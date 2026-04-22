@@ -268,7 +268,29 @@ class MqttStore {
       "lights/hallway/state",
       "alerts/motion/frontdoor",
     ];
+    const cameras = ["frontdoor", "driveway", "backyard", "garage"];
+    // Picsum gives different images per seed; videos from a public test source.
+    const sampleClip = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
+
+    let tick = 0;
     this.demoTimer = window.setInterval(() => {
+      tick++;
+      // Every ~5th tick, emit a camera event
+      if (tick % 4 === 0) {
+        const cam = cameras[Math.floor(Math.random() * cameras.length)];
+        const seed = Math.floor(Math.random() * 1000);
+        const snapshot = `https://picsum.photos/seed/${cam}-${seed}/640/360`;
+        const isClip = Math.random() > 0.65;
+        const payload = JSON.stringify({
+          camera: cam,
+          event: isClip ? "motion" : "snapshot",
+          snapshot_url: snapshot,
+          ...(isClip ? { clip_url: sampleClip } : {}),
+          ts: Date.now(),
+        });
+        this.ingest(`cameras/${cam}/${isClip ? "clip" : "snapshot"}`, payload);
+        return;
+      }
       const topic = topics[Math.floor(Math.random() * topics.length)];
       let payload: string;
       if (topic.includes("temperature")) payload = (18 + Math.random() * 8).toFixed(1) + "°C";
