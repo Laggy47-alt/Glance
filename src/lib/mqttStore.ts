@@ -1,4 +1,5 @@
 import mqtt, { MqttClient } from "mqtt";
+import { extractMedia, MediaItem } from "./mediaExtractor";
 
 export type MqttMessage = {
   id: string;
@@ -37,6 +38,7 @@ interface PersistedState {
   rules: AutoReadRule[];
   subscriptions: string[];
   messages: MqttMessage[];
+  media: MediaItem[];
 }
 
 const defaultConfig: ConnectionConfig = {
@@ -71,6 +73,7 @@ class MqttStore {
   status: Status = "disconnected";
   error: string | null = null;
   messages: MqttMessage[] = [];
+  media: MediaItem[] = [];
   rules: AutoReadRule[] = [
     { id: "r1", pattern: "sensors/+/heartbeat", enabled: true },
   ];
@@ -89,6 +92,7 @@ class MqttStore {
         this.rules = s.rules ?? this.rules;
         this.subscriptions = s.subscriptions ?? this.subscriptions;
         this.messages = (s.messages ?? []).slice(-500);
+        this.media = (s.media ?? []).slice(-200);
       }
     } catch {}
   }
@@ -99,6 +103,7 @@ class MqttStore {
       rules: this.rules,
       subscriptions: this.subscriptions,
       messages: this.messages.slice(-500),
+      media: this.media.slice(-200),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
@@ -150,6 +155,11 @@ class MqttStore {
     this.emit();
   }
 
+  clearMedia() {
+    this.media = [];
+    this.emit();
+  }
+
   publish(topic: string, payload: string) {
     if (this.config.demoMode) {
       this.ingest(topic, payload);
@@ -162,15 +172,21 @@ class MqttStore {
     const matchedRule = this.rules.find(
       (r) => r.enabled && topicMatches(r.pattern, topic)
     );
+    const ts = Date.now();
     const msg: MqttMessage = {
       id: crypto.randomUUID(),
       topic,
       payload,
-      ts: Date.now(),
+      ts,
       read: !!matchedRule,
       archived: !!matchedRule,
     };
     this.messages = [...this.messages, msg].slice(-500);
+
+    const found = extractMedia(topic, payload, ts);
+    if (found.length) {
+      this.media = [...this.media, ...found].slice(-200);
+    }
     this.emit();
   }
 
@@ -252,7 +268,29 @@ class MqttStore {
       "lights/hallway/state",
       "alerts/motion/frontdoor",
     ];
+    const cameras = ["frontdoor", "driveway", "backyard", "garage"];
+    // Picsum gives different images per seed; videos from a public test source.
+    const sampleClip = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
+
+    let tick = 0;
     this.demoTimer = window.setInterval(() => {
+      tick++;
+      // Every ~5th tick, emit a camera event
+      if (tick % 4 === 0) {
+        const cam = cameras[Math.floor(Math.random() * cameras.length)];
+        const seed = Math.floor(Math.random() * 1000);
+        const snapshot = `https://picsum.photos/seed/${cam}-${seed}/640/360`;
+        const isClip = Math.random() > 0.65;
+        const payload = JSON.stringify({
+          camera: cam,
+          event: isClip ? "motion" : "snapshot",
+          snapshot_url: snapshot,
+          ...(isClip ? { clip_url: sampleClip } : {}),
+          ts: Date.now(),
+        });
+        this.ingest(`cameras/${cam}/${isClip ? "clip" : "snapshot"}`, payload);
+        return;
+      }
       const topic = topics[Math.floor(Math.random() * topics.length)];
       let payload: string;
       if (topic.includes("temperature")) payload = (18 + Math.random() * 8).toFixed(1) + "°C";

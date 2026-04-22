@@ -1,11 +1,13 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Activity, Inbox, Archive, Filter, Settings, Radio } from "lucide-react";
+import { Activity, Inbox, Archive, Filter, Settings, Radio, Camera, Film } from "lucide-react";
 import { useMqttStore } from "@/hooks/useMqttStore";
 import { cn } from "@/lib/utils";
 
 const items = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/messages", label: "Messages", icon: Inbox },
+  { to: "/cameras", label: "Cameras", icon: Camera },
+  { to: "/media", label: "Media", icon: Film },
   { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
   { to: "/archive", label: "Archive", icon: Archive },
   { to: "/settings", label: "Settings", icon: Settings },
