@@ -7,6 +7,8 @@ import Index from "./pages/Index.tsx";
 import Messages from "./pages/Messages.tsx";
 import AutoRead from "./pages/AutoRead.tsx";
 import Archive from "./pages/Archive.tsx";
+import Cameras from "./pages/Cameras.tsx";
+import Media from "./pages/Media.tsx";
 import Settings from "./pages/Settings.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -21,6 +23,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/messages" element={<Messages />} />
+          <Route path="/cameras" element={<Cameras />} />
+          <Route path="/media" element={<Media />} />
           <Route path="/auto-read" element={<AutoRead />} />
           <Route path="/archive" element={<Archive />} />
           <Route path="/settings" element={<Settings />} />
