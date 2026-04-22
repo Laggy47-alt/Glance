@@ -49,7 +49,8 @@ const Settings = () => {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Path</Label>
-            <Input value={cfg.path} onChange={(e) => update({ path: e.target.value })} placeholder="/mqtt" className="bg-secondary border-border font-mono" />
+            <Input value={cfg.path} onChange={(e) => update({ path: e.target.value })} placeholder="leave blank for Mosquitto" className="bg-secondary border-border font-mono" />
+            <p className="text-[10px] text-muted-foreground">Mosquitto: leave blank. HiveMQ/EMQX: <code>/mqtt</code></p>
           </div>
 
           <div className="flex items-center justify-between">
