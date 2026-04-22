@@ -73,6 +73,7 @@ class MqttStore {
   status: Status = "disconnected";
   error: string | null = null;
   messages: MqttMessage[] = [];
+  media: MediaItem[] = [];
   rules: AutoReadRule[] = [
     { id: "r1", pattern: "sensors/+/heartbeat", enabled: true },
   ];
@@ -91,6 +92,7 @@ class MqttStore {
         this.rules = s.rules ?? this.rules;
         this.subscriptions = s.subscriptions ?? this.subscriptions;
         this.messages = (s.messages ?? []).slice(-500);
+        this.media = (s.media ?? []).slice(-200);
       }
     } catch {}
   }
@@ -101,6 +103,7 @@ class MqttStore {
       rules: this.rules,
       subscriptions: this.subscriptions,
       messages: this.messages.slice(-500),
+      media: this.media.slice(-200),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
@@ -152,6 +155,11 @@ class MqttStore {
     this.emit();
   }
 
+  clearMedia() {
+    this.media = [];
+    this.emit();
+  }
+
   publish(topic: string, payload: string) {
     if (this.config.demoMode) {
       this.ingest(topic, payload);
@@ -164,15 +172,21 @@ class MqttStore {
     const matchedRule = this.rules.find(
       (r) => r.enabled && topicMatches(r.pattern, topic)
     );
+    const ts = Date.now();
     const msg: MqttMessage = {
       id: crypto.randomUUID(),
       topic,
       payload,
-      ts: Date.now(),
+      ts,
       read: !!matchedRule,
       archived: !!matchedRule,
     };
     this.messages = [...this.messages, msg].slice(-500);
+
+    const found = extractMedia(topic, payload, ts);
+    if (found.length) {
+      this.media = [...this.media, ...found].slice(-200);
+    }
     this.emit();
   }
 
