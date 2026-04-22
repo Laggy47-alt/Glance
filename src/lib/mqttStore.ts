@@ -1,4 +1,5 @@
 import mqtt, { MqttClient } from "mqtt";
+import { extractMedia, MediaItem } from "./mediaExtractor";
 
 export type MqttMessage = {
   id: string;
@@ -37,6 +38,7 @@ interface PersistedState {
   rules: AutoReadRule[];
   subscriptions: string[];
   messages: MqttMessage[];
+  media: MediaItem[];
 }
 
 const defaultConfig: ConnectionConfig = {
