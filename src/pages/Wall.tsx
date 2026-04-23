@@ -27,8 +27,43 @@ const Wall = () => {
   const store = useWebhookStore();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [muted, setMuted] = useState(false);
+  const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
+
+  const availableCameras = useMemo(() => {
+    const set = new Set<string>();
+    store.events.forEach((e) => e.camera && set.add(e.camera));
+    store.media.forEach((m) => m.camera && set.add(m.camera));
+    return Array.from(set).sort();
+  }, [store.events, store.media]);
+
+  const availableLabels = useMemo(() => {
+    const set = new Set<string>();
+    store.events.forEach((e) => {
+      const l = e.label ?? e.kind;
+      if (l) set.add(l);
+    });
+    return Array.from(set).sort();
+  }, [store.events]);
+
+  const matchesFilter = (camera: string, label: string) => {
+    if (cameraFilter.size > 0 && !cameraFilter.has(camera)) return false;
+    if (labelFilter.size > 0 && !labelFilter.has(label)) return false;
+    return true;
+  };
+
+  const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, val: string) => {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(val)) next.delete(val);
+      else next.add(val);
+      return next;
+    });
+  };
+
+  const activeFilterCount = cameraFilter.size + labelFilter.size;
 
   // Helper: find best media match for an event (frigate_event_id, then event_id, then camera+time window)
   const findMedia = (e: WebhookEvent, kind: "snapshot" | "clip") => {
