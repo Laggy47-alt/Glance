@@ -6,13 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock, Camera as CameraIcon, ImageOff } from "lucide-react";
+import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock, Camera as CameraIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuditEntry } from "@/lib/auditLog";
 import { formatDuration } from "@/lib/duration";
 
 type EventMeta = { camera: string | null; topic: string | null; label: string | null };
-type MediaMeta = { url: string; kind: string };
 
 const ACTION_STYLES: Record<string, string> = {
   ack: "bg-success/15 text-success border-success/30",
@@ -27,7 +26,6 @@ const Audit = () => {
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
-  const [mediaByEvent, setMediaByEvent] = useState<Record<string, MediaMeta>>({});
 
   const load = async () => {
     setLoading(true);
@@ -55,43 +53,21 @@ const Audit = () => {
     const eventIds = Array.from(new Set(entries.map((e) => e.event_id).filter(Boolean) as string[]));
     if (eventIds.length === 0) return;
     const missingEvents = eventIds.filter((id) => !(id in eventMeta));
-    const missingMedia = eventIds.filter((id) => !(id in mediaByEvent));
+    if (missingEvents.length === 0) return;
     (async () => {
-      if (missingEvents.length) {
-        const { data } = await supabase
-          .from("webhook_events")
-          .select("id, camera, topic, label")
-          .in("id", missingEvents);
-        if (data) {
-          setEventMeta((prev) => {
-            const next = { ...prev };
-            data.forEach((r: any) => { next[r.id] = { camera: r.camera, topic: r.topic, label: r.label }; });
-            return next;
-          });
-        }
-      }
-      if (missingMedia.length) {
-        const { data } = await supabase
-          .from("media_items")
-          .select("event_id, url, kind, ts")
-          .in("event_id", missingMedia)
-          .order("ts", { ascending: false });
-        if (data) {
-          setMediaByEvent((prev) => {
-            const next = { ...prev };
-            const isImg = (k: string, u: string) => k === "snapshot" || k === "image" || /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(u);
-            data.forEach((r: any) => {
-              if (!r.event_id) return;
-              const cur = next[r.event_id];
-              if (!cur) next[r.event_id] = { url: r.url, kind: r.kind };
-              else if (!isImg(cur.kind, cur.url) && isImg(r.kind, r.url)) next[r.event_id] = { url: r.url, kind: r.kind };
-            });
-            return next;
-          });
-        }
+      const { data } = await supabase
+        .from("webhook_events")
+        .select("id, camera, topic, label")
+        .in("id", missingEvents);
+      if (data) {
+        setEventMeta((prev) => {
+          const next = { ...prev };
+          data.forEach((r: any) => { next[r.id] = { camera: r.camera, topic: r.topic, label: r.label }; });
+          return next;
+        });
       }
     })();
-  }, [entries, eventMeta, mediaByEvent]);
+  }, [entries, eventMeta]);
 
   const actions = useMemo(() => {
     const set = new Set<string>();
@@ -181,7 +157,6 @@ const Audit = () => {
                   <th className="px-4 py-2.5 font-semibold">User</th>
                   <th className="px-4 py-2.5 font-semibold">Action</th>
                   <th className="px-4 py-2.5 font-semibold">Response time</th>
-                  <th className="px-4 py-2.5 font-semibold">Snapshot</th>
                   <th className="px-4 py-2.5 font-semibold">Camera</th>
                   <th className="px-4 py-2.5 font-semibold">Note</th>
                 </tr>
@@ -222,40 +197,6 @@ const Audit = () => {
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {(() => {
-                        const meta = e.event_id ? mediaByEvent[e.event_id] : null;
-                        if (!meta) return <ImageOff className="h-4 w-4 text-muted-foreground/40" />;
-                        const isVideo = meta.kind === "clip" || meta.kind === "video" || /\.(mp4|webm|mov|m3u8)(\?|$)/i.test(meta.url);
-                        return (
-                          <a href={meta.url} target="_blank" rel="noreferrer" className="block relative w-20 h-12">
-                            {isVideo ? (
-                              <>
-                                <video
-                                  src={meta.url}
-                                  muted
-                                  playsInline
-                                  preload="metadata"
-                                  className="h-12 w-20 object-cover rounded border border-border hover:border-primary transition-colors bg-black"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                  <div className="bg-black/60 rounded-full p-1">
-                                    <CameraIcon className="h-3 w-3 text-white" />
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              <img
-                                src={meta.url}
-                                alt="snapshot"
-                                loading="lazy"
-                                className="h-12 w-20 object-cover rounded border border-border hover:border-primary transition-colors"
-                              />
-                            )}
-                          </a>
-                        );
-                      })()}
                     </td>
                     <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                       {(() => {
