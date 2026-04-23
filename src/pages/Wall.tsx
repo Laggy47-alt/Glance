@@ -214,12 +214,16 @@ const Wall = () => {
 
   const archive = async (a: Alert) => {
     setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+    void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "ack" });
     if (a.event) {
       await supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", a.event.id);
     }
   };
 
-  const dismiss = (a: Alert) => setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+  const dismiss = (a: Alert) => {
+    setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+    void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "dismiss" });
+  };
 
   const recentCount = useMemo(
     () => store.events.filter((e) => !e.archived && Date.now() - new Date(e.ts).getTime() < 5 * 60_000).length,
