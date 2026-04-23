@@ -231,7 +231,23 @@ const Wall = () => {
     void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "dismiss" });
   };
 
-  const recentCount = useMemo(
+  // Auto-archive low-signal alerts (label is "event" or "unknown" / no useful label).
+  useEffect(() => {
+    const trash = alerts.filter((a) => {
+      const l = (a.label || "").toLowerCase();
+      return l === "event" || l === "unknown" || l === "" || l === "motion" && !a.event;
+    }).filter((a) => !autoArchivedRef.current.has(a.key));
+    if (!trash.length) return;
+    trash.forEach((a) => {
+      autoArchivedRef.current.add(a.key);
+      void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "ack", note: "auto-archived (low-signal)" });
+      if (a.event) {
+        void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", a.event.id);
+      }
+    });
+    setAlerts((prev) => prev.filter((x) => !trash.some((t) => t.key === x.key)));
+  }, [alerts]);
+
     () => store.events.filter((e) => !e.archived && Date.now() - new Date(e.ts).getTime() < 5 * 60_000).length,
     [store.events]
   );
