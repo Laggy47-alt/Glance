@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon } from "lucide-react";
+import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuditEntry } from "@/lib/auditLog";
+import { formatDuration } from "@/lib/duration";
 
 const ACTION_STYLES: Record<string, string> = {
   ack: "bg-success/15 text-success border-success/30",
@@ -49,6 +50,17 @@ const Audit = () => {
     const set = new Set<string>();
     entries.forEach((e) => set.add(e.action));
     return Array.from(set).sort();
+  }, [entries]);
+
+  // Earliest "created" timestamp per alert_key — used to compute ack response time
+  const createdByKey = useMemo(() => {
+    const map: Record<string, string> = {};
+    entries.forEach((e) => {
+      if (e.action !== "created") return;
+      const t = e.ts;
+      if (!map[e.alert_key] || t < map[e.alert_key]) map[e.alert_key] = t;
+    });
+    return map;
   }, [entries]);
 
   const filtered = useMemo(() => {
@@ -119,12 +131,17 @@ const Audit = () => {
                   <th className="px-4 py-2.5 font-semibold">Time</th>
                   <th className="px-4 py-2.5 font-semibold">User</th>
                   <th className="px-4 py-2.5 font-semibold">Action</th>
+                  <th className="px-4 py-2.5 font-semibold">Response time</th>
                   <th className="px-4 py-2.5 font-semibold">Alert</th>
                   <th className="px-4 py-2.5 font-semibold">Note</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e) => (
+                {filtered.map((e) => {
+                  const createdTs = createdByKey[e.alert_key];
+                  const showDuration = e.action === "ack" && createdTs;
+                  const durationMs = showDuration ? new Date(e.ts).getTime() - new Date(createdTs).getTime() : null;
+                  return (
                   <tr key={e.id} className="border-t border-border/50 hover:bg-secondary/30 transition-colors">
                     <td className="px-4 py-2.5 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                       {new Date(e.ts).toLocaleString()}
@@ -146,6 +163,16 @@ const Audit = () => {
                         {e.action}
                       </Badge>
                     </td>
+                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                      {durationMs != null ? (
+                        <span className="inline-flex items-center gap-1 text-foreground tabular-nums">
+                          <Clock className="h-3 w-3 text-primary" />
+                          {formatDuration(durationMs)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5">
                       <code className="text-[10px] text-accent">{e.alert_key.slice(0, 12)}…</code>
                     </td>
@@ -153,7 +180,8 @@ const Audit = () => {
                       {e.note ?? "—"}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </ScrollArea>
