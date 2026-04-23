@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Camera, X, Archive as ArchiveIcon } from "lucide-react";
+import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check } from "lucide-react";
 import { resolveMediaUrl, type MediaItem, type WebhookEvent } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type Alert = {
   key: string;
@@ -26,8 +27,43 @@ const Wall = () => {
   const store = useWebhookStore();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [muted, setMuted] = useState(false);
+  const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
+
+  const availableCameras = useMemo(() => {
+    const set = new Set<string>();
+    store.events.forEach((e) => e.camera && set.add(e.camera));
+    store.media.forEach((m) => m.camera && set.add(m.camera));
+    return Array.from(set).sort();
+  }, [store.events, store.media]);
+
+  const availableLabels = useMemo(() => {
+    const set = new Set<string>();
+    store.events.forEach((e) => {
+      const l = e.label ?? e.kind;
+      if (l) set.add(l);
+    });
+    return Array.from(set).sort();
+  }, [store.events]);
+
+  const matchesFilter = (camera: string, label: string) => {
+    if (cameraFilter.size > 0 && !cameraFilter.has(camera)) return false;
+    if (labelFilter.size > 0 && !labelFilter.has(label)) return false;
+    return true;
+  };
+
+  const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, val: string) => {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(val)) next.delete(val);
+      else next.add(val);
+      return next;
+    });
+  };
+
+  const activeFilterCount = cameraFilter.size + labelFilter.size;
 
   // Helper: find best media match for an event (frigate_event_id, then event_id, then camera+time window)
   const findMedia = (e: WebhookEvent, kind: "snapshot" | "clip") => {
@@ -63,13 +99,16 @@ const Wall = () => {
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
+      const camera = e.camera ?? "unknown";
+      const label = e.label ?? e.kind ?? "motion";
+      if (!matchesFilter(camera, label)) continue;
       newOnes.push({
         key,
         event: e,
         clip,
         snapshot,
-        camera: e.camera ?? "unknown",
-        label: e.label ?? e.kind ?? "motion",
+        camera,
+        label,
         ts: e.ts,
         receivedAt: Date.now(),
       });
@@ -117,13 +156,16 @@ const Wall = () => {
         ((m.frigate_event_id && x.frigate_event_id === m.frigate_event_id) ||
           (x.camera === m.camera && Math.abs(new Date(x.ts).getTime() - new Date(m.ts).getTime()) < 60_000))
       );
+      const camera = m.camera ?? "unknown";
+      const label = "motion";
+      if (!matchesFilter(camera, label)) continue;
       newOnes.push({
         key,
         event: null,
         clip: m,
         snapshot,
-        camera: m.camera ?? "unknown",
-        label: "motion",
+        camera,
+        label,
         ts: m.ts,
         receivedAt: Date.now(),
       });
@@ -194,6 +236,76 @@ const Wall = () => {
             <span className="h-1.5 w-1.5 rounded-full bg-success pulse-dot" />
             {recentCount} in last 5m
           </Badge>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                <Filter className="h-3.5 w-3.5" />
+                Filter
+                {activeFilterCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-0">
+              <div className="p-3 border-b border-border flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground">Filter alerts</span>
+                {activeFilterCount > 0 && (
+                  <button
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => { setCameraFilter(new Set()); setLabelFilter(new Set()); }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-auto">
+                <div className="p-2">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Cameras
+                  </div>
+                  {availableCameras.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No cameras yet</div>
+                  )}
+                  {availableCameras.map((c) => {
+                    const active = cameraFilter.has(c);
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => toggleSet(setCameraFilter, c)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/60 text-foreground"
+                      >
+                        <span className="truncate capitalize">{c}</span>
+                        {active && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="p-2 border-t border-border">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Labels
+                  </div>
+                  {availableLabels.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No labels yet</div>
+                  )}
+                  {availableLabels.map((l) => {
+                    const active = labelFilter.has(l);
+                    return (
+                      <button
+                        key={l}
+                        onClick={() => toggleSet(setLabelFilter, l)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/60 text-foreground"
+                      >
+                        <span className="truncate capitalize">{l}</span>
+                        {active && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
             <Switch checked={!muted} onCheckedChange={(v) => setMuted(!v)} />
@@ -202,31 +314,40 @@ const Wall = () => {
       }
     >
       <div className="relative h-[calc(100vh-10rem)] rounded-lg border border-border bg-gradient-to-br from-background via-background to-secondary/30 overflow-hidden">
-        {alerts.length === 0 && (
-          <div className="absolute inset-0 grid place-items-center pointer-events-none">
-            <div className="text-center space-y-3">
-              <div className="mx-auto h-16 w-16 rounded-full bg-secondary/50 grid place-items-center">
-                <Camera className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">Waiting for motion…</p>
-              <p className="text-[11px] text-muted-foreground/70">New events will pop up here automatically.</p>
-            </div>
-          </div>
-        )}
+        {(() => {
+          const visibleAlerts = alerts.filter((a) => matchesFilter(a.camera, a.label));
+          return (
+            <>
+              {visibleAlerts.length === 0 && (
+                <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                  <div className="text-center space-y-3">
+                    <div className="mx-auto h-16 w-16 rounded-full bg-secondary/50 grid place-items-center">
+                      <Camera className="h-7 w-7 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {activeFilterCount > 0 ? "No alerts match the current filter" : "Waiting for motion…"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/70">New events will pop up here automatically.</p>
+                  </div>
+                </div>
+              )}
 
-        <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
-          <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
-            {alerts.map((a, i) => (
-              <AlertCard
-                key={a.key}
-                alert={a}
-                index={i}
-                onArchive={() => archive(a)}
-                onDismiss={() => dismiss(a)}
-              />
-            ))}
-          </div>
-        </div>
+              <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
+                <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
+                  {visibleAlerts.map((a, i) => (
+                    <AlertCard
+                      key={a.key}
+                      alert={a}
+                      index={i}
+                      onArchive={() => archive(a)}
+                      onDismiss={() => dismiss(a)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </div>
     </DashboardLayout>
   );
