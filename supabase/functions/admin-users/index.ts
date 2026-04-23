@@ -60,45 +60,53 @@ Deno.serve(async (req) => {
 
       // Find existing admin auth user (if any)
       const { data: list } = await a.auth.admin.listUsers();
-      let existing = list.users.find((u) => u.email === email);
+      const existing = list.users.find((u) => u.email === email);
 
-      if (!existing) {
-        const { data: created, error: createErr } = await a.auth.admin.createUser({
-          email,
-          password: "admin",
-          email_confirm: true,
-          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true },
-        });
-        if (createErr) return json({ ok: false, error: createErr.message }, 500);
-        existing = created.user!;
-      } else {
-        // Ensure password is "admin" and account is confirmed (idempotent reset)
-        await a.auth.admin.updateUserById(existing.id, {
-          password: "admin",
-          email_confirm: true,
-          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true },
-        });
+      if (existing) {
+        // Already exists — DO NOT touch the password or must_change_password flag.
+        // Just make sure the profile + admin role rows exist.
+        const { data: prof } = await a
+          .from("profiles")
+          .select("user_id")
+          .eq("user_id", existing.id)
+          .maybeSingle();
+        if (!prof) {
+          await a.from("profiles").insert({
+            user_id: existing.id,
+            username: "admin",
+            display_name: "Administrator",
+            must_change_password: false,
+          });
+        }
+        const { data: roleRow } = await a
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", existing.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        if (!roleRow) {
+          await a.from("user_roles").insert({ user_id: existing.id, role: "admin" });
+        }
+        return json({ ok: true, seeded: false, user_id: existing.id });
       }
 
-      // Ensure profile exists
+      // Brand-new install: create the bootstrap admin/admin account.
+      const { data: created, error: createErr } = await a.auth.admin.createUser({
+        email,
+        password: "admin",
+        email_confirm: true,
+        user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true },
+      });
+      if (createErr) return json({ ok: false, error: createErr.message }, 500);
+      const newId = created.user!.id;
       await a.from("profiles").upsert(
-        { user_id: existing.id, username: "admin", display_name: "Administrator", must_change_password: true },
+        { user_id: newId, username: "admin", display_name: "Administrator", must_change_password: true },
         { onConflict: "user_id" },
       );
-
-      // Ensure admin role exists
-      const { data: roleRow } = await a
-        .from("user_roles")
-        .select("id")
-        .eq("user_id", existing.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      if (!roleRow) {
-        await a.from("user_roles").insert({ user_id: existing.id, role: "admin" });
-      }
-
-      return json({ ok: true, seeded: true, user_id: existing.id });
+      await a.from("user_roles").insert({ user_id: newId, role: "admin" });
+      return json({ ok: true, seeded: true, user_id: newId });
     }
+
 
     // All other endpoints require an admin caller
     const caller = await getCallerIsAdmin(req.headers.get("authorization"));
