@@ -178,6 +178,41 @@ export type Database = {
           },
         ]
       }
+      media_tags: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          media_id: string
+          note: string | null
+          tag: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_id: string
+          note?: string | null
+          tag: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_id?: string
+          note?: string | null
+          tag?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_tags_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
