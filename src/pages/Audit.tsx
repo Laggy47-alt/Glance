@@ -114,13 +114,15 @@ const Audit = () => {
     return entries.filter((e) => {
       if (actionFilter !== "all" && e.action !== actionFilter) return false;
       if (!f) return true;
+      const cam = e.event_id ? eventMeta[e.event_id]?.camera ?? "" : "";
       return (
         (e.actor ?? "").toLowerCase().includes(f) ||
         (e.note ?? "").toLowerCase().includes(f) ||
+        cam.toLowerCase().includes(f) ||
         e.alert_key.toLowerCase().includes(f)
       );
     });
-  }, [entries, filter, actionFilter]);
+  }, [entries, filter, actionFilter, eventMeta]);
 
   return (
     <DashboardLayout
