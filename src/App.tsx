@@ -8,7 +8,7 @@ import { AuthGate } from "@/components/AuthGate";
 import Index from "./pages/Index.tsx";
 import Sources from "./pages/Sources.tsx";
 import Frigate from "./pages/Frigate.tsx";
-import Messages from "./pages/Messages.tsx";
+
 import AutoRead from "./pages/AutoRead.tsx";
 import Archive from "./pages/Archive.tsx";
 import Audit from "./pages/Audit.tsx";
@@ -37,7 +37,7 @@ const App = () => (
             <Route path="/" element={protect(<Index />)} />
             <Route path="/sources" element={protect(<Sources />)} />
             <Route path="/frigate" element={protect(<Frigate />)} />
-            <Route path="/messages" element={protect(<Messages />)} />
+            
             <Route path="/wall" element={protect(<Wall />)} />
             <Route path="/cameras" element={protect(<Cameras />)} />
             <Route path="/media" element={protect(<Media />)} />

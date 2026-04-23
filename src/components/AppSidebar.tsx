@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Inbox, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,6 @@ const baseItems = [
   { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/sources", label: "Sources", icon: Plug },
   { to: "/frigate", label: "Frigate NVR", icon: Server },
-  { to: "/messages", label: "Messages", icon: Inbox },
   { to: "/cameras", label: "Cameras", icon: Camera },
   { to: "/media", label: "Media", icon: Film },
   { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
@@ -22,7 +21,6 @@ export function AppSidebar() {
   const { profile, isAdmin, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const unread = store.events.filter((m) => !m.read && !m.archived).length;
   const enabledSources = store.sources.filter((s) => s.enabled).length;
 
   const items = isAdmin
@@ -63,11 +61,6 @@ export function AppSidebar() {
             >
               <it.icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
               <span className="flex-1">{it.label}</span>
-              {it.to === "/messages" && unread > 0 && (
-                <span className="text-[10px] font-semibold bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-                  {unread > 99 ? "99+" : unread}
-                </span>
-              )}
             </NavLink>
           );
         })}
