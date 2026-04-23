@@ -46,6 +46,36 @@ export type Database = {
           },
         ]
       }
+      event_audit_log: {
+        Row: {
+          action: string
+          actor: string | null
+          alert_key: string
+          event_id: string | null
+          id: string
+          note: string | null
+          ts: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          alert_key: string
+          event_id?: string | null
+          id?: string
+          note?: string | null
+          ts?: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          alert_key?: string
+          event_id?: string | null
+          id?: string
+          note?: string | null
+          ts?: string
+        }
+        Relationships: []
+      }
       frigate_instances: {
         Row: {
           api_key: string | null
