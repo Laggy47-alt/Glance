@@ -9,6 +9,7 @@ import { resolveMediaUrl, type MediaItem, type WebhookEvent } from "@/lib/webhoo
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
 
 type Alert = {
   key: string;
