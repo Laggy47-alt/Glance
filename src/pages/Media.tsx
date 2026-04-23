@@ -20,6 +20,7 @@ const Media = () => {
   const [filter, setFilter] = useState("");
   const [tagsByMedia, setTagsByMedia] = useState<Record<string, { id: string; tag: string; note: string | null }[]>>({});
   const [onlyTagged, setOnlyTagged] = useState(false);
+  const [acksByEvent, setAcksByEvent] = useState<Record<string, { actor: string | null; ts: string }>>({});
 
   useEffect(() => {
     let active = true;
@@ -36,6 +37,33 @@ const Media = () => {
     const ch = supabase
       .channel("media-tags")
       .on("postgres_changes", { event: "*", schema: "public", table: "media_tags" }, () => load())
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
+
+  // Load ack audit entries (latest per event_id)
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const { data } = await supabase
+        .from("event_audit_log")
+        .select("event_id, actor, ts, action")
+        .eq("action", "ack")
+        .order("ts", { ascending: false })
+        .limit(2000);
+      if (!active) return;
+      const map: Record<string, { actor: string | null; ts: string }> = {};
+      (data ?? []).forEach((row: { event_id: string | null; actor: string | null; ts: string }) => {
+        if (row.event_id && !map[row.event_id]) {
+          map[row.event_id] = { actor: row.actor, ts: row.ts };
+        }
+      });
+      setAcksByEvent(map);
+    };
+    load();
+    const ch = supabase
+      .channel("audit-acks")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "event_audit_log", filter: "action=eq.ack" }, () => load())
       .subscribe();
     return () => { active = false; supabase.removeChannel(ch); };
   }, []);
