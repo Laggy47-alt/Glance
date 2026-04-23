@@ -18,16 +18,49 @@ const Media = () => {
   const [selected, setSelected] = useState<LightboxItem | null>(null);
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState("");
+  const [tagsByMedia, setTagsByMedia] = useState<Record<string, { id: string; tag: string; note: string | null }[]>>({});
+  const [onlyTagged, setOnlyTagged] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const { data } = await supabase.from("media_tags").select("id, media_id, tag, note").order("created_at", { ascending: false });
+      if (!active) return;
+      const grouped: Record<string, { id: string; tag: string; note: string | null }[]> = {};
+      (data ?? []).forEach((t: { id: string; media_id: string; tag: string; note: string | null }) => {
+        (grouped[t.media_id] ||= []).push({ id: t.id, tag: t.tag, note: t.note });
+      });
+      setTagsByMedia(grouped);
+    };
+    load();
+    const ch = supabase
+      .channel("media-tags")
+      .on("postgres_changes", { event: "*", schema: "public", table: "media_tags" }, () => load())
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
 
   const items = useMemo(() => {
     return store.media
       .filter((m) => tab === "all" || m.kind === tab)
+      .filter((m) => !onlyTagged || (tagsByMedia[m.id]?.length ?? 0) > 0)
       .filter((m) => {
         if (!filter) return true;
         const f = filter.toLowerCase();
-        return (m.camera ?? "").toLowerCase().includes(f) || (m.topic ?? "").toLowerCase().includes(f);
+        return (m.camera ?? "").toLowerCase().includes(f) ||
+          (m.topic ?? "").toLowerCase().includes(f) ||
+          (tagsByMedia[m.id] ?? []).some((t) => t.tag.toLowerCase().includes(f));
       });
-  }, [store.media, tab, filter]);
+  }, [store.media, tab, filter, tagsByMedia, onlyTagged]);
+
+  const toLightbox = (m: typeof store.media[number]): LightboxItem => ({
+    kind: m.kind,
+    url: resolveMediaUrl(m.url),
+    camera: m.camera,
+    topic: m.topic,
+    ts: m.ts,
+    mediaId: m.id,
+  });
 
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: "all", label: "All", count: store.media.length },
