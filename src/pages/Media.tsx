@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useState } from "react";
-import { Camera, Film, ImageOff, Play, Tag as TagIcon } from "lucide-react";
+import { Camera, Film, ImageOff, Play, Tag as TagIcon, Check } from "lucide-react";
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
 import { resolveMediaUrl } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
