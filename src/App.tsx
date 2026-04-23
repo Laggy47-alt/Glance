@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import Sources from "./pages/Sources.tsx";
+import Frigate from "./pages/Frigate.tsx";
 import Messages from "./pages/Messages.tsx";
 import AutoRead from "./pages/AutoRead.tsx";
 import Archive from "./pages/Archive.tsx";
@@ -23,6 +24,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/sources" element={<Sources />} />
+          <Route path="/frigate" element={<Frigate />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/cameras" element={<Cameras />} />
           <Route path="/media" element={<Media />} />
