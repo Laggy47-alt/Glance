@@ -88,6 +88,7 @@ const Media = () => {
     topic: m.topic,
     ts: m.ts,
     mediaId: m.id,
+    eventId: m.event_id ?? null,
   });
 
   const tabs: { id: Tab; label: string; count: number }[] = [
