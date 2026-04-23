@@ -52,6 +52,17 @@ const Audit = () => {
     return Array.from(set).sort();
   }, [entries]);
 
+  // Earliest "created" timestamp per alert_key — used to compute ack response time
+  const createdByKey = useMemo(() => {
+    const map: Record<string, string> = {};
+    entries.forEach((e) => {
+      if (e.action !== "created") return;
+      const t = e.ts;
+      if (!map[e.alert_key] || t < map[e.alert_key]) map[e.alert_key] = t;
+    });
+    return map;
+  }, [entries]);
+
   const filtered = useMemo(() => {
     const f = filter.trim().toLowerCase();
     return entries.filter((e) => {
