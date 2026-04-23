@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Camera, X, Archive as ArchiveIcon } from "lucide-react";
+import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check } from "lucide-react";
 import { resolveMediaUrl, type MediaItem, type WebhookEvent } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type Alert = {
   key: string;
