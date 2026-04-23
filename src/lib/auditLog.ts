@@ -12,7 +12,23 @@ export type AuditEntry = {
 
 const ACTOR_KEY = "wall.actor";
 
-export function getActor(): string {
+// Cached actor identity, refreshed on auth state changes.
+let cachedActor: string | null = null;
+
+async function resolveActor(): Promise<string> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("username, display_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const name = prof?.display_name || prof?.username || user.email || "user";
+      cachedActor = name;
+      return name;
+    }
+  } catch { /* fall through */ }
   try {
     const v = localStorage.getItem(ACTOR_KEY);
     if (v && v.trim()) return v;
@@ -20,7 +36,12 @@ export function getActor(): string {
   return "operator";
 }
 
+export function getActor(): string {
+  return cachedActor ?? "operator";
+}
+
 export function setActor(name: string) {
+  cachedActor = name;
   try { localStorage.setItem(ACTOR_KEY, name); } catch { /* no-op */ }
 }
 
@@ -30,12 +51,13 @@ export async function logAudit(input: {
   action: string;
   note?: string | null;
 }) {
+  const actor = await resolveActor();
   const { error } = await supabase.from("event_audit_log").insert({
     alert_key: input.alert_key,
     event_id: input.event_id ?? null,
     action: input.action,
     note: input.note ?? null,
-    actor: getActor(),
+    actor,
   });
   if (error) throw error;
 }
