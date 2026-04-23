@@ -131,12 +131,17 @@ const Audit = () => {
                   <th className="px-4 py-2.5 font-semibold">Time</th>
                   <th className="px-4 py-2.5 font-semibold">User</th>
                   <th className="px-4 py-2.5 font-semibold">Action</th>
+                  <th className="px-4 py-2.5 font-semibold">Response time</th>
                   <th className="px-4 py-2.5 font-semibold">Alert</th>
                   <th className="px-4 py-2.5 font-semibold">Note</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e) => (
+                {filtered.map((e) => {
+                  const createdTs = createdByKey[e.alert_key];
+                  const showDuration = e.action === "ack" && createdTs;
+                  const durationMs = showDuration ? new Date(e.ts).getTime() - new Date(createdTs).getTime() : null;
+                  return (
                   <tr key={e.id} className="border-t border-border/50 hover:bg-secondary/30 transition-colors">
                     <td className="px-4 py-2.5 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                       {new Date(e.ts).toLocaleString()}
