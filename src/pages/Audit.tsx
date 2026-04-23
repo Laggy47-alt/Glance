@@ -79,11 +79,12 @@ const Audit = () => {
         if (data) {
           setMediaByEvent((prev) => {
             const next = { ...prev };
+            const isImg = (k: string, u: string) => k === "snapshot" || k === "image" || /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(u);
             data.forEach((r: any) => {
               if (!r.event_id) return;
               const cur = next[r.event_id];
               if (!cur) next[r.event_id] = { url: r.url, kind: r.kind };
-              else if (cur.kind !== "snapshot" && r.kind === "snapshot") next[r.event_id] = { url: r.url, kind: r.kind };
+              else if (!isImg(cur.kind, cur.url) && isImg(r.kind, r.url)) next[r.event_id] = { url: r.url, kind: r.kind };
             });
             return next;
           });
