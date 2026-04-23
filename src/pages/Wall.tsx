@@ -236,6 +236,76 @@ const Wall = () => {
             <span className="h-1.5 w-1.5 rounded-full bg-success pulse-dot" />
             {recentCount} in last 5m
           </Badge>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                <Filter className="h-3.5 w-3.5" />
+                Filter
+                {activeFilterCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-0">
+              <div className="p-3 border-b border-border flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground">Filter alerts</span>
+                {activeFilterCount > 0 && (
+                  <button
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => { setCameraFilter(new Set()); setLabelFilter(new Set()); }}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-auto">
+                <div className="p-2">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Cameras
+                  </div>
+                  {availableCameras.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No cameras yet</div>
+                  )}
+                  {availableCameras.map((c) => {
+                    const active = cameraFilter.has(c);
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => toggleSet(setCameraFilter, c)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/60 text-foreground"
+                      >
+                        <span className="truncate capitalize">{c}</span>
+                        {active && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="p-2 border-t border-border">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                    Labels
+                  </div>
+                  {availableLabels.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No labels yet</div>
+                  )}
+                  {availableLabels.map((l) => {
+                    const active = labelFilter.has(l);
+                    return (
+                      <button
+                        key={l}
+                        onClick={() => toggleSet(setLabelFilter, l)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/60 text-foreground"
+                      >
+                        <span className="truncate capitalize">{l}</span>
+                        {active && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
             <Switch checked={!muted} onCheckedChange={(v) => setMuted(!v)} />
