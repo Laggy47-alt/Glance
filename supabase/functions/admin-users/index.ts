@@ -56,27 +56,48 @@ Deno.serve(async (req) => {
     const a = admin();
 
     if (action === "seed") {
-      // Idempotent: only create admin if no admin role exists.
-      const { count } = await a.from("user_roles").select("*", { count: "exact", head: true }).eq("role", "admin");
-      if ((count ?? 0) > 0) return json({ ok: true, seeded: false });
-
       const email = usernameToEmail("admin");
-      const { data: created, error: createErr } = await a.auth.admin.createUser({
-        email,
-        password: "admin",
-        email_confirm: true,
-        user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true },
-      });
-      if (createErr) {
-        // Maybe user exists already without role — fetch and continue
-        const { data: list } = await a.auth.admin.listUsers();
-        const existing = list.users.find((u) => u.email === email);
-        if (!existing) return json({ ok: false, error: createErr.message }, 500);
-        await a.from("user_roles").insert({ user_id: existing.id, role: "admin" }).select();
-        return json({ ok: true, seeded: true, reused: true });
+
+      // Find existing admin auth user (if any)
+      const { data: list } = await a.auth.admin.listUsers();
+      let existing = list.users.find((u) => u.email === email);
+
+      if (!existing) {
+        const { data: created, error: createErr } = await a.auth.admin.createUser({
+          email,
+          password: "admin",
+          email_confirm: true,
+          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true },
+        });
+        if (createErr) return json({ ok: false, error: createErr.message }, 500);
+        existing = created.user!;
+      } else {
+        // Ensure password is "admin" and account is confirmed (idempotent reset)
+        await a.auth.admin.updateUserById(existing.id, {
+          password: "admin",
+          email_confirm: true,
+          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true },
+        });
       }
-      await a.from("user_roles").insert({ user_id: created.user!.id, role: "admin" });
-      return json({ ok: true, seeded: true });
+
+      // Ensure profile exists
+      await a.from("profiles").upsert(
+        { user_id: existing.id, username: "admin", display_name: "Administrator", must_change_password: true },
+        { onConflict: "user_id" },
+      );
+
+      // Ensure admin role exists
+      const { data: roleRow } = await a
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", existing.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (!roleRow) {
+        await a.from("user_roles").insert({ user_id: existing.id, role: "admin" });
+      }
+
+      return json({ ok: true, seeded: true, user_id: existing.id });
     }
 
     // All other endpoints require an admin caller
