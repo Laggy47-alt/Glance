@@ -89,7 +89,7 @@ export default function Customization() {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout title="Customization" subtitle="Personalize your dashboard branding">
       <div className="max-w-3xl space-y-6">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-md bg-gradient-primary grid place-items-center shadow-glow">
