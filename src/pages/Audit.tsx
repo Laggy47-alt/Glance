@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock } from "lucide-react";
+import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock, Camera as CameraIcon, ImageOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuditEntry } from "@/lib/auditLog";
 import { formatDuration } from "@/lib/duration";
+
+type EventMeta = { camera: string | null; topic: string | null; label: string | null };
+type MediaMeta = { url: string; kind: string };
 
 const ACTION_STYLES: Record<string, string> = {
   ack: "bg-success/15 text-success border-success/30",
@@ -23,6 +26,8 @@ const Audit = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
+  const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
+  const [mediaByEvent, setMediaByEvent] = useState<Record<string, MediaMeta>>({});
 
   const load = async () => {
     setLoading(true);
@@ -46,6 +51,47 @@ const Audit = () => {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
+  useEffect(() => {
+    const eventIds = Array.from(new Set(entries.map((e) => e.event_id).filter(Boolean) as string[]));
+    if (eventIds.length === 0) return;
+    const missingEvents = eventIds.filter((id) => !(id in eventMeta));
+    const missingMedia = eventIds.filter((id) => !(id in mediaByEvent));
+    (async () => {
+      if (missingEvents.length) {
+        const { data } = await supabase
+          .from("webhook_events")
+          .select("id, camera, topic, label")
+          .in("id", missingEvents);
+        if (data) {
+          setEventMeta((prev) => {
+            const next = { ...prev };
+            data.forEach((r: any) => { next[r.id] = { camera: r.camera, topic: r.topic, label: r.label }; });
+            return next;
+          });
+        }
+      }
+      if (missingMedia.length) {
+        const { data } = await supabase
+          .from("media_items")
+          .select("event_id, url, kind, ts")
+          .in("event_id", missingMedia)
+          .order("ts", { ascending: false });
+        if (data) {
+          setMediaByEvent((prev) => {
+            const next = { ...prev };
+            data.forEach((r: any) => {
+              if (!r.event_id) return;
+              const cur = next[r.event_id];
+              if (!cur) next[r.event_id] = { url: r.url, kind: r.kind };
+              else if (cur.kind !== "snapshot" && r.kind === "snapshot") next[r.event_id] = { url: r.url, kind: r.kind };
+            });
+            return next;
+          });
+        }
+      }
+    })();
+  }, [entries, eventMeta, mediaByEvent]);
+
   const actions = useMemo(() => {
     const set = new Set<string>();
     entries.forEach((e) => set.add(e.action));
@@ -68,13 +114,15 @@ const Audit = () => {
     return entries.filter((e) => {
       if (actionFilter !== "all" && e.action !== actionFilter) return false;
       if (!f) return true;
+      const cam = e.event_id ? eventMeta[e.event_id]?.camera ?? "" : "";
       return (
         (e.actor ?? "").toLowerCase().includes(f) ||
         (e.note ?? "").toLowerCase().includes(f) ||
+        cam.toLowerCase().includes(f) ||
         e.alert_key.toLowerCase().includes(f)
       );
     });
-  }, [entries, filter, actionFilter]);
+  }, [entries, filter, actionFilter, eventMeta]);
 
   return (
     <DashboardLayout
@@ -106,7 +154,7 @@ const Audit = () => {
         <div className="relative ml-auto max-w-xs w-full">
           <FilterIcon className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Filter by user, note, or alert…"
+            placeholder="Filter by user, camera, note…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="bg-secondary border-border pl-8"
@@ -132,7 +180,8 @@ const Audit = () => {
                   <th className="px-4 py-2.5 font-semibold">User</th>
                   <th className="px-4 py-2.5 font-semibold">Action</th>
                   <th className="px-4 py-2.5 font-semibold">Response time</th>
-                  <th className="px-4 py-2.5 font-semibold">Alert</th>
+                  <th className="px-4 py-2.5 font-semibold">Snapshot</th>
+                  <th className="px-4 py-2.5 font-semibold">Camera</th>
                   <th className="px-4 py-2.5 font-semibold">Note</th>
                 </tr>
               </thead>
@@ -174,7 +223,41 @@ const Audit = () => {
                       )}
                     </td>
                     <td className="px-4 py-2.5">
-                      <code className="text-[10px] text-accent">{e.alert_key.slice(0, 12)}…</code>
+                      {(() => {
+                        const meta = e.event_id ? mediaByEvent[e.event_id] : null;
+                        if (meta && (meta.kind === "snapshot" || meta.kind === "image")) {
+                          return (
+                            <a href={meta.url} target="_blank" rel="noreferrer" className="block">
+                              <img src={meta.url} alt="snapshot" loading="lazy"
+                                className="h-12 w-20 object-cover rounded border border-border hover:border-primary transition-colors" />
+                            </a>
+                          );
+                        }
+                        if (meta) {
+                          return (
+                            <a href={meta.url} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
+                              <CameraIcon className="h-3 w-3" /> clip
+                            </a>
+                          );
+                        }
+                        return <ImageOff className="h-4 w-4 text-muted-foreground/40" />;
+                      })()}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                      {(() => {
+                        const meta = e.event_id ? eventMeta[e.event_id] : null;
+                        const camera = meta?.camera || meta?.label;
+                        if (camera) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 text-foreground font-medium">
+                              <CameraIcon className="h-3 w-3 text-primary" />
+                              {camera}
+                            </span>
+                          );
+                        }
+                        return <code className="text-[10px] text-muted-foreground">{e.alert_key.slice(0, 12)}…</code>;
+                      })()}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-md truncate">
                       {e.note ?? "—"}
