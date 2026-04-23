@@ -360,6 +360,7 @@ const Wall = () => {
                       index={i}
                       onArchive={() => archive(a)}
                       onDismiss={() => dismiss(a)}
+                      onComment={() => setAuditFor(a)}
                       onOpen={() => {
                         if (a.clip) {
                           setLightbox({
