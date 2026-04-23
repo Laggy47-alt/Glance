@@ -1,0 +1,233 @@
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bell, BellOff, Camera, X, Archive as ArchiveIcon } from "lucide-react";
+import { resolveMediaUrl, type MediaItem, type WebhookEvent } from "@/lib/webhookStore";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+
+type Alert = {
+  key: string;
+  event: WebhookEvent | null;
+  clip?: MediaItem;
+  snapshot?: MediaItem;
+  camera: string;
+  label: string;
+  ts: string;
+  receivedAt: number;
+};
+
+const AUTO_DISMISS_MS = 25_000;
+
+const Wall = () => {
+  const store = useWebhookStore();
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [muted, setMuted] = useState(false);
+  const seenRef = useRef<Set<string>>(new Set());
+  const mountedAtRef = useRef<number>(Date.now());
+
+  // Build alerts from incoming events + media. Pair by frigate_event_id when possible.
+  useEffect(() => {
+    if (!store.loaded) return;
+    const newOnes: Alert[] = [];
+    for (const e of store.events) {
+      if (e.archived) continue;
+      // Only react to fresh events arriving after mount, to avoid flooding on first load.
+      if (new Date(e.ts).getTime() < mountedAtRef.current - 5_000) continue;
+      const key = e.id;
+      if (seenRef.current.has(key)) continue;
+      const fid = e.frigate_event_id;
+      const clip = fid ? store.media.find((m) => m.frigate_event_id === fid && m.kind === "clip") : undefined;
+      const snapshot = fid ? store.media.find((m) => m.frigate_event_id === fid && m.kind === "snapshot") : undefined;
+      seenRef.current.add(key);
+      newOnes.push({
+        key,
+        event: e,
+        clip,
+        snapshot,
+        camera: e.camera ?? "unknown",
+        label: e.label ?? e.kind ?? "motion",
+        ts: e.ts,
+        receivedAt: Date.now(),
+      });
+    }
+    if (newOnes.length) {
+      setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
+      if (!muted) {
+        try {
+          // simple beep
+          const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.frequency.value = 880;
+          g.gain.setValueAtTime(0.0001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+          o.start();
+          o.stop(ctx.currentTime + 0.26);
+        } catch { /* no-op */ }
+      }
+    }
+  }, [store.events, store.media, store.loaded, muted]);
+
+  // When media arrives later than the event, attach it to the open alert.
+  useEffect(() => {
+    setAlerts((prev) =>
+      prev.map((a) => {
+        if (a.clip || !a.event?.frigate_event_id) return a;
+        const fid = a.event.frigate_event_id;
+        const clip = store.media.find((m) => m.frigate_event_id === fid && m.kind === "clip");
+        const snapshot = a.snapshot ?? store.media.find((m) => m.frigate_event_id === fid && m.kind === "snapshot");
+        if (clip || snapshot !== a.snapshot) return { ...a, clip, snapshot };
+        return a;
+      })
+    );
+  }, [store.media]);
+
+  // Auto-dismiss old cards.
+  useEffect(() => {
+    const t = setInterval(() => {
+      setAlerts((prev) => prev.filter((a) => Date.now() - a.receivedAt < AUTO_DISMISS_MS));
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const archive = async (a: Alert) => {
+    setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+    if (a.event) {
+      await supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", a.event.id);
+    }
+  };
+
+  const dismiss = (a: Alert) => setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+
+  const recentCount = useMemo(
+    () => store.events.filter((e) => !e.archived && Date.now() - new Date(e.ts).getTime() < 5 * 60_000).length,
+    [store.events]
+  );
+
+  return (
+    <DashboardLayout
+      title="Live Wall"
+      subtitle="Idle screen — incoming motion clips pop up here"
+      actions={
+        <div className="flex items-center gap-3">
+          <Badge variant="secondary" className="gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-success pulse-dot" />
+            {recentCount} in last 5m
+          </Badge>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+            <Switch checked={!muted} onCheckedChange={(v) => setMuted(!v)} />
+          </div>
+        </div>
+      }
+    >
+      <div className="relative h-[calc(100vh-10rem)] rounded-lg border border-border bg-gradient-to-br from-background via-background to-secondary/30 overflow-hidden">
+        {alerts.length === 0 && (
+          <div className="absolute inset-0 grid place-items-center pointer-events-none">
+            <div className="text-center space-y-3">
+              <div className="mx-auto h-16 w-16 rounded-full bg-secondary/50 grid place-items-center">
+                <Camera className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground">Waiting for motion…</p>
+              <p className="text-[11px] text-muted-foreground/70">New events will pop up here automatically.</p>
+            </div>
+          </div>
+        )}
+
+        <div className="absolute inset-0 p-6 flex flex-col-reverse gap-4 pointer-events-none">
+          {alerts.map((a, i) => (
+            <AlertCard
+              key={a.key}
+              alert={a}
+              index={i}
+              onArchive={() => archive(a)}
+              onDismiss={() => dismiss(a)}
+            />
+          ))}
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+function AlertCard({
+  alert,
+  index,
+  onArchive,
+  onDismiss,
+}: {
+  alert: Alert;
+  index: number;
+  onArchive: () => void;
+  onDismiss: () => void;
+}) {
+  const clipUrl = alert.clip ? resolveMediaUrl(alert.clip.url) : null;
+  const snapUrl = alert.snapshot ? resolveMediaUrl(alert.snapshot.url) : null;
+  const elapsed = Math.max(0, Math.min(1, (Date.now() - alert.receivedAt) / AUTO_DISMISS_MS));
+
+  return (
+    <div
+      className={cn(
+        "pointer-events-auto self-end ml-auto w-full max-w-md rounded-xl border border-border bg-card/95 backdrop-blur shadow-2xl overflow-hidden",
+        "animate-in slide-in-from-right-8 fade-in duration-300"
+      )}
+      style={{ opacity: 1 - index * 0.05 }}
+    >
+      <div className="relative aspect-video bg-black">
+        {clipUrl ? (
+          <video
+            src={clipUrl}
+            poster={snapUrl ?? undefined}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover"
+          />
+        ) : snapUrl ? (
+          <img src={snapUrl} alt={alert.camera} className="w-full h-full object-cover" />
+        ) : (
+          <div className="grid place-items-center h-full text-muted-foreground text-xs">
+            Waiting for clip…
+          </div>
+        )}
+        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-destructive/90 text-destructive-foreground px-2 py-1 rounded text-[10px] uppercase tracking-wider font-semibold">
+          <span className="h-1.5 w-1.5 rounded-full bg-destructive-foreground pulse-dot" />
+          Live alert
+        </div>
+        <button
+          onClick={onDismiss}
+          className="absolute top-2 right-2 h-7 w-7 grid place-items-center rounded-full bg-black/60 hover:bg-black/80 text-foreground/90"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="p-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-foreground capitalize truncate">
+            {alert.label} · {alert.camera}
+          </div>
+          <div className="text-[11px] text-muted-foreground tabular-nums">
+            {new Date(alert.ts).toLocaleTimeString()}
+            {alert.event?.score != null && ` · ${(alert.event.score * 100).toFixed(0)}%`}
+          </div>
+        </div>
+        <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1.5">
+          <ArchiveIcon className="h-3.5 w-3.5" /> Archive
+        </Button>
+      </div>
+      <div className="h-0.5 bg-border">
+        <div className="h-full bg-primary transition-[width] duration-1000 ease-linear" style={{ width: `${(1 - elapsed) * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export default Wall;

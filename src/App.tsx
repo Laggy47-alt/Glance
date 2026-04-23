@@ -11,6 +11,7 @@ import AutoRead from "./pages/AutoRead.tsx";
 import Archive from "./pages/Archive.tsx";
 import Cameras from "./pages/Cameras.tsx";
 import Media from "./pages/Media.tsx";
+import Wall from "./pages/Wall.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/sources" element={<Sources />} />
           <Route path="/frigate" element={<Frigate />} />
           <Route path="/messages" element={<Messages />} />
+          <Route path="/wall" element={<Wall />} />
           <Route path="/cameras" element={<Cameras />} />
           <Route path="/media" element={<Media />} />
           <Route path="/auto-read" element={<AutoRead />} />

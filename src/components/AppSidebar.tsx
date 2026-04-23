@@ -1,10 +1,11 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Activity, Inbox, Archive, Filter, Camera, Film, Webhook, Plug, Server } from "lucide-react";
+import { Activity, Inbox, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { cn } from "@/lib/utils";
 
 const items = [
   { to: "/", label: "Overview", icon: Activity },
+  { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/sources", label: "Sources", icon: Plug },
   { to: "/frigate", label: "Frigate NVR", icon: Server },
   { to: "/messages", label: "Messages", icon: Inbox },
