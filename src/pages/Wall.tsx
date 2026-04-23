@@ -337,6 +337,18 @@ const Wall = () => {
                       index={i}
                       onArchive={() => archive(a)}
                       onDismiss={() => dismiss(a)}
+                      onOpen={() => {
+                        if (a.clip) {
+                          setLightbox({
+                            kind: "clip",
+                            url: resolveMediaUrl(a.clip.url),
+                            camera: a.camera,
+                            topic: a.clip.topic ?? null,
+                            ts: a.clip.ts,
+                            thumbnail: a.snapshot ? resolveMediaUrl(a.snapshot.url) : undefined,
+                          });
+                        }
+                      }}
                     />
                   ))}
                 </div>
@@ -345,6 +357,7 @@ const Wall = () => {
           );
         })()}
       </div>
+      <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </DashboardLayout>
   );
 };
