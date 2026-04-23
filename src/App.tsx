@@ -11,6 +11,7 @@ import Frigate from "./pages/Frigate.tsx";
 import Messages from "./pages/Messages.tsx";
 import AutoRead from "./pages/AutoRead.tsx";
 import Archive from "./pages/Archive.tsx";
+import Audit from "./pages/Audit.tsx";
 import Cameras from "./pages/Cameras.tsx";
 import Media from "./pages/Media.tsx";
 import Wall from "./pages/Wall.tsx";
