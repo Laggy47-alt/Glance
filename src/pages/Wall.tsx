@@ -400,12 +400,14 @@ function AlertCard({
   index,
   onArchive,
   onDismiss,
+  onComment,
   onOpen,
 }: {
   alert: Alert;
   index: number;
   onArchive: () => void;
   onDismiss: () => void;
+  onComment: () => void;
   onOpen: () => void;
 }) {
   const withBbox = (raw: string) => {
@@ -472,10 +474,20 @@ function AlertCard({
             {alert.event?.score != null && ` · ${(alert.event.score * 100).toFixed(0)}%`}
           </div>
         </div>
-        <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
-          <ArchiveIcon className="h-3 w-3" /> ACK
-        </Button>
-      </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onComment}
+            className="gap-1 h-7 px-2 text-[11px]"
+            title="Add comment / view audit trail"
+          >
+            <MessageSquare className="h-3 w-3" />
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
+            <ArchiveIcon className="h-3 w-3" /> ACK
+          </Button>
+        </div>
     </div>
   );
 }
