@@ -488,6 +488,7 @@ function AlertCard({
             <ArchiveIcon className="h-3 w-3" /> ACK
           </Button>
         </div>
+      </div>
     </div>
   );
 }
