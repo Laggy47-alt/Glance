@@ -187,7 +187,7 @@ const Wall = () => {
   return (
     <DashboardLayout
       title="Live Wall"
-      subtitle="Idle screen — incoming motion clips pop up here"
+      subtitle="Idle screen — incoming snapshots pop up here"
       actions={
         <div className="flex items-center gap-3">
           <Badge variant="secondary" className="gap-1.5">
@@ -214,16 +214,18 @@ const Wall = () => {
           </div>
         )}
 
-        <div className="absolute inset-0 p-6 flex flex-col-reverse gap-4 pointer-events-none">
-          {alerts.map((a, i) => (
-            <AlertCard
-              key={a.key}
-              alert={a}
-              index={i}
-              onArchive={() => archive(a)}
-              onDismiss={() => dismiss(a)}
-            />
-          ))}
+        <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
+          <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
+            {alerts.map((a, i) => (
+              <AlertCard
+                key={a.key}
+                alert={a}
+                index={i}
+                onArchive={() => archive(a)}
+                onDismiss={() => dismiss(a)}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </DashboardLayout>
@@ -241,34 +243,30 @@ function AlertCard({
   onArchive: () => void;
   onDismiss: () => void;
 }) {
-  const clipUrl = alert.clip ? resolveMediaUrl(alert.clip.url) : null;
-  const snapUrl = alert.snapshot ? resolveMediaUrl(alert.snapshot.url) : null;
+  const withBbox = (raw: string) => {
+    const resolved = resolveMediaUrl(raw);
+    if (/\/api\/events\/[^/]+\/snapshot\.jpg/.test(raw) || /\/api\/events\/[^/]+\/snapshot\.jpg/.test(resolved)) {
+      return resolved + (resolved.includes("?") ? "&" : "?") + "bbox=1";
+    }
+    return resolved;
+  };
+  const snapUrl = alert.snapshot ? withBbox(alert.snapshot.url) : null;
   const elapsed = Math.max(0, Math.min(1, (Date.now() - alert.receivedAt) / AUTO_DISMISS_MS));
 
   return (
     <div
       className={cn(
-        "pointer-events-auto self-end ml-auto w-full max-w-md rounded-xl border border-border bg-card/95 backdrop-blur shadow-2xl overflow-hidden",
-        "animate-in slide-in-from-right-8 fade-in duration-300"
+        "pointer-events-auto w-full max-w-2xl rounded-xl border border-border bg-card/95 backdrop-blur shadow-2xl overflow-hidden",
+        "animate-in zoom-in-95 fade-in duration-300"
       )}
-      style={{ opacity: 1 - index * 0.05 }}
+      style={{ opacity: 1 - index * 0.08 }}
     >
       <div className="relative aspect-video bg-black">
-        {clipUrl ? (
-          <video
-            src={clipUrl}
-            poster={snapUrl ?? undefined}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="w-full h-full object-cover"
-          />
-        ) : snapUrl ? (
-          <img src={snapUrl} alt={alert.camera} className="w-full h-full object-cover" />
+        {snapUrl ? (
+          <img src={snapUrl} alt={alert.camera} className="w-full h-full object-contain" />
         ) : (
           <div className="grid place-items-center h-full text-muted-foreground text-xs">
-            Waiting for clip…
+            Waiting for snapshot…
           </div>
         )}
         <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-destructive/90 text-destructive-foreground px-2 py-1 rounded text-[10px] uppercase tracking-wider font-semibold">
@@ -283,6 +281,7 @@ function AlertCard({
           <X className="h-4 w-4" />
         </button>
       </div>
+
       <div className="p-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-foreground capitalize truncate">
