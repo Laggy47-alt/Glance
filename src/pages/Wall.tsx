@@ -115,7 +115,7 @@ const Wall = () => {
       });
     }
     if (newOnes.length) {
-      setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
+      setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
       if (!muted) {
         try {
           const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -171,7 +171,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       });
     }
-    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
+    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
   }, [store.media, store.events, store.loaded]);
 
   // When media arrives after the alert is shown, attach it.
@@ -328,8 +328,8 @@ const Wall = () => {
                 </div>
               )}
 
-              <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
-                <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
+              <div className="absolute inset-0 overflow-y-auto p-4">
+                <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] auto-rows-min">
                   {visibleAlerts.map((a, i) => (
                     <AlertCard
                       key={a.key}
@@ -388,10 +388,9 @@ function AlertCard({
   return (
     <div
       className={cn(
-        "pointer-events-auto w-full max-w-2xl rounded-xl border border-border bg-card/95 backdrop-blur shadow-2xl overflow-hidden",
+        "pointer-events-auto w-full rounded-lg border border-border bg-card/95 backdrop-blur shadow-lg overflow-hidden",
         "animate-in zoom-in-95 fade-in duration-300"
       )}
-      style={{ opacity: 1 - index * 0.08 }}
     >
       <button
         type="button"
@@ -403,19 +402,19 @@ function AlertCard({
         aria-label={hasClip ? "Open clip" : "Alert"}
       >
         {snapUrl ? (
-          <img src={snapUrl} alt={alert.camera} className="w-full h-full object-contain" />
+          <img src={snapUrl} alt={alert.camera} className="w-full h-full object-cover" />
         ) : (
-          <div className="grid place-items-center h-full text-muted-foreground text-xs">
+          <div className="grid place-items-center h-full text-muted-foreground text-[10px]">
             Waiting for snapshot…
           </div>
         )}
-        <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-destructive/90 text-destructive-foreground px-2 py-1 rounded text-[10px] uppercase tracking-wider font-semibold">
-          <span className="h-1.5 w-1.5 rounded-full bg-destructive-foreground pulse-dot" />
-          Live alert
+        <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-destructive/90 text-destructive-foreground px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold">
+          <span className="h-1 w-1 rounded-full bg-destructive-foreground pulse-dot" />
+          Live
         </div>
         {hasClip && (
-          <div className="absolute bottom-2 left-2 bg-black/70 text-foreground/90 px-2 py-1 rounded text-[10px] uppercase tracking-wider font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-            Click to play clip
+          <div className="absolute bottom-1.5 left-1.5 bg-black/70 text-foreground/90 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+            Play clip
           </div>
         )}
         <span
@@ -423,25 +422,25 @@ function AlertCard({
           tabIndex={0}
           onClick={(e) => { e.stopPropagation(); onDismiss(); }}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onDismiss(); } }}
-          className="absolute top-2 right-2 h-7 w-7 grid place-items-center rounded-full bg-black/60 hover:bg-black/80 text-foreground/90"
+          className="absolute top-1.5 right-1.5 h-6 w-6 grid place-items-center rounded-full bg-black/60 hover:bg-black/80 text-foreground/90"
           aria-label="Dismiss"
         >
-          <X className="h-4 w-4" />
+          <X className="h-3.5 w-3.5" />
         </span>
       </button>
 
-      <div className="p-3 flex items-center justify-between gap-3">
+      <div className="p-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-foreground capitalize truncate">
+          <div className="text-xs font-semibold text-foreground capitalize truncate">
             {alert.label} · {alert.camera}
           </div>
-          <div className="text-[11px] text-muted-foreground tabular-nums">
+          <div className="text-[10px] text-muted-foreground tabular-nums truncate">
             {new Date(alert.ts).toLocaleTimeString()}
             {alert.event?.score != null && ` · ${(alert.event.score * 100).toFixed(0)}%`}
           </div>
         </div>
-        <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1.5">
-          <ArchiveIcon className="h-3.5 w-3.5" /> ACK
+        <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
+          <ArchiveIcon className="h-3 w-3" /> ACK
         </Button>
       </div>
     </div>
