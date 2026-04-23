@@ -92,11 +92,19 @@ const Media = () => {
             </button>
           ))}
         </div>
+        <Button
+          size="sm"
+          variant={onlyTagged ? "default" : "outline"}
+          onClick={() => setOnlyTagged((v) => !v)}
+          className="gap-1.5 h-8 ml-auto"
+        >
+          <TagIcon className="h-3.5 w-3.5" /> Tagged only
+        </Button>
         <Input
-          placeholder="Filter by camera or topic…"
+          placeholder="Filter by camera, topic, or tag…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="bg-secondary border-border max-w-xs ml-auto"
+          className="bg-secondary border-border max-w-xs"
         />
       </div>
 
