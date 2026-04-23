@@ -3,9 +3,12 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useMemo, useState } from "react";
-import { Camera, Film, ImageOff, Play } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useEffect, useMemo, useState } from "react";
+import { Camera, Film, ImageOff, Play, Tag as TagIcon } from "lucide-react";
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
+import { resolveMediaUrl } from "@/lib/webhookStore";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "snapshot" | "clip";
