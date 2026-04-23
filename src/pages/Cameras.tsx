@@ -56,14 +56,22 @@ const Cameras = () => {
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {cameras.map((cam) => {
             const recentClips = cam.clips.slice().sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 3);
+            // Live thumbnail: if this camera came from a Frigate instance, hit /api/<cam>/latest.jpg through the proxy.
+            const liveSrc = cam.instanceId
+              ? `${frigateProxyUrl(`/${cam.instanceId}/api/${encodeURIComponent(cam.name)}/latest.jpg`)}?t=${tick}`
+              : null;
+            const snapshotSrc = liveSrc ?? (cam.latestSnapshot ? resolveMediaUrl(cam.latestSnapshot.url) : null);
+            const lightboxSnapshot = cam.latestSnapshot
+              ? { ...cam.latestSnapshot, url: resolveMediaUrl(cam.latestSnapshot.url) }
+              : null;
             return (
-              <Card key={cam.name} className="bg-gradient-card border-border shadow-card overflow-hidden flex flex-col">
+              <Card key={`${cam.instanceId ?? "_"}-${cam.name}`} className="bg-gradient-card border-border shadow-card overflow-hidden flex flex-col">
                 <button
-                  onClick={() => cam.latestSnapshot && setSelected(cam.latestSnapshot)}
+                  onClick={() => lightboxSnapshot && setSelected(lightboxSnapshot)}
                   className="relative aspect-video bg-black group"
                 >
-                  {cam.latestSnapshot ? (
-                    <img src={cam.latestSnapshot.url} alt={cam.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                  {snapshotSrc ? (
+                    <img src={snapshotSrc} alt={cam.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
                   ) : (
                     <div className="grid place-items-center h-full text-muted-foreground">
                       <Camera className="h-8 w-8" />
@@ -71,7 +79,7 @@ const Cameras = () => {
                   )}
                   <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur px-2 py-1 rounded text-[10px] uppercase tracking-wider">
                     <span className="h-1.5 w-1.5 rounded-full bg-success pulse-dot" />
-                    <span className="text-foreground/90">Live</span>
+                    <span className="text-foreground/90">{liveSrc ? "Live" : "Last"}</span>
                   </div>
                   {cam.clips.length > 0 && (
                     <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-[10px] font-semibold px-1.5 py-0.5 rounded">
@@ -98,7 +106,7 @@ const Cameras = () => {
                       {recentClips.map((c) => (
                         <button
                           key={c.id}
-                          onClick={() => setSelected(c)}
+                          onClick={() => setSelected({ ...c, url: resolveMediaUrl(c.url) })}
                           className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-secondary/50 hover:bg-secondary text-left transition-colors"
                         >
                           <Play className="h-3.5 w-3.5 text-primary shrink-0" />
