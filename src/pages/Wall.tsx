@@ -29,7 +29,28 @@ const Wall = () => {
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
 
-  // Build alerts from incoming events + media. Pair by frigate_event_id when possible.
+  // Helper: find best media match for an event (frigate_event_id, then event_id, then camera+time window)
+  const findMedia = (e: WebhookEvent, kind: "snapshot" | "clip") => {
+    const fid = e.frigate_event_id;
+    if (fid) {
+      const m = store.media.find((x) => x.frigate_event_id === fid && x.kind === kind);
+      if (m) return m;
+    }
+    const byEvent = store.media.find((x) => x.event_id === e.id && x.kind === kind);
+    if (byEvent) return byEvent;
+    if (e.camera) {
+      const eventTs = new Date(e.ts).getTime();
+      const m = store.media.find((x) =>
+        x.kind === kind &&
+        x.camera === e.camera &&
+        Math.abs(new Date(x.ts).getTime() - eventTs) < 60_000
+      );
+      if (m) return m;
+    }
+    return undefined;
+  };
+
+  // Build alerts from incoming events. Pair media as it arrives.
   useEffect(() => {
     if (!store.loaded) return;
     const newOnes: Alert[] = [];
@@ -39,9 +60,8 @@ const Wall = () => {
       if (new Date(e.ts).getTime() < mountedAtRef.current - 5_000) continue;
       const key = e.id;
       if (seenRef.current.has(key)) continue;
-      const fid = e.frigate_event_id;
-      const clip = fid ? store.media.find((m) => m.frigate_event_id === fid && m.kind === "clip") : undefined;
-      const snapshot = fid ? store.media.find((m) => m.frigate_event_id === fid && m.kind === "snapshot") : undefined;
+      const clip = findMedia(e, "clip");
+      const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
       newOnes.push({
         key,
@@ -58,7 +78,6 @@ const Wall = () => {
       setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
       if (!muted) {
         try {
-          // simple beep
           const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
           const o = ctx.createOscillator();
           const g = ctx.createGain();
@@ -74,15 +93,70 @@ const Wall = () => {
     }
   }, [store.events, store.media, store.loaded, muted]);
 
-  // When media arrives later than the event, attach it to the open alert.
+  // Also pop up standalone media (e.g. polled clips with no paired event row).
+  useEffect(() => {
+    if (!store.loaded) return;
+    const newOnes: Alert[] = [];
+    for (const m of store.media) {
+      if (m.kind !== "clip") continue;
+      if (new Date(m.ts).getTime() < mountedAtRef.current - 5_000) continue;
+      const key = `m:${m.id}`;
+      if (seenRef.current.has(key)) continue;
+      // Skip if we already have an alert covering this clip via its paired event
+      const alreadyCovered = [...seenRef.current].some((k) => {
+        const ev = store.events.find((e) => e.id === k);
+        if (!ev) return false;
+        if (ev.frigate_event_id && m.frigate_event_id && ev.frigate_event_id === m.frigate_event_id) return true;
+        if (m.event_id && m.event_id === ev.id) return true;
+        return false;
+      });
+      if (alreadyCovered) { seenRef.current.add(key); continue; }
+      seenRef.current.add(key);
+      const snapshot = store.media.find((x) =>
+        x.kind === "snapshot" &&
+        ((m.frigate_event_id && x.frigate_event_id === m.frigate_event_id) ||
+          (x.camera === m.camera && Math.abs(new Date(x.ts).getTime() - new Date(m.ts).getTime()) < 60_000))
+      );
+      newOnes.push({
+        key,
+        event: null,
+        clip: m,
+        snapshot,
+        camera: m.camera ?? "unknown",
+        label: "motion",
+        ts: m.ts,
+        receivedAt: Date.now(),
+      });
+    }
+    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
+  }, [store.media, store.events, store.loaded]);
+
+  // When media arrives after the alert is shown, attach it.
   useEffect(() => {
     setAlerts((prev) =>
       prev.map((a) => {
-        if (a.clip || !a.event?.frigate_event_id) return a;
-        const fid = a.event.frigate_event_id;
-        const clip = store.media.find((m) => m.frigate_event_id === fid && m.kind === "clip");
-        const snapshot = a.snapshot ?? store.media.find((m) => m.frigate_event_id === fid && m.kind === "snapshot");
-        if (clip || snapshot !== a.snapshot) return { ...a, clip, snapshot };
+        if (a.clip && a.snapshot) return a;
+        const camera = a.camera;
+        const eventTs = new Date(a.ts).getTime();
+        const fid = a.event?.frigate_event_id;
+        const matchKind = (kind: "snapshot" | "clip") => {
+          if (fid) {
+            const m = store.media.find((x) => x.frigate_event_id === fid && x.kind === kind);
+            if (m) return m;
+          }
+          if (a.event) {
+            const m = store.media.find((x) => x.event_id === a.event!.id && x.kind === kind);
+            if (m) return m;
+          }
+          return store.media.find((x) =>
+            x.kind === kind &&
+            x.camera === camera &&
+            Math.abs(new Date(x.ts).getTime() - eventTs) < 60_000
+          );
+        };
+        const clip = a.clip ?? matchKind("clip");
+        const snapshot = a.snapshot ?? matchKind("snapshot");
+        if (clip !== a.clip || snapshot !== a.snapshot) return { ...a, clip, snapshot };
         return a;
       })
     );
