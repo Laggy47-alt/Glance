@@ -157,16 +157,87 @@ const Frigate = () => {
                       <div className="text-xs bg-destructive/10 border border-destructive/30 rounded px-3 py-2 text-destructive font-mono break-all">{f.last_error}</div>
                     )}
 
-                    {pushUrl && (
-                      <div>
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Push endpoint (Frigate → Lovable)</Label>
-                        <div className="flex gap-2 mt-1">
-                          <code className="flex-1 text-xs bg-secondary border border-border rounded px-3 py-2 font-mono text-accent break-all">{pushUrl}</code>
-                          <Button size="icon" variant="outline" onClick={() => copy(pushUrl)}><Copy className="h-4 w-4" /></Button>
+                    {src && pushUrl && (
+                      <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Webhook className="h-4 w-4 text-primary" />
+                          <p className="text-xs font-semibold text-foreground">Webhook for your NVR</p>
+                          <Badge variant="secondary" className="ml-auto text-[9px]">Paste into Frigate</Badge>
                         </div>
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          Configure this as a Frigate notification webhook (or pipe MQTT events through node-red / mosquitto-bridge).
-                          Send <code className="text-accent">X-Webhook-Secret: &lt;source secret&gt;</code> from the Sources page.
+
+                        <div>
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Endpoint URL</Label>
+                          <div className="flex gap-2 mt-1">
+                            <code className="flex-1 text-xs bg-secondary border border-border rounded px-3 py-2 font-mono text-accent break-all">{pushUrl}</code>
+                            <Button size="icon" variant="outline" onClick={() => copy(pushUrl)} title="Copy URL"><Copy className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Secret <span className="normal-case text-muted-foreground/70">— send as <code className="text-accent">X-Webhook-Secret</code> header</span>
+                          </Label>
+                          <div className="flex gap-2 mt-1">
+                            <code className="flex-1 text-xs bg-secondary border border-border rounded px-3 py-2 font-mono break-all">
+                              {secretRevealed[f.id] ? src.secret : "•".repeat(32)}
+                            </code>
+                            <Button size="icon" variant="outline" onClick={() => setSecretRevealed((r) => ({ ...r, [f.id]: !r[f.id] }))} title={secretRevealed[f.id] ? "Hide" : "Reveal"}>
+                              {secretRevealed[f.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                            <Button size="icon" variant="outline" onClick={() => copy(src.secret)} title="Copy secret"><Copy className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">frigate-notify config snippet</summary>
+                          <div className="flex gap-2 mt-2 items-start">
+                            <pre className="flex-1 bg-background/60 border border-border rounded p-3 font-mono text-[11px] overflow-auto whitespace-pre">{`webhook:
+  enabled: true
+  server: "${pushUrl}"
+  method: POST
+  headers:
+    Content-Type: "application/json"
+    X-Webhook-Secret: "${src.secret}"
+  template: |
+    {
+      "event_id": "{{ .ID }}",
+      "camera": "{{ .Camera }}",
+      "label": "{{ .Label }}",
+      "score": {{ .TopScore }},
+      "severity": "event",
+      "snapshot_url": "{{ .SnapshotURL }}",
+      "clip_url": "{{ .ClipURL }}"
+    }`}</pre>
+                            <Button size="icon" variant="outline" onClick={() => copy(`webhook:
+  enabled: true
+  server: "${pushUrl}"
+  method: POST
+  headers:
+    Content-Type: "application/json"
+    X-Webhook-Secret: "${src.secret}"
+  template: |
+    {
+      "event_id": "{{ .ID }}",
+      "camera": "{{ .Camera }}",
+      "label": "{{ .Label }}",
+      "score": {{ .TopScore }},
+      "severity": "event",
+      "snapshot_url": "{{ .SnapshotURL }}",
+      "clip_url": "{{ .ClipURL }}"
+    }`)} title="Copy snippet"><Copy className="h-4 w-4" /></Button>
+                          </div>
+                        </details>
+
+                        <details className="text-xs">
+                          <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">curl test</summary>
+                          <pre className="bg-background/60 border border-border rounded p-3 mt-2 font-mono text-[11px] overflow-auto">{`curl -X POST '${pushUrl}' \\
+  -H 'Content-Type: application/json' \\
+  -H 'X-Webhook-Secret: ${src.secret}' \\
+  -d '{"event_id":"test-1","camera":"front_door","label":"person","score":0.9}'`}</pre>
+                        </details>
+
+                        <p className="text-[10px] text-muted-foreground">
+                          Your NVR has internet access — paste the endpoint and secret directly into <code className="text-accent">frigate-notify</code> or any HTTP notifier. No tunnel needed for push (only required if you also want polling/media proxy).
                         </p>
                       </div>
                     )}
