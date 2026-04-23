@@ -248,9 +248,11 @@ const Wall = () => {
     setAlerts((prev) => prev.filter((x) => !trash.some((t) => t.key === x.key)));
   }, [alerts]);
 
+  const recentCount = useMemo(
     () => store.events.filter((e) => !e.archived && Date.now() - new Date(e.ts).getTime() < 5 * 60_000).length,
     [store.events]
   );
+
 
   return (
     <DashboardLayout
