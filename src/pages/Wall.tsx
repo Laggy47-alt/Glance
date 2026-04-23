@@ -30,6 +30,8 @@ const Wall = () => {
   const store = useWebhookStore();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [muted, setMuted] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [auditFor, setAuditFor] = useState<Alert | null>(null);
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
   const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
