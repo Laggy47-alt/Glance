@@ -1,5 +1,11 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Film, Camera } from "lucide-react";
+import { Film, Camera, Tag as TagIcon, X, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 export type LightboxItem = {
   kind: "snapshot" | "clip";
@@ -9,9 +15,61 @@ export type LightboxItem = {
   ts: string;
   thumbnail?: string;
   frigateUrl?: string | null;
+  mediaId?: string;
 };
 
+type MediaTag = { id: string; tag: string; note: string | null };
+
+const SUGGESTED_TAGS = ["positive incident", "false positive", "review", "important", "evidence"];
+
 export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; onClose: () => void }) {
+  const [tags, setTags] = useState<MediaTag[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!item?.mediaId) { setTags([]); return; }
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from("media_tags")
+        .select("id, tag, note")
+        .eq("media_id", item.mediaId!)
+        .order("created_at", { ascending: false });
+      if (active) setTags((data ?? []) as MediaTag[]);
+    })();
+    return () => { active = false; };
+  }, [item?.mediaId]);
+
+  const addTag = async (value: string) => {
+    if (!item?.mediaId) return;
+    const tag = value.trim();
+    if (!tag) return;
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("media_tags")
+      .insert({ media_id: item.mediaId, tag, created_by: user?.id ?? null })
+      .select("id, tag, note")
+      .single();
+    setLoading(false);
+    if (error) {
+      toast.error("Failed to add tag");
+      return;
+    }
+    setTags((prev) => [data as MediaTag, ...prev]);
+    setNewTag("");
+  };
+
+  const removeTag = async (id: string) => {
+    const { error } = await supabase.from("media_tags").delete().eq("id", id);
+    if (error) {
+      toast.error("Failed to remove tag");
+      return;
+    }
+    setTags((prev) => prev.filter((t) => t.id !== id));
+  };
+
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-4xl bg-card border-border p-0 overflow-hidden">
@@ -29,6 +87,55 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                 <video src={item.url} controls autoPlay className="max-h-[70vh] w-full" poster={item.thumbnail} />
               )}
             </div>
+            {item.mediaId && (
+              <div className="px-4 py-3 border-t border-border bg-secondary/20 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                  <TagIcon className="h-3.5 w-3.5 text-primary" /> Tags
+                </div>
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map((t) => (
+                      <Badge key={t.id} variant="secondary" className="gap-1 pr-1 bg-primary/15 text-primary border border-primary/30">
+                        {t.tag}
+                        <button
+                          onClick={() => removeTag(t.id)}
+                          className="hover:bg-primary/20 rounded-sm h-3.5 w-3.5 grid place-items-center"
+                          aria-label="Remove tag"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {SUGGESTED_TAGS.filter((s) => !tags.some((t) => t.tag.toLowerCase() === s.toLowerCase())).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => addTag(s)}
+                      disabled={loading}
+                      className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border border-dashed border-border hover:border-primary hover:text-primary text-muted-foreground transition-colors"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+                <form
+                  className="flex gap-1.5"
+                  onSubmit={(e) => { e.preventDefault(); addTag(newTag); }}
+                >
+                  <Input
+                    placeholder="Custom tag…"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    className="h-7 text-xs bg-background border-border"
+                  />
+                  <Button type="submit" size="sm" disabled={loading || !newTag.trim()} className="h-7 gap-1 px-2 text-xs">
+                    <Plus className="h-3 w-3" /> Add
+                  </Button>
+                </form>
+              </div>
+            )}
             <div className="px-4 py-2.5 text-xs text-muted-foreground border-t border-border flex justify-between items-center gap-3">
               <span>{new Date(item.ts).toLocaleString()}</span>
               {item.frigateUrl ? (
