@@ -33,7 +33,8 @@ const Wall = () => {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [auditFor, setAuditFor] = useState<Alert | null>(null);
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
-  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set(["person"]));
+  const autoArchivedRef = useRef<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
 
