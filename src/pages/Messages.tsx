@@ -1,72 +1,73 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { useMqttStore } from "@/hooks/useMqttStore";
+import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
-import { Check, CheckCheck, Send, Trash2, Plus, X } from "lucide-react";
-import { toast } from "sonner";
+import { Check, CheckCheck, Trash2 } from "lucide-react";
 
 const Messages = () => {
-  const store = useMqttStore();
+  const store = useWebhookStore();
   const [filter, setFilter] = useState("");
-  const [pubTopic, setPubTopic] = useState("test/hello");
-  const [pubPayload, setPubPayload] = useState("hello world");
-  const [newSub, setNewSub] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+
+  const sourceMap = new Map(store.sources.map((s) => [s.id, s]));
 
   const visible = useMemo(
     () =>
-      store.messages
+      store.events
         .filter((m) => !m.archived)
-        .filter((m) => !filter || m.topic.includes(filter) || m.payload.includes(filter))
-        .slice()
-        .reverse(),
-    [store.messages, filter]
+        .filter((m) => sourceFilter === "all" || m.source_id === sourceFilter)
+        .filter((m) => {
+          if (!filter) return true;
+          const f = filter.toLowerCase();
+          return m.topic.toLowerCase().includes(f) || JSON.stringify(m.payload).toLowerCase().includes(f);
+        }),
+    [store.events, filter, sourceFilter]
   );
 
-  const addSub = () => {
-    const t = newSub.trim();
-    if (!t) return;
-    if (store.subscriptions.includes(t)) return;
-    store.setSubscriptions([...store.subscriptions, t]);
-    setNewSub("");
-  };
-
-  const removeSub = (t: string) => store.setSubscriptions(store.subscriptions.filter((s) => s !== t));
-
-  const publish = () => {
-    if (!pubTopic.trim()) return;
-    store.publish(pubTopic.trim(), pubPayload);
-    toast.success(`Published to ${pubTopic}`);
+  const renderPayload = (p: unknown) => {
+    if (typeof p === "string") return p;
+    return JSON.stringify(p);
   };
 
   return (
     <DashboardLayout
       title="Messages"
-      subtitle="Live MQTT message stream"
+      subtitle="Live webhook event stream"
       actions={
         <>
           <Button variant="outline" size="sm" onClick={() => store.markAllRead()}>
             <CheckCheck className="h-4 w-4 mr-2" /> Mark all read
           </Button>
-          <Button variant="outline" size="sm" onClick={() => store.clearMessages()}>
+          <Button variant="outline" size="sm" onClick={() => store.clearEvents()}>
             <Trash2 className="h-4 w-4 mr-2" /> Clear
           </Button>
         </>
       }
     >
-      <div className="grid lg:grid-cols-[1fr_320px] gap-4">
-        <Card className="bg-gradient-card border-border shadow-card p-4 flex flex-col min-h-[60vh]">
-          <div className="flex gap-2 mb-3">
-            <Input placeholder="Filter by topic or payload…" value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-secondary border-border" />
+      <Card className="bg-gradient-card border-border shadow-card p-4 flex flex-col min-h-[60vh]">
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Input placeholder="Filter by topic or payload…" value={filter} onChange={(e) => setFilter(e.target.value)} className="bg-secondary border-border flex-1 min-w-[200px]" />
+          <div className="flex bg-secondary/50 rounded-md p-1 border border-border">
+            <button onClick={() => setSourceFilter("all")} className={`px-3 py-1 text-xs rounded ${sourceFilter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              All
+            </button>
+            {store.sources.map((s) => (
+              <button key={s.id} onClick={() => setSourceFilter(s.id)} className={`px-3 py-1 text-xs rounded ${sourceFilter === s.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                {s.name}
+              </button>
+            ))}
           </div>
-          <div className="flex-1 overflow-auto -mx-4 px-4">
-            {visible.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-12 text-center">No messages.</div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {visible.map((m) => (
+        </div>
+        <div className="flex-1 overflow-auto -mx-4 px-4">
+          {visible.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-12 text-center">No messages.</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {visible.map((m) => {
+                const src = sourceMap.get(m.source_id);
+                return (
                   <li key={m.id} className="py-3 flex items-start gap-3">
                     <button
                       onClick={() => store.markRead(m.id, !m.read)}
@@ -74,11 +75,16 @@ const Messages = () => {
                       title={m.read ? "Mark unread" : "Mark read"}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        {src && (
+                          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0" style={{ background: src.color + "22", color: src.color }}>
+                            {src.name}
+                          </span>
+                        )}
                         <code className="text-xs text-accent font-medium truncate">{m.topic}</code>
-                        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{new Date(m.ts).toLocaleTimeString()}</span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 ml-auto">{new Date(m.ts).toLocaleTimeString()}</span>
                       </div>
-                      <div className="text-sm text-foreground/90 break-all font-mono">{m.payload}</div>
+                      <div className="text-sm text-foreground/90 break-all font-mono line-clamp-3">{renderPayload(m.payload)}</div>
                     </div>
                     {!m.read && (
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => store.markRead(m.id, true)}>
@@ -86,42 +92,12 @@ const Messages = () => {
                       </Button>
                     )}
                   </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Card>
-
-        <div className="space-y-4">
-          <Card className="bg-gradient-card border-border shadow-card p-4">
-            <h3 className="text-sm font-semibold mb-3">Subscriptions</h3>
-            <div className="flex gap-2 mb-3">
-              <Input placeholder="topic/+/wildcard" value={newSub} onChange={(e) => setNewSub(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addSub()} className="bg-secondary border-border" />
-              <Button size="icon" onClick={addSub} className="bg-primary text-primary-foreground hover:bg-primary/90"><Plus className="h-4 w-4" /></Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {store.subscriptions.map((s) => (
-                <Badge key={s} variant="secondary" className="bg-secondary text-secondary-foreground gap-1.5 pr-1">
-                  <code className="text-xs">{s}</code>
-                  <button onClick={() => removeSub(s)} className="hover:text-destructive"><X className="h-3 w-3" /></button>
-                </Badge>
-              ))}
-              {store.subscriptions.length === 0 && <span className="text-xs text-muted-foreground">No subscriptions.</span>}
-            </div>
-          </Card>
-
-          <Card className="bg-gradient-card border-border shadow-card p-4">
-            <h3 className="text-sm font-semibold mb-3">Publish</h3>
-            <div className="space-y-2">
-              <Input placeholder="topic" value={pubTopic} onChange={(e) => setPubTopic(e.target.value)} className="bg-secondary border-border" />
-              <Input placeholder="payload" value={pubPayload} onChange={(e) => setPubPayload(e.target.value)} className="bg-secondary border-border font-mono" />
-              <Button onClick={publish} className="w-full bg-gradient-primary text-primary-foreground hover:opacity-90">
-                <Send className="h-4 w-4 mr-2" /> Publish
-              </Button>
-            </div>
-          </Card>
+                );
+              })}
+            </ul>
+          )}
         </div>
-      </div>
+      </Card>
     </DashboardLayout>
   );
 };

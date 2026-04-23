@@ -1,8 +1,16 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { MediaItem } from "@/lib/mediaExtractor";
 import { Film, Camera } from "lucide-react";
 
-export function MediaLightbox({ item, onClose }: { item: MediaItem | null; onClose: () => void }) {
+export type LightboxItem = {
+  kind: "snapshot" | "clip";
+  url: string;
+  camera: string | null;
+  topic: string | null;
+  ts: string;
+  thumbnail?: string;
+};
+
+export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; onClose: () => void }) {
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-4xl bg-card border-border p-0 overflow-hidden">
@@ -10,12 +18,12 @@ export function MediaLightbox({ item, onClose }: { item: MediaItem | null; onClo
           <div className="flex flex-col">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-secondary/40">
               {item.kind === "clip" ? <Film className="h-4 w-4 text-primary" /> : <Camera className="h-4 w-4 text-primary" />}
-              <span className="text-sm font-semibold text-foreground">{item.camera}</span>
+              <span className="text-sm font-semibold text-foreground">{item.camera ?? "Unknown"}</span>
               <code className="text-xs text-accent ml-auto truncate">{item.topic}</code>
             </div>
             <div className="bg-black grid place-items-center min-h-[300px]">
               {item.kind === "snapshot" ? (
-                <img src={item.url} alt={item.camera} className="max-h-[70vh] w-auto" />
+                <img src={item.url} alt={item.camera ?? ""} className="max-h-[70vh] w-auto" />
               ) : (
                 <video src={item.url} controls autoPlay className="max-h-[70vh] w-full" poster={item.thumbnail} />
               )}

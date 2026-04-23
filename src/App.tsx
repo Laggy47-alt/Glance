@@ -4,12 +4,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
+import Sources from "./pages/Sources.tsx";
 import Messages from "./pages/Messages.tsx";
 import AutoRead from "./pages/AutoRead.tsx";
 import Archive from "./pages/Archive.tsx";
 import Cameras from "./pages/Cameras.tsx";
 import Media from "./pages/Media.tsx";
-import Settings from "./pages/Settings.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -22,13 +22,12 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/sources" element={<Sources />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/cameras" element={<Cameras />} />
           <Route path="/media" element={<Media />} />
           <Route path="/auto-read" element={<AutoRead />} />
           <Route path="/archive" element={<Archive />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

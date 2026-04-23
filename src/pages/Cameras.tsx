@@ -1,28 +1,30 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { useMqttStore } from "@/hooks/useMqttStore";
+import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { Camera, Film, Play, VideoOff } from "lucide-react";
-import { MediaLightbox } from "@/components/MediaLightbox";
-import { MediaItem } from "@/lib/mediaExtractor";
+import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
+import type { MediaItem } from "@/lib/webhookStore";
 
 const Cameras = () => {
-  const store = useMqttStore();
-  const [selected, setSelected] = useState<MediaItem | null>(null);
+  const store = useWebhookStore();
+  const [selected, setSelected] = useState<LightboxItem | null>(null);
 
   const cameras = useMemo(() => {
     const map = new Map<string, { name: string; latestSnapshot?: MediaItem; clips: MediaItem[]; lastTs: number }>();
     for (const m of store.media) {
-      const entry = map.get(m.camera) ?? { name: m.camera, clips: [], lastTs: 0 };
+      const key = m.camera ?? "unknown";
+      const entry = map.get(key) ?? { name: key, clips: [], lastTs: 0 };
+      const t = new Date(m.ts).getTime();
       if (m.kind === "snapshot") {
-        if (!entry.latestSnapshot || m.ts > entry.latestSnapshot.ts) entry.latestSnapshot = m;
+        if (!entry.latestSnapshot || t > new Date(entry.latestSnapshot.ts).getTime()) entry.latestSnapshot = m;
       } else {
         entry.clips.push(m);
       }
-      entry.lastTs = Math.max(entry.lastTs, m.ts);
-      map.set(m.camera, entry);
+      entry.lastTs = Math.max(entry.lastTs, t);
+      map.set(key, entry);
     }
     return [...map.values()].sort((a, b) => b.lastTs - a.lastTs);
   }, [store.media]);
@@ -30,11 +32,9 @@ const Cameras = () => {
   return (
     <DashboardLayout
       title="Cameras"
-      subtitle={`${cameras.length} device${cameras.length === 1 ? "" : "s"} detected via MQTT`}
+      subtitle={`${cameras.length} device${cameras.length === 1 ? "" : "s"} detected via webhooks`}
       actions={
-        <Button variant="outline" size="sm" onClick={() => store.clearMedia()}>
-          Clear media
-        </Button>
+        <Button variant="outline" size="sm" onClick={() => store.clearMedia()}>Clear media</Button>
       }
     >
       {cameras.length === 0 ? (
@@ -42,13 +42,13 @@ const Cameras = () => {
           <VideoOff className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm text-foreground font-medium">No cameras detected yet</p>
           <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-            Publish a JSON message containing <code className="text-accent">snapshot_url</code> or <code className="text-accent">clip_url</code> to any topic. Demo mode emits sample camera events automatically.
+            POST a JSON body containing <code className="text-accent">snapshot_url</code> or <code className="text-accent">clip_url</code> to one of your webhook URLs.
           </p>
         </Card>
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {cameras.map((cam) => {
-            const recentClips = cam.clips.slice().sort((a, b) => b.ts - a.ts).slice(0, 3);
+            const recentClips = cam.clips.slice().sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 3);
             return (
               <Card key={cam.name} className="bg-gradient-card border-border shadow-card overflow-hidden flex flex-col">
                 <button
@@ -90,7 +90,7 @@ const Cameras = () => {
                       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Recent clips</p>
                       {recentClips.map((c) => (
                         <button
-                          key={c.url + c.ts}
+                          key={c.id}
                           onClick={() => setSelected(c)}
                           className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-secondary/50 hover:bg-secondary text-left transition-colors"
                         >
