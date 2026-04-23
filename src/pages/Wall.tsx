@@ -9,6 +9,7 @@ import { resolveMediaUrl, type MediaItem, type WebhookEvent } from "@/lib/webhoo
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
 
 type Alert = {
   key: string;
@@ -21,7 +22,7 @@ type Alert = {
   receivedAt: number;
 };
 
-const AUTO_DISMISS_MS = 25_000;
+
 
 const Wall = () => {
   const store = useWebhookStore();
@@ -204,13 +205,8 @@ const Wall = () => {
     );
   }, [store.media]);
 
-  // Auto-dismiss old cards.
-  useEffect(() => {
-    const t = setInterval(() => {
-      setAlerts((prev) => prev.filter((a) => Date.now() - a.receivedAt < AUTO_DISMISS_MS));
-    }, 1000);
-    return () => clearInterval(t);
-  }, []);
+  // Lightbox for opening the clip when an alert is clicked.
+  const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
 
   const archive = async (a: Alert) => {
     setAlerts((prev) => prev.filter((x) => x.key !== a.key));
@@ -341,6 +337,18 @@ const Wall = () => {
                       index={i}
                       onArchive={() => archive(a)}
                       onDismiss={() => dismiss(a)}
+                      onOpen={() => {
+                        if (a.clip) {
+                          setLightbox({
+                            kind: "clip",
+                            url: resolveMediaUrl(a.clip.url),
+                            camera: a.camera,
+                            topic: a.clip.topic ?? null,
+                            ts: a.clip.ts,
+                            thumbnail: a.snapshot ? resolveMediaUrl(a.snapshot.url) : undefined,
+                          });
+                        }
+                      }}
                     />
                   ))}
                 </div>
@@ -349,6 +357,7 @@ const Wall = () => {
           );
         })()}
       </div>
+      <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </DashboardLayout>
   );
 };
@@ -358,11 +367,13 @@ function AlertCard({
   index,
   onArchive,
   onDismiss,
+  onOpen,
 }: {
   alert: Alert;
   index: number;
   onArchive: () => void;
   onDismiss: () => void;
+  onOpen: () => void;
 }) {
   const withBbox = (raw: string) => {
     const resolved = resolveMediaUrl(raw);
@@ -372,7 +383,7 @@ function AlertCard({
     return resolved;
   };
   const snapUrl = alert.snapshot ? withBbox(alert.snapshot.url) : null;
-  const elapsed = Math.max(0, Math.min(1, (Date.now() - alert.receivedAt) / AUTO_DISMISS_MS));
+  const hasClip = !!alert.clip;
 
   return (
     <div
@@ -382,7 +393,15 @@ function AlertCard({
       )}
       style={{ opacity: 1 - index * 0.08 }}
     >
-      <div className="relative aspect-video bg-black">
+      <button
+        type="button"
+        onClick={hasClip ? onOpen : undefined}
+        className={cn(
+          "relative aspect-video bg-black w-full block",
+          hasClip ? "cursor-pointer group" : "cursor-default"
+        )}
+        aria-label={hasClip ? "Open clip" : "Alert"}
+      >
         {snapUrl ? (
           <img src={snapUrl} alt={alert.camera} className="w-full h-full object-contain" />
         ) : (
@@ -394,14 +413,22 @@ function AlertCard({
           <span className="h-1.5 w-1.5 rounded-full bg-destructive-foreground pulse-dot" />
           Live alert
         </div>
-        <button
-          onClick={onDismiss}
+        {hasClip && (
+          <div className="absolute bottom-2 left-2 bg-black/70 text-foreground/90 px-2 py-1 rounded text-[10px] uppercase tracking-wider font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+            Click to play clip
+          </div>
+        )}
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onDismiss(); } }}
           className="absolute top-2 right-2 h-7 w-7 grid place-items-center rounded-full bg-black/60 hover:bg-black/80 text-foreground/90"
           aria-label="Dismiss"
         >
           <X className="h-4 w-4" />
-        </button>
-      </div>
+        </span>
+      </button>
 
       <div className="p-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
@@ -414,11 +441,8 @@ function AlertCard({
           </div>
         </div>
         <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1.5">
-          <ArchiveIcon className="h-3.5 w-3.5" /> Archive
+          <ArchiveIcon className="h-3.5 w-3.5" /> ACK
         </Button>
-      </div>
-      <div className="h-0.5 bg-border">
-        <div className="h-full bg-primary transition-[width] duration-1000 ease-linear" style={{ width: `${(1 - elapsed) * 100}%` }} />
       </div>
     </div>
   );
