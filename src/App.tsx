@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { BrandingProvider } from "@/hooks/useBranding";
 import { AuthGate } from "@/components/AuthGate";
 import Index from "./pages/Index.tsx";
 import Sources from "./pages/Sources.tsx";
@@ -18,6 +19,7 @@ import Wall from "./pages/Wall.tsx";
 import Login from "./pages/Login.tsx";
 import ChangePassword from "./pages/ChangePassword.tsx";
 import Users from "./pages/Users.tsx";
+import Customization from "./pages/Customization.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -31,21 +33,24 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/change-password" element={protect(<ChangePassword />)} />
-            <Route path="/" element={protect(<Index />, true)} />
-            <Route path="/sources" element={protect(<Sources />, true)} />
-            <Route path="/frigate" element={protect(<Frigate />, true)} />
-            <Route path="/wall" element={protect(<Wall />)} />
-            <Route path="/cameras" element={protect(<Cameras />)} />
-            <Route path="/media" element={protect(<Media />)} />
-            <Route path="/auto-read" element={protect(<AutoRead />, true)} />
-            <Route path="/archive" element={protect(<Archive />, true)} />
-            <Route path="/audit" element={protect(<Audit />, true)} />
-            <Route path="/users" element={protect(<Users />, true)} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <BrandingProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/change-password" element={protect(<ChangePassword />)} />
+              <Route path="/" element={protect(<Index />, true)} />
+              <Route path="/sources" element={protect(<Sources />, true)} />
+              <Route path="/frigate" element={protect(<Frigate />, true)} />
+              <Route path="/wall" element={protect(<Wall />)} />
+              <Route path="/cameras" element={protect(<Cameras />)} />
+              <Route path="/media" element={protect(<Media />)} />
+              <Route path="/auto-read" element={protect(<AutoRead />, true)} />
+              <Route path="/archive" element={protect(<Archive />, true)} />
+              <Route path="/audit" element={protect(<Audit />, true)} />
+              <Route path="/users" element={protect(<Users />, true)} />
+              <Route path="/customization" element={protect(<Customization />, true)} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrandingProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -1,7 +1,8 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranding } from "@/hooks/useBranding";
 import { cn } from "@/lib/utils";
 
 const adminItems = [
@@ -14,6 +15,7 @@ const adminItems = [
   { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
   { to: "/archive", label: "Archive", icon: Archive },
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
+  { to: "/customization", label: "Customization", icon: Palette },
 ];
 
 const userItems = [
@@ -25,6 +27,7 @@ const userItems = [
 export function AppSidebar() {
   const store = useWebhookStore();
   const { profile, isAdmin, signOut } = useAuth();
+  const { appName, appSubtitle, logoUrl } = useBranding();
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
@@ -41,12 +44,16 @@ export function AppSidebar() {
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
       <div className="px-5 py-5 border-b border-sidebar-border flex items-center gap-3">
-        <div className="h-9 w-9 rounded-md bg-gradient-primary grid place-items-center shadow-glow">
-          <Webhook className="h-5 w-5 text-primary-foreground" />
+        <div className="h-9 w-9 rounded-md bg-gradient-primary grid place-items-center shadow-glow overflow-hidden">
+          {logoUrl ? (
+            <img src={logoUrl} alt={appName} className="h-full w-full object-contain" />
+          ) : (
+            <Webhook className="h-5 w-5 text-primary-foreground" />
+          )}
         </div>
-        <div>
-          <div className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight">Webhook Console</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Event Dashboard</div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight truncate">{appName}</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{appSubtitle}</div>
         </div>
       </div>
 
