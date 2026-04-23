@@ -509,6 +509,16 @@ function AlertCard({
           <Button
             size="sm"
             variant="ghost"
+            onClick={onTag}
+            disabled={!alert.snapshot && !alert.clip}
+            className="gap-1 h-7 px-2 text-[11px]"
+            title="Add tag"
+          >
+            <TagIcon className="h-3 w-3" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={onComment}
             className="gap-1 h-7 px-2 text-[11px]"
             title="Add comment / view audit trail"
