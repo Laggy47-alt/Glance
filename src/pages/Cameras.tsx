@@ -3,20 +3,27 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Camera, Film, Play, VideoOff } from "lucide-react";
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
 import type { MediaItem } from "@/lib/webhookStore";
+import { resolveMediaUrl, frigateProxyUrl } from "@/lib/webhookStore";
 
 const Cameras = () => {
   const store = useWebhookStore();
   const [selected, setSelected] = useState<LightboxItem | null>(null);
 
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
+
   const cameras = useMemo(() => {
-    const map = new Map<string, { name: string; latestSnapshot?: MediaItem; clips: MediaItem[]; lastTs: number }>();
+    const map = new Map<string, { name: string; latestSnapshot?: MediaItem; clips: MediaItem[]; lastTs: number; instanceId?: string | null }>();
     for (const m of store.media) {
-      const key = m.camera ?? "unknown";
-      const entry = map.get(key) ?? { name: key, clips: [], lastTs: 0 };
+      const key = `${m.instance_id ?? "_"}::${m.camera ?? "unknown"}`;
+      const entry = map.get(key) ?? { name: m.camera ?? "unknown", clips: [], lastTs: 0, instanceId: m.instance_id };
       const t = new Date(m.ts).getTime();
       if (m.kind === "snapshot") {
         if (!entry.latestSnapshot || t > new Date(entry.latestSnapshot.ts).getTime()) entry.latestSnapshot = m;
