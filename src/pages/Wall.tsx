@@ -204,13 +204,8 @@ const Wall = () => {
     );
   }, [store.media]);
 
-  // Auto-dismiss old cards.
-  useEffect(() => {
-    const t = setInterval(() => {
-      setAlerts((prev) => prev.filter((a) => Date.now() - a.receivedAt < AUTO_DISMISS_MS));
-    }, 1000);
-    return () => clearInterval(t);
-  }, []);
+  // Lightbox for opening the clip when an alert is clicked.
+  const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
 
   const archive = async (a: Alert) => {
     setAlerts((prev) => prev.filter((x) => x.key !== a.key));
