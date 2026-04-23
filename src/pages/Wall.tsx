@@ -131,6 +131,37 @@ const Wall = () => {
     if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
   }, [store.media, store.events, store.loaded]);
 
+  // When media arrives after the alert is shown, attach it.
+  useEffect(() => {
+    setAlerts((prev) =>
+      prev.map((a) => {
+        if (a.clip && a.snapshot) return a;
+        const camera = a.camera;
+        const eventTs = new Date(a.ts).getTime();
+        const fid = a.event?.frigate_event_id;
+        const matchKind = (kind: "snapshot" | "clip") => {
+          if (fid) {
+            const m = store.media.find((x) => x.frigate_event_id === fid && x.kind === kind);
+            if (m) return m;
+          }
+          if (a.event) {
+            const m = store.media.find((x) => x.event_id === a.event!.id && x.kind === kind);
+            if (m) return m;
+          }
+          return store.media.find((x) =>
+            x.kind === kind &&
+            x.camera === camera &&
+            Math.abs(new Date(x.ts).getTime() - eventTs) < 60_000
+          );
+        };
+        const clip = a.clip ?? matchKind("clip");
+        const snapshot = a.snapshot ?? matchKind("snapshot");
+        if (clip !== a.clip || snapshot !== a.snapshot) return { ...a, clip, snapshot };
+        return a;
+      })
+    );
+  }, [store.media]);
+
   // Auto-dismiss old cards.
   useEffect(() => {
     const t = setInterval(() => {
