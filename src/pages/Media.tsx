@@ -146,6 +146,7 @@ const Media = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {items.map((m) => {
             const tags = tagsByMedia[m.id] ?? [];
+            const ack = m.event_id ? acksByEvent[m.event_id] : undefined;
             const thumbnail =
               m.kind === "clip"
                 ? store.media.find((x) => x.kind === "snapshot" && (
