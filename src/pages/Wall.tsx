@@ -56,9 +56,6 @@ const Wall = () => {
     const newOnes: Alert[] = [];
     for (const e of store.events) {
       if (e.archived) continue;
-      // Only show Frigate review-level alerts (skip detections, generic webhooks, etc.)
-      if (e.kind !== "alert") continue;
-      if (!e.frigate_event_id) continue;
       // Only react to fresh events arriving after mount, to avoid flooding on first load.
       if (new Date(e.ts).getTime() < mountedAtRef.current - 5_000) continue;
       const key = e.id;
@@ -96,7 +93,43 @@ const Wall = () => {
     }
   }, [store.events, store.media, store.loaded, muted]);
 
-  // (No standalone-media popups — Wall only shows review-level alert events.)
+  // Also pop up standalone media (e.g. polled clips with no paired event row).
+  useEffect(() => {
+    if (!store.loaded) return;
+    const newOnes: Alert[] = [];
+    for (const m of store.media) {
+      if (m.kind !== "clip") continue;
+      if (new Date(m.ts).getTime() < mountedAtRef.current - 5_000) continue;
+      const key = `m:${m.id}`;
+      if (seenRef.current.has(key)) continue;
+      // Skip if we already have an alert covering this clip via its paired event
+      const alreadyCovered = [...seenRef.current].some((k) => {
+        const ev = store.events.find((e) => e.id === k);
+        if (!ev) return false;
+        if (ev.frigate_event_id && m.frigate_event_id && ev.frigate_event_id === m.frigate_event_id) return true;
+        if (m.event_id && m.event_id === ev.id) return true;
+        return false;
+      });
+      if (alreadyCovered) { seenRef.current.add(key); continue; }
+      seenRef.current.add(key);
+      const snapshot = store.media.find((x) =>
+        x.kind === "snapshot" &&
+        ((m.frigate_event_id && x.frigate_event_id === m.frigate_event_id) ||
+          (x.camera === m.camera && Math.abs(new Date(x.ts).getTime() - new Date(m.ts).getTime()) < 60_000))
+      );
+      newOnes.push({
+        key,
+        event: null,
+        clip: m,
+        snapshot,
+        camera: m.camera ?? "unknown",
+        label: "motion",
+        ts: m.ts,
+        receivedAt: Date.now(),
+      });
+    }
+    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
+  }, [store.media, store.events, store.loaded]);
 
   // When media arrives after the alert is shown, attach it.
   useEffect(() => {
