@@ -160,6 +160,25 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                 </form>
               </div>
             )}
+            {ack && (
+              <div className="px-4 py-2.5 border-t border-border bg-success/10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <div className="flex items-center gap-1.5 text-success font-semibold">
+                  <Check className="h-3.5 w-3.5" /> Acknowledged
+                </div>
+                <div className="text-foreground">
+                  by <span className="font-medium">{ack.actor ?? "unknown"}</span>
+                </div>
+                <div className="text-muted-foreground tabular-nums">
+                  {new Date(ack.ts).toLocaleString()}
+                </div>
+                {ack.createdTs && (
+                  <div className="flex items-center gap-1 text-muted-foreground ml-auto">
+                    <Clock className="h-3 w-3" />
+                    Response time: <span className="text-foreground font-medium">{formatDuration(new Date(ack.ts).getTime() - new Date(ack.createdTs).getTime())}</span>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="px-4 py-2.5 text-xs text-muted-foreground border-t border-border flex justify-between items-center gap-3">
               <span>{new Date(item.ts).toLocaleString()}</span>
               {item.frigateUrl ? (
