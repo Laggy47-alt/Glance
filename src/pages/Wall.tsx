@@ -373,33 +373,37 @@ const Wall = () => {
 
               <div className="absolute inset-0 overflow-y-auto p-4">
                 <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] auto-rows-min">
-                  {visibleAlerts.map((a, i) => (
-                    <AlertCard
-                      key={a.key}
-                      alert={a}
-                      index={i}
-                      onArchive={() => archive(a)}
-                      onDismiss={() => dismiss(a)}
-                      onComment={() => setAuditFor(a)}
-                      onOpen={() => {
-                        if (a.clip) {
-                          const inst = store.frigates.find((f) =>
-                            (a.clip!.instance_id && f.id === a.clip!.instance_id) ||
-                            f.source_id === a.clip!.source_id
-                          );
-                          setLightbox({
-                            kind: "clip",
-                            url: resolveMediaUrl(a.clip.url),
-                            camera: a.camera,
-                            topic: a.clip.topic ?? null,
-                            ts: a.clip.ts,
-                            thumbnail: a.snapshot ? resolveMediaUrl(a.snapshot.url) : undefined,
-                            frigateUrl: inst ? `${inst.base_url}/cameras/${a.camera}` : null,
-                          });
-                        }
-                      }}
-                    />
-                  ))}
+                  {visibleAlerts.map((a, i) => {
+                    const openMedia = (preferred: "clip" | "snapshot") => {
+                      const m = preferred === "clip" ? (a.clip ?? a.snapshot) : (a.snapshot ?? a.clip);
+                      if (!m) return;
+                      const inst = store.frigates.find((f) =>
+                        (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id
+                      );
+                      setLightbox({
+                        kind: m.kind,
+                        url: resolveMediaUrl(m.url),
+                        camera: a.camera,
+                        topic: m.topic ?? null,
+                        ts: m.ts,
+                        thumbnail: a.snapshot && m.kind === "clip" ? resolveMediaUrl(a.snapshot.url) : undefined,
+                        frigateUrl: inst ? `${inst.base_url}/cameras/${a.camera}` : null,
+                        mediaId: m.id,
+                      });
+                    };
+                    return (
+                      <AlertCard
+                        key={a.key}
+                        alert={a}
+                        index={i}
+                        onArchive={() => archive(a)}
+                        onDismiss={() => dismiss(a)}
+                        onComment={() => setAuditFor(a)}
+                        onOpen={() => openMedia("clip")}
+                        onTag={() => openMedia("snapshot")}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </>
