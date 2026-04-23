@@ -14,6 +14,7 @@ const baseItems = [
   { to: "/media", label: "Media", icon: Film },
   { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
   { to: "/archive", label: "Archive", icon: Archive },
+  { to: "/audit", label: "Audit Trail", icon: ScrollText },
 ];
 
 export function AppSidebar() {
