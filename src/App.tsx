@@ -43,6 +43,7 @@ const App = () => (
             <Route path="/media" element={protect(<Media />)} />
             <Route path="/auto-read" element={protect(<AutoRead />)} />
             <Route path="/archive" element={protect(<Archive />)} />
+            <Route path="/audit" element={protect(<Audit />)} />
             <Route path="/users" element={protect(<Users />, true)} />
             <Route path="*" element={<NotFound />} />
           </Routes>
