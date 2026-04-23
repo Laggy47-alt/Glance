@@ -21,6 +21,11 @@ export type WebhookEvent = {
   read: boolean;
   archived: boolean;
   ts: string;
+  frigate_event_id?: string | null;
+  label?: string | null;
+  camera?: string | null;
+  score?: number | null;
+  kind?: string | null;
 };
 
 export type AutoReadRule = {
@@ -40,6 +45,24 @@ export type MediaItem = {
   camera: string | null;
   topic: string | null;
   ts: string;
+  instance_id?: string | null;
+  frigate_event_id?: string | null;
+};
+
+export type FrigateInstance = {
+  id: string;
+  source_id: string;
+  name: string;
+  base_url: string;
+  api_key: string | null;
+  color: string;
+  enabled: boolean;
+  poll_enabled: boolean;
+  poll_interval_seconds: number;
+  last_polled_at: string | null;
+  last_event_ts: string | null;
+  last_error: string | null;
+  created_at: string;
 };
 
 type Listener = () => void;
@@ -49,6 +72,7 @@ class WebhookStore {
   events: WebhookEvent[] = [];
   rules: AutoReadRule[] = [];
   media: MediaItem[] = [];
+  frigates: FrigateInstance[] = [];
   loaded = false;
   error: string | null = null;
 
@@ -74,16 +98,18 @@ class WebhookStore {
 
   async refreshAll() {
     try {
-      const [s, e, r, m] = await Promise.all([
+      const [s, e, r, m, f] = await Promise.all([
         supabase.from("webhook_sources").select("*").order("created_at", { ascending: true }),
         supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500),
         supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true }),
         supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200),
+        supabase.from("frigate_instances").select("*").order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = (e.data ?? []) as WebhookEvent[];
       this.rules = (r.data ?? []) as AutoReadRule[];
       this.media = (m.data ?? []) as MediaItem[];
+      this.frigates = (f.data ?? []) as FrigateInstance[];
       this.loaded = true;
       this.error = null;
     } catch (err) {
@@ -116,6 +142,12 @@ class WebhookStore {
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, (p) => {
         if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 200);
         else if (p.eventType === "DELETE") this.media = this.media.filter((x) => x.id !== (p.old as MediaItem).id);
+        this.emit();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "frigate_instances" }, (p) => {
+        if (p.eventType === "INSERT") this.frigates = [...this.frigates, p.new as FrigateInstance];
+        else if (p.eventType === "UPDATE") this.frigates = this.frigates.map((x) => x.id === (p.new as FrigateInstance).id ? (p.new as FrigateInstance) : x);
+        else if (p.eventType === "DELETE") this.frigates = this.frigates.filter((x) => x.id !== (p.old as FrigateInstance).id);
         this.emit();
       })
       .subscribe();
@@ -171,6 +203,52 @@ class WebhookStore {
   async removeRule(id: string) {
     await supabase.from("auto_read_rules").delete().eq("id", id);
   }
+
+  // ─── Frigate instances ───
+  async createFrigate(input: { name: string; base_url: string; api_key?: string; color?: string }) {
+    const slugBase = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "frigate";
+    const slug = `frigate-${slugBase}-${crypto.randomUUID().slice(0, 6)}`;
+    const secret = crypto.randomUUID().replace(/-/g, "");
+    const color = input.color ?? "#3b82f6";
+
+    // Paired webhook source so push notifications and polled events share the same source view
+    const { data: src, error: srcErr } = await supabase.from("webhook_sources").insert({
+      name: `Frigate · ${input.name}`,
+      slug,
+      color,
+      secret,
+    }).select("id").single();
+    if (srcErr) throw srcErr;
+
+    const { error } = await supabase.from("frigate_instances").insert({
+      source_id: src.id,
+      name: input.name,
+      base_url: input.base_url.replace(/\/+$/, ""),
+      api_key: input.api_key || null,
+      color,
+    });
+    if (error) {
+      // Roll back the orphan source
+      await supabase.from("webhook_sources").delete().eq("id", src.id);
+      throw error;
+    }
+  }
+  async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds">>) {
+    const { error } = await supabase.from("frigate_instances").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+  async deleteFrigate(id: string) {
+    const inst = this.frigates.find((f) => f.id === id);
+    const { error } = await supabase.from("frigate_instances").delete().eq("id", id);
+    if (error) throw error;
+    if (inst?.source_id) await supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+  }
+  async pollFrigateNow(id?: string) {
+    const url = id ? `frigate-poll?instance_id=${id}` : "frigate-poll";
+    const { data, error } = await supabase.functions.invoke(url, { method: "POST" });
+    if (error) throw error;
+    return data;
+  }
 }
 
 export const webhookStore = new WebhookStore();
@@ -178,4 +256,16 @@ export const webhookStore = new WebhookStore();
 export function webhookUrl(slug: string) {
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   return `https://${projectId}.supabase.co/functions/v1/webhook-ingest/${slug}`;
+}
+
+export function frigateProxyUrl(relative: string) {
+  // relative comes from frigate-poll as "/<instance_id>/api/..." (leading slash)
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const path = relative.startsWith("/") ? relative : "/" + relative;
+  return `https://${projectId}.supabase.co/functions/v1/frigate-proxy${path}`;
+}
+
+export function resolveMediaUrl(url: string) {
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
+  return frigateProxyUrl(url);
 }

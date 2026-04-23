@@ -1,0 +1,232 @@
+// Polls each enabled Frigate instance for new events and review items.
+// Runs on a schedule (pg_cron) or on demand via POST. Idempotent via frigate_event_id.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};
+
+type FrigateInstance = {
+  id: string;
+  source_id: string;
+  name: string;
+  base_url: string;
+  api_key: string | null;
+  enabled: boolean;
+  poll_enabled: boolean;
+  last_event_ts: string | null;
+};
+
+type FrigateEvent = {
+  id: string;
+  camera: string;
+  label: string;
+  start_time: number;
+  end_time: number | null;
+  top_score?: number;
+  score?: number;
+  has_clip?: boolean;
+  has_snapshot?: boolean;
+  sub_label?: string | null;
+};
+
+type FrigateReview = {
+  id: string;
+  camera: string;
+  start_time: number;
+  end_time: number | null;
+  severity: string; // "alert" | "detection" | "significant_motion"
+  thumb_path?: string;
+  data?: { detections?: string[]; objects?: string[]; sub_labels?: string[]; zones?: string[] };
+};
+
+function trimUrl(u: string) {
+  return u.replace(/\/+$/, "");
+}
+
+async function fetchJson<T>(url: string, apiKey: string | null): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+  const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText} @ ${url}`);
+  return r.json() as Promise<T>;
+}
+
+function proxyUrl(instanceId: string, path: string) {
+  // Use relative path; the frontend will build the full proxy URL
+  return `/${instanceId}${path.startsWith("/") ? path : "/" + path}`;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  // Optional ?instance_id= to poll just one
+  const url = new URL(req.url);
+  const onlyId = url.searchParams.get("instance_id");
+
+  let q = supabase
+    .from("frigate_instances")
+    .select("id, source_id, name, base_url, api_key, enabled, poll_enabled, last_event_ts")
+    .eq("enabled", true)
+    .eq("poll_enabled", true);
+  if (onlyId) q = q.eq("id", onlyId);
+
+  const { data: instances, error } = await q;
+  if (error) return json({ error: error.message }, 500);
+
+  const results: Array<Record<string, unknown>> = [];
+  for (const inst of (instances ?? []) as FrigateInstance[]) {
+    try {
+      const r = await pollOne(supabase, inst);
+      results.push({ instance: inst.name, ...r });
+    } catch (e) {
+      const msg = (e as Error).message;
+      results.push({ instance: inst.name, error: msg });
+      await supabase.from("frigate_instances")
+        .update({ last_error: msg, last_polled_at: new Date().toISOString() })
+        .eq("id", inst.id);
+    }
+  }
+
+  return json({ ok: true, polled: results.length, results });
+});
+
+async function pollOne(
+  supabase: ReturnType<typeof createClient>,
+  inst: FrigateInstance,
+) {
+  const base = trimUrl(inst.base_url);
+  const sinceMs = inst.last_event_ts ? new Date(inst.last_event_ts).getTime() : Date.now() - 24 * 3600 * 1000;
+  const sinceSec = Math.floor(sinceMs / 1000);
+
+  // EVENTS
+  const evUrl = `${base}/api/events?after=${sinceSec}&limit=100&include_thumbnails=0`;
+  const events = await fetchJson<FrigateEvent[]>(evUrl, inst.api_key);
+
+  let insertedEvents = 0;
+  let insertedMedia = 0;
+  let maxStart = sinceMs;
+
+  for (const ev of events) {
+    const startMs = Math.floor((ev.start_time ?? 0) * 1000);
+    if (startMs > maxStart) maxStart = startMs;
+    const score = ev.top_score ?? ev.score ?? null;
+    const topic = `frigate/${ev.camera}/${ev.label}`;
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("webhook_events")
+      .upsert({
+        source_id: inst.source_id,
+        topic,
+        payload: ev as unknown as Record<string, unknown>,
+        payload_text: null,
+        headers: { "x-frigate-instance": inst.id },
+        read: false,
+        archived: false,
+        ts: new Date(startMs).toISOString(),
+        frigate_event_id: ev.id,
+        label: ev.label,
+        camera: ev.camera,
+        score,
+        kind: "event",
+      }, { onConflict: "frigate_event_id", ignoreDuplicates: true })
+      .select("id")
+      .maybeSingle();
+
+    if (insErr) continue;
+    if (!inserted) continue; // duplicate
+    insertedEvents++;
+
+    const eventId = inserted.id as string;
+    const mediaRows: Array<Record<string, unknown>> = [];
+    if (ev.has_snapshot) {
+      mediaRows.push({
+        source_id: inst.source_id,
+        event_id: eventId,
+        instance_id: inst.id,
+        kind: "snapshot",
+        url: proxyUrl(inst.id, `/api/events/${ev.id}/snapshot.jpg`),
+        camera: ev.camera,
+        topic,
+        ts: new Date(startMs).toISOString(),
+        frigate_event_id: ev.id,
+      });
+    }
+    if (ev.has_clip) {
+      mediaRows.push({
+        source_id: inst.source_id,
+        event_id: eventId,
+        instance_id: inst.id,
+        kind: "clip",
+        url: proxyUrl(inst.id, `/api/events/${ev.id}/clip.mp4`),
+        camera: ev.camera,
+        topic,
+        ts: new Date(startMs).toISOString(),
+        frigate_event_id: ev.id,
+      });
+    }
+    if (mediaRows.length) {
+      await supabase.from("media_items").insert(mediaRows);
+      insertedMedia += mediaRows.length;
+    }
+  }
+
+  // REVIEW (Frigate 0.14+) — best-effort, ignore 404s
+  let insertedReviews = 0;
+  try {
+    const revUrl = `${base}/api/review?after=${sinceSec}&limit=100`;
+    const reviews = await fetchJson<FrigateReview[]>(revUrl, inst.api_key);
+    for (const rv of reviews) {
+      const startMs = Math.floor((rv.start_time ?? 0) * 1000);
+      if (startMs > maxStart) maxStart = startMs;
+      const labels = rv.data?.objects?.join(",") ?? rv.data?.detections?.join(",") ?? null;
+      const topic = `frigate/${rv.camera}/review/${rv.severity}`;
+      const fid = `review-${rv.id}`;
+
+      const { data: inserted } = await supabase
+        .from("webhook_events")
+        .upsert({
+          source_id: inst.source_id,
+          topic,
+          payload: rv as unknown as Record<string, unknown>,
+          headers: { "x-frigate-instance": inst.id },
+          read: false,
+          archived: false,
+          ts: new Date(startMs).toISOString(),
+          frigate_event_id: fid,
+          label: labels,
+          camera: rv.camera,
+          kind: rv.severity === "alert" ? "alert" : "review",
+        }, { onConflict: "frigate_event_id", ignoreDuplicates: true })
+        .select("id")
+        .maybeSingle();
+
+      if (inserted) insertedReviews++;
+    }
+  } catch (_) { /* review API not available */ }
+
+  await supabase.from("frigate_instances")
+    .update({
+      last_polled_at: new Date().toISOString(),
+      last_event_ts: new Date(maxStart).toISOString(),
+      last_error: null,
+    })
+    .eq("id", inst.id);
+
+  return { events: insertedEvents, reviews: insertedReviews, media: insertedMedia };
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}

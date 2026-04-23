@@ -46,11 +46,61 @@ export type Database = {
           },
         ]
       }
+      frigate_instances: {
+        Row: {
+          api_key: string | null
+          base_url: string
+          color: string
+          created_at: string
+          enabled: boolean
+          id: string
+          last_error: string | null
+          last_event_ts: string | null
+          last_polled_at: string | null
+          name: string
+          poll_enabled: boolean
+          poll_interval_seconds: number
+          source_id: string
+        }
+        Insert: {
+          api_key?: string | null
+          base_url: string
+          color?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_error?: string | null
+          last_event_ts?: string | null
+          last_polled_at?: string | null
+          name: string
+          poll_enabled?: boolean
+          poll_interval_seconds?: number
+          source_id: string
+        }
+        Update: {
+          api_key?: string | null
+          base_url?: string
+          color?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_error?: string | null
+          last_event_ts?: string | null
+          last_polled_at?: string | null
+          name?: string
+          poll_enabled?: boolean
+          poll_interval_seconds?: number
+          source_id?: string
+        }
+        Relationships: []
+      }
       media_items: {
         Row: {
           camera: string | null
           event_id: string | null
+          frigate_event_id: string | null
           id: string
+          instance_id: string | null
           kind: string
           source_id: string
           topic: string | null
@@ -60,7 +110,9 @@ export type Database = {
         Insert: {
           camera?: string | null
           event_id?: string | null
+          frigate_event_id?: string | null
           id?: string
+          instance_id?: string | null
           kind: string
           source_id: string
           topic?: string | null
@@ -70,7 +122,9 @@ export type Database = {
         Update: {
           camera?: string | null
           event_id?: string | null
+          frigate_event_id?: string | null
           id?: string
+          instance_id?: string | null
           kind?: string
           source_id?: string
           topic?: string | null
@@ -97,33 +151,48 @@ export type Database = {
       webhook_events: {
         Row: {
           archived: boolean
+          camera: string | null
+          frigate_event_id: string | null
           headers: Json
           id: string
+          kind: string
+          label: string | null
           payload: Json
           payload_text: string | null
           read: boolean
+          score: number | null
           source_id: string
           topic: string
           ts: string
         }
         Insert: {
           archived?: boolean
+          camera?: string | null
+          frigate_event_id?: string | null
           headers?: Json
           id?: string
+          kind?: string
+          label?: string | null
           payload?: Json
           payload_text?: string | null
           read?: boolean
+          score?: number | null
           source_id: string
           topic?: string
           ts?: string
         }
         Update: {
           archived?: boolean
+          camera?: string | null
+          frigate_event_id?: string | null
           headers?: Json
           id?: string
+          kind?: string
+          label?: string | null
           payload?: Json
           payload_text?: string | null
           read?: boolean
+          score?: number | null
           source_id?: string
           topic?: string
           ts?: string
