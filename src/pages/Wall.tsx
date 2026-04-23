@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check } from "lucide-react";
+import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { resolveMediaUrl, type MediaItem, type WebhookEvent } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
+import { logAudit } from "@/lib/auditLog";
+import { AlertAuditDialog } from "@/components/AlertAuditDialog";
 
 type Alert = {
   key: string;
@@ -28,6 +30,8 @@ const Wall = () => {
   const store = useWebhookStore();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [muted, setMuted] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [auditFor, setAuditFor] = useState<Alert | null>(null);
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
   const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
@@ -115,6 +119,7 @@ const Wall = () => {
       });
     }
     if (newOnes.length) {
+      newOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
       if (!muted) {
         try {
@@ -171,7 +176,10 @@ const Wall = () => {
         receivedAt: Date.now(),
       });
     }
-    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
+    if (newOnes.length) {
+      newOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
+      setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
+    }
   }, [store.media, store.events, store.loaded]);
 
   // When media arrives after the alert is shown, attach it.
@@ -210,12 +218,16 @@ const Wall = () => {
 
   const archive = async (a: Alert) => {
     setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+    void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "ack" });
     if (a.event) {
       await supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", a.event.id);
     }
   };
 
-  const dismiss = (a: Alert) => setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+  const dismiss = (a: Alert) => {
+    setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+    void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "dismiss" });
+  };
 
   const recentCount = useMemo(
     () => store.events.filter((e) => !e.archived && Date.now() - new Date(e.ts).getTime() < 5 * 60_000).length,
@@ -226,8 +238,19 @@ const Wall = () => {
     <DashboardLayout
       title="Live Wall"
       subtitle="Idle screen — incoming snapshots pop up here"
+      hideSidebar={sidebarHidden}
       actions={
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-8"
+            onClick={() => setSidebarHidden((v) => !v)}
+            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+          >
+            {sidebarHidden ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+            {sidebarHidden ? "Show menu" : "Hide menu"}
+          </Button>
           <Badge variant="secondary" className="gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-success pulse-dot" />
             {recentCount} in last 5m
@@ -337,6 +360,7 @@ const Wall = () => {
                       index={i}
                       onArchive={() => archive(a)}
                       onDismiss={() => dismiss(a)}
+                      onComment={() => setAuditFor(a)}
                       onOpen={() => {
                         if (a.clip) {
                           setLightbox({
@@ -358,6 +382,15 @@ const Wall = () => {
         })()}
       </div>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
+      {auditFor && (
+        <AlertAuditDialog
+          open={!!auditFor}
+          onOpenChange={(v) => { if (!v) setAuditFor(null); }}
+          alertKey={auditFor.key}
+          eventId={auditFor.event?.id ?? null}
+          title={`${auditFor.label} · ${auditFor.camera}`}
+        />
+      )}
     </DashboardLayout>
   );
 };
@@ -367,12 +400,14 @@ function AlertCard({
   index,
   onArchive,
   onDismiss,
+  onComment,
   onOpen,
 }: {
   alert: Alert;
   index: number;
   onArchive: () => void;
   onDismiss: () => void;
+  onComment: () => void;
   onOpen: () => void;
 }) {
   const withBbox = (raw: string) => {
@@ -439,9 +474,20 @@ function AlertCard({
             {alert.event?.score != null && ` · ${(alert.event.score * 100).toFixed(0)}%`}
           </div>
         </div>
-        <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
-          <ArchiveIcon className="h-3 w-3" /> ACK
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onComment}
+            className="gap-1 h-7 px-2 text-[11px]"
+            title="Add comment / view audit trail"
+          >
+            <MessageSquare className="h-3 w-3" />
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
+            <ArchiveIcon className="h-3 w-3" /> ACK
+          </Button>
+        </div>
       </div>
     </div>
   );
