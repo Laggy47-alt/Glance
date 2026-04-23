@@ -1,9 +1,10 @@
-import { NavLink, useLocation } from "react-router-dom";
-import { Activity, Inbox, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Activity, Inbox, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
-const items = [
+const baseItems = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/sources", label: "Sources", icon: Plug },
@@ -17,9 +18,20 @@ const items = [
 
 export function AppSidebar() {
   const store = useWebhookStore();
+  const { profile, isAdmin, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const unread = store.events.filter((m) => !m.read && !m.archived).length;
   const enabledSources = store.sources.filter((s) => s.enabled).length;
+
+  const items = isAdmin
+    ? [...baseItems, { to: "/users", label: "Users", icon: UsersIcon }]
+    : baseItems;
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
@@ -33,7 +45,7 @@ export function AppSidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {items.map((it) => {
           const active = location.pathname === it.to;
           return (
@@ -60,15 +72,31 @@ export function AppSidebar() {
         })}
       </nav>
 
-      <div className="p-3 border-t border-sidebar-border">
+      <div className="p-3 border-t border-sidebar-border space-y-2">
         <div className="rounded-md bg-sidebar-accent/40 px-3 py-2.5 flex items-center gap-3">
           <div className="relative h-2 w-2 rounded-full pulse-dot bg-success" />
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-sidebar-accent-foreground">Live</div>
+            <div className="text-xs font-medium text-sidebar-accent-foreground truncate">
+              {profile?.display_name ?? profile?.username ?? "Live"}
+            </div>
             <div className="text-[10px] text-muted-foreground truncate">
-              {enabledSources} active source{enabledSources === 1 ? "" : "s"}
+              {isAdmin ? "Admin · " : ""}{enabledSources} active source{enabledSources === 1 ? "" : "s"}
             </div>
           </div>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => navigate("/change-password")}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <KeyRound className="h-3 w-3" /> Password
+          </button>
+          <button
+            onClick={handleSignOut}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <LogOut className="h-3 w-3" /> Sign out
+          </button>
         </div>
       </div>
     </aside>
