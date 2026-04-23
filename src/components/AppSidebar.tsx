@@ -1,41 +1,33 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Activity, Inbox, Archive, Filter, Settings, Radio, Camera, Film } from "lucide-react";
-import { useMqttStore } from "@/hooks/useMqttStore";
+import { Activity, Inbox, Archive, Filter, Camera, Film, Webhook, Plug } from "lucide-react";
+import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { cn } from "@/lib/utils";
 
 const items = [
   { to: "/", label: "Overview", icon: Activity },
+  { to: "/sources", label: "Sources", icon: Plug },
   { to: "/messages", label: "Messages", icon: Inbox },
   { to: "/cameras", label: "Cameras", icon: Camera },
   { to: "/media", label: "Media", icon: Film },
   { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
   { to: "/archive", label: "Archive", icon: Archive },
-  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppSidebar() {
-  const store = useMqttStore();
+  const store = useWebhookStore();
   const location = useLocation();
-  const unread = store.messages.filter((m) => !m.read && !m.archived).length;
-
-  const statusColor =
-    store.status === "connected"
-      ? "bg-success text-success"
-      : store.status === "connecting"
-      ? "bg-warning text-warning"
-      : store.status === "error"
-      ? "bg-destructive text-destructive"
-      : "bg-muted-foreground text-muted-foreground";
+  const unread = store.events.filter((m) => !m.read && !m.archived).length;
+  const enabledSources = store.sources.filter((s) => s.enabled).length;
 
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col bg-sidebar border-r border-sidebar-border">
       <div className="px-5 py-5 border-b border-sidebar-border flex items-center gap-3">
         <div className="h-9 w-9 rounded-md bg-gradient-primary grid place-items-center shadow-glow">
-          <Radio className="h-5 w-5 text-primary-foreground" />
+          <Webhook className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>
-          <div className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight">MQTT Console</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Broker Dashboard</div>
+          <div className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight">Webhook Console</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Event Dashboard</div>
         </div>
       </div>
 
@@ -68,11 +60,11 @@ export function AppSidebar() {
 
       <div className="p-3 border-t border-sidebar-border">
         <div className="rounded-md bg-sidebar-accent/40 px-3 py-2.5 flex items-center gap-3">
-          <div className={cn("relative h-2 w-2 rounded-full pulse-dot", statusColor)} />
+          <div className="relative h-2 w-2 rounded-full pulse-dot bg-success" />
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-sidebar-accent-foreground capitalize">{store.status}</div>
+            <div className="text-xs font-medium text-sidebar-accent-foreground">Live</div>
             <div className="text-[10px] text-muted-foreground truncate">
-              {store.config.demoMode ? "Demo simulator" : `${store.config.host}:${store.config.port}`}
+              {enabledSources} active source{enabledSources === 1 ? "" : "s"}
             </div>
           </div>
         </div>
