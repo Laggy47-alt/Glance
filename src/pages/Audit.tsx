@@ -163,6 +163,16 @@ const Audit = () => {
                         {e.action}
                       </Badge>
                     </td>
+                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                      {durationMs != null ? (
+                        <span className="inline-flex items-center gap-1 text-foreground tabular-nums">
+                          <Clock className="h-3 w-3 text-primary" />
+                          {formatDuration(durationMs)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5">
                       <code className="text-[10px] text-accent">{e.alert_key.slice(0, 12)}…</code>
                     </td>
@@ -170,7 +180,8 @@ const Audit = () => {
                       {e.note ?? "—"}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </ScrollArea>
