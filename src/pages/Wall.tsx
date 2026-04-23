@@ -314,31 +314,40 @@ const Wall = () => {
       }
     >
       <div className="relative h-[calc(100vh-10rem)] rounded-lg border border-border bg-gradient-to-br from-background via-background to-secondary/30 overflow-hidden">
-        {alerts.length === 0 && (
-          <div className="absolute inset-0 grid place-items-center pointer-events-none">
-            <div className="text-center space-y-3">
-              <div className="mx-auto h-16 w-16 rounded-full bg-secondary/50 grid place-items-center">
-                <Camera className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">Waiting for motion…</p>
-              <p className="text-[11px] text-muted-foreground/70">New events will pop up here automatically.</p>
-            </div>
-          </div>
-        )}
+        {(() => {
+          const visibleAlerts = alerts.filter((a) => matchesFilter(a.camera, a.label));
+          return (
+            <>
+              {visibleAlerts.length === 0 && (
+                <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                  <div className="text-center space-y-3">
+                    <div className="mx-auto h-16 w-16 rounded-full bg-secondary/50 grid place-items-center">
+                      <Camera className="h-7 w-7 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {activeFilterCount > 0 ? "No alerts match the current filter" : "Waiting for motion…"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/70">New events will pop up here automatically.</p>
+                  </div>
+                </div>
+              )}
 
-        <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
-          <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
-            {alerts.map((a, i) => (
-              <AlertCard
-                key={a.key}
-                alert={a}
-                index={i}
-                onArchive={() => archive(a)}
-                onDismiss={() => dismiss(a)}
-              />
-            ))}
-          </div>
-        </div>
+              <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
+                <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
+                  {visibleAlerts.map((a, i) => (
+                    <AlertCard
+                      key={a.key}
+                      alert={a}
+                      index={i}
+                      onArchive={() => archive(a)}
+                      onDismiss={() => dismiss(a)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </div>
     </DashboardLayout>
   );
