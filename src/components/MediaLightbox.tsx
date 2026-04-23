@@ -8,6 +8,7 @@ export type LightboxItem = {
   topic: string | null;
   ts: string;
   thumbnail?: string;
+  frigateUrl?: string | null;
 };
 
 export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; onClose: () => void }) {
