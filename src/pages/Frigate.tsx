@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff, Webhook } from "lucide-react";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 
@@ -23,6 +23,7 @@ const Frigate = () => {
   const [apiKey, setApiKey] = useState("");
   const [color, setColor] = useState(PALETTE[0]);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [secretRevealed, setSecretRevealed] = useState<Record<string, boolean>>({});
   const [polling, setPolling] = useState<Record<string, boolean>>({});
 
   const reset = () => { setEditing(null); setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]); };
