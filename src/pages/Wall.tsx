@@ -56,6 +56,9 @@ const Wall = () => {
     const newOnes: Alert[] = [];
     for (const e of store.events) {
       if (e.archived) continue;
+      // Only show Frigate review-level alerts (skip detections, generic webhooks, etc.)
+      if (e.kind !== "alert") continue;
+      if (!e.frigate_event_id) continue;
       // Only react to fresh events arriving after mount, to avoid flooding on first load.
       if (new Date(e.ts).getTime() < mountedAtRef.current - 5_000) continue;
       const key = e.id;
