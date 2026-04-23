@@ -221,7 +221,41 @@ const Audit = () => {
                       )}
                     </td>
                     <td className="px-4 py-2.5">
-                      <code className="text-[10px] text-accent">{e.alert_key.slice(0, 12)}…</code>
+                      {(() => {
+                        const meta = e.event_id ? mediaByEvent[e.event_id] : null;
+                        if (meta && (meta.kind === "snapshot" || meta.kind === "image")) {
+                          return (
+                            <a href={meta.url} target="_blank" rel="noreferrer" className="block">
+                              <img src={meta.url} alt="snapshot" loading="lazy"
+                                className="h-12 w-20 object-cover rounded border border-border hover:border-primary transition-colors" />
+                            </a>
+                          );
+                        }
+                        if (meta) {
+                          return (
+                            <a href={meta.url} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
+                              <CameraIcon className="h-3 w-3" /> clip
+                            </a>
+                          );
+                        }
+                        return <ImageOff className="h-4 w-4 text-muted-foreground/40" />;
+                      })()}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                      {(() => {
+                        const meta = e.event_id ? eventMeta[e.event_id] : null;
+                        const camera = meta?.camera || meta?.label;
+                        if (camera) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 text-foreground font-medium">
+                              <CameraIcon className="h-3 w-3 text-primary" />
+                              {camera}
+                            </span>
+                          );
+                        }
+                        return <code className="text-[10px] text-muted-foreground">{e.alert_key.slice(0, 12)}…</code>;
+                      })()}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-md truncate">
                       {e.note ?? "—"}
