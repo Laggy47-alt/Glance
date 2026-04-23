@@ -156,13 +156,16 @@ const Wall = () => {
         ((m.frigate_event_id && x.frigate_event_id === m.frigate_event_id) ||
           (x.camera === m.camera && Math.abs(new Date(x.ts).getTime() - new Date(m.ts).getTime()) < 60_000))
       );
+      const camera = m.camera ?? "unknown";
+      const label = "motion";
+      if (!matchesFilter(camera, label)) continue;
       newOnes.push({
         key,
         event: null,
         clip: m,
         snapshot,
-        camera: m.camera ?? "unknown",
-        label: "motion",
+        camera,
+        label,
         ts: m.ts,
         receivedAt: Date.now(),
       });
