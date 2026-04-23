@@ -383,6 +383,10 @@ const Wall = () => {
                       onComment={() => setAuditFor(a)}
                       onOpen={() => {
                         if (a.clip) {
+                          const inst = store.frigates.find((f) =>
+                            (a.clip!.instance_id && f.id === a.clip!.instance_id) ||
+                            f.source_id === a.clip!.source_id
+                          );
                           setLightbox({
                             kind: "clip",
                             url: resolveMediaUrl(a.clip.url),
@@ -390,6 +394,7 @@ const Wall = () => {
                             topic: a.clip.topic ?? null,
                             ts: a.clip.ts,
                             thumbnail: a.snapshot ? resolveMediaUrl(a.snapshot.url) : undefined,
+                            frigateUrl: inst ? `${inst.base_url}/cameras/${a.camera}` : null,
                           });
                         }
                       }}
