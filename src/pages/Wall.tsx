@@ -119,6 +119,7 @@ const Wall = () => {
       });
     }
     if (newOnes.length) {
+      newOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
       if (!muted) {
         try {
@@ -175,7 +176,10 @@ const Wall = () => {
         receivedAt: Date.now(),
       });
     }
-    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
+    if (newOnes.length) {
+      newOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
+      setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
+    }
   }, [store.media, store.events, store.loaded]);
 
   // When media arrives after the alert is shown, attach it.
@@ -234,8 +238,19 @@ const Wall = () => {
     <DashboardLayout
       title="Live Wall"
       subtitle="Idle screen — incoming snapshots pop up here"
+      hideSidebar={sidebarHidden}
       actions={
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-8"
+            onClick={() => setSidebarHidden((v) => !v)}
+            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+          >
+            {sidebarHidden ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+            {sidebarHidden ? "Show menu" : "Hide menu"}
+          </Button>
           <Badge variant="secondary" className="gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-success pulse-dot" />
             {recentCount} in last 5m
@@ -366,6 +381,15 @@ const Wall = () => {
         })()}
       </div>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
+      {auditFor && (
+        <AlertAuditDialog
+          open={!!auditFor}
+          onOpenChange={(v) => { if (!v) setAuditFor(null); }}
+          alertKey={auditFor.key}
+          eventId={auditFor.event?.id ?? null}
+          title={`${auditFor.label} · ${auditFor.camera}`}
+        />
+      )}
     </DashboardLayout>
   );
 };
