@@ -182,8 +182,17 @@ const Media = () => {
                   {m.kind === "snapshot" ? <Camera className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
                   <span className="text-foreground/90 capitalize">{m.camera ?? "—"}</span>
                 </div>
+                {ack && (
+                  <div
+                    className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-success/90 text-success-foreground px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider shadow"
+                    title={`Acknowledged by ${ack.actor ?? "unknown"} at ${new Date(ack.ts).toLocaleString()}`}
+                  >
+                    <Check className="h-2.5 w-2.5" />
+                    <span className="normal-case tracking-normal">{ack.actor ?? "unknown"}</span>
+                  </div>
+                )}
                 <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur px-1.5 py-0.5 rounded text-[10px] text-foreground/80 tabular-nums">
-                  {new Date(m.ts).toLocaleTimeString()}
+                  {ack ? new Date(ack.ts).toLocaleString() : new Date(m.ts).toLocaleTimeString()}
                 </div>
                 {tags.length > 0 && (
                   <div className="absolute bottom-1.5 left-1.5 flex flex-wrap gap-0.5 max-w-[70%]">
