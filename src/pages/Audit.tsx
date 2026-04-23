@@ -154,7 +154,7 @@ const Audit = () => {
         <div className="relative ml-auto max-w-xs w-full">
           <FilterIcon className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Filter by user, note, or alert…"
+            placeholder="Filter by user, camera, note…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="bg-secondary border-border pl-8"
