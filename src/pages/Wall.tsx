@@ -99,13 +99,16 @@ const Wall = () => {
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
+      const camera = e.camera ?? "unknown";
+      const label = e.label ?? e.kind ?? "motion";
+      if (!matchesFilter(camera, label)) continue;
       newOnes.push({
         key,
         event: e,
         clip,
         snapshot,
-        camera: e.camera ?? "unknown",
-        label: e.label ?? e.kind ?? "motion",
+        camera,
+        label,
         ts: e.ts,
         receivedAt: Date.now(),
       });
