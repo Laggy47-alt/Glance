@@ -26,6 +26,8 @@ const Audit = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
+  const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
+  const [mediaByEvent, setMediaByEvent] = useState<Record<string, MediaMeta>>({});
 
   const load = async () => {
     setLoading(true);
@@ -48,6 +50,47 @@ const Audit = () => {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
+
+  useEffect(() => {
+    const eventIds = Array.from(new Set(entries.map((e) => e.event_id).filter(Boolean) as string[]));
+    if (eventIds.length === 0) return;
+    const missingEvents = eventIds.filter((id) => !(id in eventMeta));
+    const missingMedia = eventIds.filter((id) => !(id in mediaByEvent));
+    (async () => {
+      if (missingEvents.length) {
+        const { data } = await supabase
+          .from("webhook_events")
+          .select("id, camera, topic, label")
+          .in("id", missingEvents);
+        if (data) {
+          setEventMeta((prev) => {
+            const next = { ...prev };
+            data.forEach((r: any) => { next[r.id] = { camera: r.camera, topic: r.topic, label: r.label }; });
+            return next;
+          });
+        }
+      }
+      if (missingMedia.length) {
+        const { data } = await supabase
+          .from("media_items")
+          .select("event_id, url, kind, ts")
+          .in("event_id", missingMedia)
+          .order("ts", { ascending: false });
+        if (data) {
+          setMediaByEvent((prev) => {
+            const next = { ...prev };
+            data.forEach((r: any) => {
+              if (!r.event_id) return;
+              const cur = next[r.event_id];
+              if (!cur) next[r.event_id] = { url: r.url, kind: r.kind };
+              else if (cur.kind !== "snapshot" && r.kind === "snapshot") next[r.event_id] = { url: r.url, kind: r.kind };
+            });
+            return next;
+          });
+        }
+      }
+    })();
+  }, [entries, eventMeta, mediaByEvent]);
 
   const actions = useMemo(() => {
     const set = new Set<string>();
