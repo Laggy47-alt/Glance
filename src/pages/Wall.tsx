@@ -431,6 +431,7 @@ function AlertCard({
   onDismiss,
   onComment,
   onOpen,
+  onTag,
 }: {
   alert: Alert;
   index: number;
@@ -438,6 +439,7 @@ function AlertCard({
   onDismiss: () => void;
   onComment: () => void;
   onOpen: () => void;
+  onTag: () => void;
 }) {
   const withBbox = (raw: string) => {
     const resolved = resolveMediaUrl(raw);
