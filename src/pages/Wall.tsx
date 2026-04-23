@@ -22,7 +22,7 @@ type Alert = {
   receivedAt: number;
 };
 
-const AUTO_DISMISS_MS = 25_000;
+
 
 const Wall = () => {
   const store = useWebhookStore();
