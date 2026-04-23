@@ -92,13 +92,13 @@ const Wall = () => {
   };
 
   // Build alerts from incoming events. Pair media as it arrives.
+  // Alerts persist for any un-archived event so they survive navigation away from the Wall.
   useEffect(() => {
     if (!store.loaded) return;
     const newOnes: Alert[] = [];
+    const freshOnes: Alert[] = [];
     for (const e of store.events) {
       if (e.archived) continue;
-      // Only react to fresh events arriving after mount, to avoid flooding on first load.
-      if (new Date(e.ts).getTime() < mountedAtRef.current - 5_000) continue;
       const key = e.id;
       if (seenRef.current.has(key)) continue;
       const clip = findMedia(e, "clip");
@@ -106,8 +106,7 @@ const Wall = () => {
       seenRef.current.add(key);
       const camera = e.camera ?? "unknown";
       const label = e.label ?? e.kind ?? "motion";
-      if (!matchesFilter(camera, label)) continue;
-      newOnes.push({
+      const alert: Alert = {
         key,
         event: e,
         clip,
@@ -116,12 +115,14 @@ const Wall = () => {
         label,
         ts: e.ts,
         receivedAt: Date.now(),
-      });
+      };
+      newOnes.push(alert);
+      if (new Date(e.ts).getTime() >= mountedAtRef.current - 5_000) freshOnes.push(alert);
     }
     if (newOnes.length) {
-      newOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
+      freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
-      if (!muted) {
+      if (freshOnes.length && !muted) {
         try {
           const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
           const o = ctx.createOscillator();
@@ -142,12 +143,11 @@ const Wall = () => {
   useEffect(() => {
     if (!store.loaded) return;
     const newOnes: Alert[] = [];
+    const freshOnes: Alert[] = [];
     for (const m of store.media) {
       if (m.kind !== "clip") continue;
-      if (new Date(m.ts).getTime() < mountedAtRef.current - 5_000) continue;
       const key = `m:${m.id}`;
       if (seenRef.current.has(key)) continue;
-      // Skip if we already have an alert covering this clip via its paired event
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
@@ -164,8 +164,7 @@ const Wall = () => {
       );
       const camera = m.camera ?? "unknown";
       const label = "motion";
-      if (!matchesFilter(camera, label)) continue;
-      newOnes.push({
+      const alert: Alert = {
         key,
         event: null,
         clip: m,
@@ -174,10 +173,12 @@ const Wall = () => {
         label,
         ts: m.ts,
         receivedAt: Date.now(),
-      });
+      };
+      newOnes.push(alert);
+      if (new Date(m.ts).getTime() >= mountedAtRef.current - 5_000) freshOnes.push(alert);
     }
     if (newOnes.length) {
-      newOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
+      freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
     }
   }, [store.media, store.events, store.loaded]);
