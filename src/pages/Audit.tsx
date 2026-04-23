@@ -225,23 +225,35 @@ const Audit = () => {
                     <td className="px-4 py-2.5">
                       {(() => {
                         const meta = e.event_id ? mediaByEvent[e.event_id] : null;
-                        if (meta && (meta.kind === "snapshot" || meta.kind === "image")) {
-                          return (
-                            <a href={meta.url} target="_blank" rel="noreferrer" className="block">
-                              <img src={meta.url} alt="snapshot" loading="lazy"
-                                className="h-12 w-20 object-cover rounded border border-border hover:border-primary transition-colors" />
-                            </a>
-                          );
-                        }
-                        if (meta) {
-                          return (
-                            <a href={meta.url} target="_blank" rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
-                              <CameraIcon className="h-3 w-3" /> clip
-                            </a>
-                          );
-                        }
-                        return <ImageOff className="h-4 w-4 text-muted-foreground/40" />;
+                        if (!meta) return <ImageOff className="h-4 w-4 text-muted-foreground/40" />;
+                        const isVideo = meta.kind === "clip" || meta.kind === "video" || /\.(mp4|webm|mov|m3u8)(\?|$)/i.test(meta.url);
+                        return (
+                          <a href={meta.url} target="_blank" rel="noreferrer" className="block relative w-20 h-12">
+                            {isVideo ? (
+                              <>
+                                <video
+                                  src={meta.url}
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                  className="h-12 w-20 object-cover rounded border border-border hover:border-primary transition-colors bg-black"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                  <div className="bg-black/60 rounded-full p-1">
+                                    <CameraIcon className="h-3 w-3 text-white" />
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <img
+                                src={meta.url}
+                                alt="snapshot"
+                                loading="lazy"
+                                className="h-12 w-20 object-cover rounded border border-border hover:border-primary transition-colors"
+                              />
+                            )}
+                          </a>
+                        );
                       })()}
                     </td>
                     <td className="px-4 py-2.5 text-xs whitespace-nowrap">
