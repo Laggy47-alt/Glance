@@ -4,7 +4,7 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
-const baseItems = [
+const adminItems = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/sources", label: "Sources", icon: Plug },
@@ -16,6 +16,12 @@ const baseItems = [
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
 ];
 
+const userItems = [
+  { to: "/wall", label: "Live Wall", icon: Bell },
+  { to: "/cameras", label: "Cameras", icon: Camera },
+  { to: "/media", label: "Media", icon: Film },
+];
+
 export function AppSidebar() {
   const store = useWebhookStore();
   const { profile, isAdmin, signOut } = useAuth();
@@ -24,8 +30,8 @@ export function AppSidebar() {
   const enabledSources = store.sources.filter((s) => s.enabled).length;
 
   const items = isAdmin
-    ? [...baseItems, { to: "/users", label: "Users", icon: UsersIcon }]
-    : baseItems;
+    ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
+    : userItems;
 
   const handleSignOut = async () => {
     await signOut();

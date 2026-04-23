@@ -34,16 +34,15 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/change-password" element={protect(<ChangePassword />)} />
-            <Route path="/" element={protect(<Index />)} />
-            <Route path="/sources" element={protect(<Sources />)} />
-            <Route path="/frigate" element={protect(<Frigate />)} />
-            
+            <Route path="/" element={protect(<Index />, true)} />
+            <Route path="/sources" element={protect(<Sources />, true)} />
+            <Route path="/frigate" element={protect(<Frigate />, true)} />
             <Route path="/wall" element={protect(<Wall />)} />
             <Route path="/cameras" element={protect(<Cameras />)} />
             <Route path="/media" element={protect(<Media />)} />
-            <Route path="/auto-read" element={protect(<AutoRead />)} />
-            <Route path="/archive" element={protect(<Archive />)} />
-            <Route path="/audit" element={protect(<Audit />)} />
+            <Route path="/auto-read" element={protect(<AutoRead />, true)} />
+            <Route path="/archive" element={protect(<Archive />, true)} />
+            <Route path="/audit" element={protect(<Audit />, true)} />
             <Route path="/users" element={protect(<Users />, true)} />
             <Route path="*" element={<NotFound />} />
           </Routes>

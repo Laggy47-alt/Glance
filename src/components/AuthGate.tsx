@@ -38,14 +38,7 @@ export function AuthGate({ children, adminOnly = false }: { children: ReactNode;
   }
 
   if (adminOnly && !isAdmin) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-background">
-        <div className="text-center space-y-2">
-          <p className="text-lg font-semibold text-foreground">Access denied</p>
-          <p className="text-sm text-muted-foreground">Admin privileges required.</p>
-        </div>
-      </div>
-    );
+    return <Navigate to="/wall" replace />;
   }
 
   return <>{children}</>;
