@@ -328,8 +328,8 @@ const Wall = () => {
                 </div>
               )}
 
-              <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
-                <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
+              <div className="absolute inset-0 overflow-y-auto p-4">
+                <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] auto-rows-min">
                   {visibleAlerts.map((a, i) => (
                     <AlertCard
                       key={a.key}
