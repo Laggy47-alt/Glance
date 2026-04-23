@@ -115,7 +115,7 @@ const Wall = () => {
       });
     }
     if (newOnes.length) {
-      setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
+      setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
       if (!muted) {
         try {
           const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
