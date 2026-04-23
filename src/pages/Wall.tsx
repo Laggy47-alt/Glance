@@ -187,7 +187,7 @@ const Wall = () => {
   return (
     <DashboardLayout
       title="Live Wall"
-      subtitle="Idle screen — incoming motion clips pop up here"
+      subtitle="Idle screen — incoming snapshots pop up here"
       actions={
         <div className="flex items-center gap-3">
           <Badge variant="secondary" className="gap-1.5">
@@ -214,16 +214,18 @@ const Wall = () => {
           </div>
         )}
 
-        <div className="absolute inset-0 p-6 flex flex-col-reverse gap-4 pointer-events-none">
-          {alerts.map((a, i) => (
-            <AlertCard
-              key={a.key}
-              alert={a}
-              index={i}
-              onArchive={() => archive(a)}
-              onDismiss={() => dismiss(a)}
-            />
-          ))}
+        <div className="absolute inset-0 p-6 grid place-items-center pointer-events-none">
+          <div className="flex flex-col gap-4 items-center w-full max-w-2xl">
+            {alerts.map((a, i) => (
+              <AlertCard
+                key={a.key}
+                alert={a}
+                index={i}
+                onArchive={() => archive(a)}
+                onDismiss={() => dismiss(a)}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </DashboardLayout>
