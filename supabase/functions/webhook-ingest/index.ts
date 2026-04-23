@@ -123,9 +123,64 @@ Deno.serve(async (req) => {
       payload = raw;
     }
 
+    // Detect frigate-notify shape (flat JSON with event_id/camera/label, no topic field)
+    const rec = (payload && typeof payload === "object" && !Array.isArray(payload))
+      ? payload as Record<string, unknown>
+      : null;
+    const isFrigate = !!rec && (
+      typeof rec.event_id === "string" || typeof rec.eventId === "string" ||
+      (typeof rec.camera === "string" && (typeof rec.label === "string" || typeof rec.zones !== "undefined"))
+    );
+
+    let frigateMeta: { event_id: string | null; camera: string | null; label: string | null; score: number | null; kind: string } = {
+      event_id: null, camera: null, label: null, score: null, kind: "event",
+    };
+
     let topic = queryTopic ?? headerTopic ?? "";
-    if (!topic && payload && typeof payload === "object" && !Array.isArray(payload)) {
-      const rec = payload as Record<string, unknown>;
+
+    if (isFrigate && rec) {
+      const camera = (typeof rec.camera === "string" && rec.camera) || null;
+      const label = (typeof rec.label === "string" && rec.label) || null;
+      const eid = (typeof rec.event_id === "string" && rec.event_id) ||
+                  (typeof rec.eventId === "string" && rec.eventId) || null;
+      const sevRaw = typeof rec.severity === "string" ? rec.severity.toLowerCase() : "";
+      const kind = sevRaw === "alert" ? "alert" : sevRaw === "review" ? "review" : "event";
+      const scoreRaw = rec.score ?? rec.top_score ?? rec.topScore;
+      const score = typeof scoreRaw === "number" ? scoreRaw : (typeof scoreRaw === "string" && !isNaN(Number(scoreRaw)) ? Number(scoreRaw) : null);
+      frigateMeta = { event_id: eid, camera, label, score, kind };
+
+      if (!topic) {
+        const parts = ["frigate", camera, kind === "alert" ? `review/alert` : label].filter(Boolean) as string[];
+        topic = parts.join("/");
+      }
+
+      // Look up the Frigate instance paired with this source so we can rewrite media URLs through the proxy
+      const { data: inst } = await supabase
+        .from("frigate_instances")
+        .select("id")
+        .eq("source_id", source.id)
+        .maybeSingle();
+
+      if (inst && eid) {
+        // If the payload references snapshot/clip via Frigate paths, rewrite as proxy paths
+        for (const k of [...SNAPSHOT_KEYS, ...CLIP_KEYS]) {
+          const v = rec[k];
+          if (typeof v === "string" && v.includes(`/api/events/${eid}/`)) {
+            const m = v.match(/\/api\/events\/[^/]+\/(snapshot\.jpg|clip\.mp4)/);
+            if (m) rec[k] = `/${inst.id}/api/events/${eid}/${m[1]}`;
+          }
+        }
+        // If neither snapshot/clip provided but we know the event_id, infer them
+        if (!SNAPSHOT_KEYS.some((k) => typeof rec[k] === "string")) {
+          rec.snapshot_url = `/${inst.id}/api/events/${eid}/snapshot.jpg`;
+        }
+        if (!CLIP_KEYS.some((k) => typeof rec[k] === "string") && rec.has_clip !== false) {
+          rec.clip_url = `/${inst.id}/api/events/${eid}/clip.mp4`;
+        }
+      }
+    }
+
+    if (!topic && rec) {
       if (typeof rec.topic === "string") topic = rec.topic;
       else if (typeof rec.event === "string") topic = rec.event;
       else if (typeof rec.type === "string") topic = rec.type;
@@ -146,37 +201,67 @@ Deno.serve(async (req) => {
 
     const payloadJson = (payload && typeof payload === "object") ? payload : { value: payload };
 
-    const { data: ev, error: evErr } = await supabase
-      .from("webhook_events")
-      .insert({
-        source_id: source.id,
-        topic,
-        payload: payloadJson,
-        payload_text: payloadText,
-        headers,
-        read: matched,
-        archived: matched,
-      })
-      .select("id")
-      .single();
+    const insertRow: Record<string, unknown> = {
+      source_id: source.id,
+      topic,
+      payload: payloadJson,
+      payload_text: payloadText,
+      headers,
+      read: matched,
+      archived: matched,
+    };
+    if (isFrigate) {
+      insertRow.frigate_event_id = frigateMeta.event_id;
+      insertRow.camera = frigateMeta.camera;
+      insertRow.label = frigateMeta.label;
+      insertRow.score = frigateMeta.score;
+      insertRow.kind = frigateMeta.kind;
+    }
 
-    if (evErr) return json({ error: evErr.message }, 500);
+    // Upsert on frigate_event_id when present so duplicate notifications dedupe
+    let evId: string | null = null;
+    if (isFrigate && frigateMeta.event_id) {
+      const { data: ev, error: evErr } = await supabase
+        .from("webhook_events")
+        .upsert(insertRow, { onConflict: "frigate_event_id" })
+        .select("id")
+        .single();
+      if (evErr) return json({ error: evErr.message }, 500);
+      evId = ev.id;
+    } else {
+      const { data: ev, error: evErr } = await supabase
+        .from("webhook_events")
+        .insert(insertRow)
+        .select("id")
+        .single();
+      if (evErr) return json({ error: evErr.message }, 500);
+      evId = ev.id;
+    }
 
     const media = extractMedia(topic, payload, source.name);
-    if (media.length) {
+    if (media.length && evId) {
+      // Look up instance once if Frigate (already loaded above? re-fetch lightweight)
+      let instanceId: string | null = null;
+      if (isFrigate) {
+        const { data: inst } = await supabase
+          .from("frigate_instances").select("id").eq("source_id", source.id).maybeSingle();
+        instanceId = inst?.id ?? null;
+      }
       await supabase.from("media_items").insert(
         media.map((m) => ({
           source_id: source.id,
-          event_id: ev.id,
+          event_id: evId,
           kind: m.kind,
           url: m.url,
-          camera: m.camera,
+          camera: m.camera ?? frigateMeta.camera,
           topic,
+          instance_id: instanceId,
+          frigate_event_id: frigateMeta.event_id,
         })),
       );
     }
 
-    return json({ ok: true, event_id: ev.id, media: media.length, auto_read: matched });
+    return json({ ok: true, event_id: evId, media: media.length, auto_read: matched, frigate: isFrigate });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
