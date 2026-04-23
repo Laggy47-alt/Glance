@@ -171,7 +171,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       });
     }
-    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 8));
+    if (newOnes.length) setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
   }, [store.media, store.events, store.loaded]);
 
   // When media arrives after the alert is shown, attach it.
