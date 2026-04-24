@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { BrandingProvider } from "@/hooks/useBranding";
 import { AuthGate } from "@/components/AuthGate";
+import { AuthorBadge } from "@/components/AuthorBadge";
 import Index from "./pages/Index.tsx";
 import Sources from "./pages/Sources.tsx";
 import Frigate from "./pages/Frigate.tsx";
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/customization" element={protect(<Customization />, true)} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <AuthorBadge />
           </BrandingProvider>
         </AuthProvider>
       </BrowserRouter>
