@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2 } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -31,6 +32,10 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
+  const sites = [...store.frigates].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
+  const [sitesOpen, setSitesOpen] = useState(true);
 
   const items = isAdmin
     ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
@@ -77,6 +82,39 @@ export function AppSidebar() {
             </NavLink>
           );
         })}
+
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setSitesOpen((v) => !v)}
+            className="w-full group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <Building2 className="h-4 w-4 text-muted-foreground group-hover:text-sidebar-accent-foreground" />
+            <span className="flex-1 text-left">ABC Sites</span>
+            <span className="text-[10px] text-muted-foreground tabular-nums">{sites.length}</span>
+            <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", sitesOpen && "rotate-180")} />
+          </button>
+
+          {sitesOpen && (
+            <div className="mt-1 ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+              {sites.length === 0 ? (
+                <p className="px-3 py-1.5 text-[11px] text-muted-foreground italic">No sites yet</p>
+              ) : (
+                sites.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => navigate(`/frigate#${s.id}`)}
+                    className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors text-left"
+                  >
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: s.color }} />
+                    <span className="flex-1 truncate">{s.name}</span>
+                    {!s.enabled && <span className="text-[9px] uppercase text-muted-foreground">off</span>}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className="p-3 border-t border-sidebar-border space-y-2">
