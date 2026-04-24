@@ -99,6 +99,8 @@ const Audit = () => {
   const filtered = useMemo(() => {
     const f = filter.trim().toLowerCase();
     return entries.filter((e) => {
+      // Only show actions performed by actual operators/viewers (users with profiles)
+      if (!e.actor || !operatorNames.has(e.actor)) return false;
       if (actionFilter !== "all" && e.action !== actionFilter) return false;
       if (!f) return true;
       const cam = e.event_id ? eventMeta[e.event_id]?.camera ?? "" : "";
@@ -109,7 +111,7 @@ const Audit = () => {
         e.alert_key.toLowerCase().includes(f)
       );
     });
-  }, [entries, filter, actionFilter, eventMeta]);
+  }, [entries, filter, actionFilter, eventMeta, operatorNames]);
 
   return (
     <DashboardLayout
