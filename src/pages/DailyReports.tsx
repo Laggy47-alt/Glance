@@ -2,6 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { frigateUrl } from "@/lib/webhookStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,45 @@ import { Badge } from "@/components/ui/badge";
 import { Mail, Send, Save, Plus, X, Eye, Server, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Fetch latest snapshots for all online cameras of an instance, browser-side. */
+async function collectSnapshots(instanceId: string): Promise<Array<{ name: string; dataUrl: string }>> {
+  const { data: inst } = await supabase
+    .from("frigate_instances")
+    .select("id, base_url, is_local")
+    .eq("id", instanceId)
+    .maybeSingle();
+  if (!inst) return [];
+  try {
+    const statsRes = await fetch(frigateUrl(inst as any, "/api/stats"));
+    if (!statsRes.ok) return [];
+    const stats: any = await statsRes.json();
+    const cams = stats?.cameras ?? {};
+    const online = Object.entries<any>(cams)
+      .filter(([, d]) => Number(d?.camera_fps ?? 0) > 0)
+      .map(([n]) => n);
+    const results = await Promise.all(online.map(async (name) => {
+      try {
+        const r = await fetch(frigateUrl(inst as any, `/api/${encodeURIComponent(name)}/latest.jpg?h=300`));
+        if (!r.ok) return null;
+        const b = await r.blob();
+        if (!b.type.startsWith("image/")) return null;
+        return { name, dataUrl: await blobToDataUrl(b) };
+      } catch { return null; }
+    }));
+    return results.filter(Boolean) as Array<{ name: string; dataUrl: string }>;
+  } catch { return []; }
+}
+
 
 type Cfg = {
   id: string;
@@ -100,8 +140,9 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
 
   const previewEmail = async () => {
     setPreview("loading");
+    const snapshots = await collectSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
-      body: { config_id: local.id, preview: true },
+      body: { config_id: local.id, preview: true, snapshots },
     });
     if (error) { toast.error(error.message); setPreview(null); return; }
     const p = (data?.results?.[0]?.preview);
@@ -112,8 +153,9 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
   const sendTest = async () => {
     if (!local.recipients.length) { toast.error("Add at least one recipient first"); return; }
     setSending(true);
+    const snapshots = await collectSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
-      body: { config_id: local.id, recipients: local.recipients },
+      body: { config_id: local.id, recipients: local.recipients, snapshots },
     });
     setSending(false);
     if (error) { toast.error(error.message); return; }

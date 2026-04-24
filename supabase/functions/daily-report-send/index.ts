@@ -151,7 +151,7 @@ function nl2br(s: string) {
   return s.split("\n").map((l) => esc(l)).join("<br/>");
 }
 
-async function buildEmail(cfg: Cfg, inst: Instance) {
+async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ name: string; dataUrl: string }>) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const [stats, incidents] = await Promise.all([
@@ -168,10 +168,12 @@ async function buildEmail(cfg: Cfg, inst: Instance) {
     return { name: n, since: st?.since ?? null, duration: formatDuration(dur) };
   });
 
-  // Snapshots for online cameras
-  const snapshots = await Promise.all(
-    stats.online.map(async (n) => ({ name: n, dataUrl: await fetchSnapshot(inst, n) })),
-  );
+  // Snapshots: prefer client-provided (works for LAN-only Frigate), else fetch server-side
+  const snapshots = providedSnapshots?.length
+    ? providedSnapshots
+    : await Promise.all(
+        stats.online.map(async (n) => ({ name: n, dataUrl: await fetchSnapshot(inst, n) })),
+      ).then((arr) => arr.filter((s) => s.dataUrl) as Array<{ name: string; dataUrl: string }>);
 
   const date = new Date().toISOString().slice(0, 10);
   const data: Record<string, string> = {
@@ -247,6 +249,7 @@ Deno.serve(async (req) => {
   const onlyConfigId: string | undefined = body?.config_id;
   const preview: boolean = !!body?.preview;
   const overrideRecipients: string[] | undefined = body?.recipients;
+  const providedSnapshots: Array<{ name: string; dataUrl: string }> | undefined = body?.snapshots;
 
   const { data: settings } = await supabase.from("daily_report_settings").select("*").limit(1).maybeSingle();
   const s: Settings = (settings ?? {
@@ -264,7 +267,7 @@ Deno.serve(async (req) => {
   for (const cfg of (cfgs ?? []) as Cfg[]) {
     const { data: inst } = await supabase.from("frigate_instances").select("id, name, base_url, api_key").eq("id", cfg.instance_id).maybeSingle();
     if (!inst) { results.push({ config_id: cfg.id, status: "skipped", error: "instance missing" }); continue; }
-    const email = await buildEmail(cfg, inst as Instance);
+    const email = await buildEmail(cfg, inst as Instance, providedSnapshots);
     const recipients = overrideRecipients?.length ? overrideRecipients : cfg.recipients;
     if (preview) { results.push({ config_id: cfg.id, preview: email }); continue; }
     if (!recipients?.length) {
