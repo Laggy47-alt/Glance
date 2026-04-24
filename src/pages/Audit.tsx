@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock, Camera as CameraIcon } from "lucide-react";
+import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock, Camera as CameraIcon, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuditEntry } from "@/lib/auditLog";
 import { formatDuration } from "@/lib/duration";
