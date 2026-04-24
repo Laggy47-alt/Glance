@@ -1,9 +1,23 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { Card } from "@/components/ui/card";
-import { Camera, Users, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Camera, Users, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/hooks/use-toast";
 import {
   Bar,
   BarChart,
@@ -23,7 +37,15 @@ type AuditRow = {
 
 const Overview = () => {
   const store = useWebhookStore();
+  const { isAdmin } = useAuth();
   const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [adminNames, setAdminNames] = useState<Set<string>>(new Set());
+  const [resetting, setResetting] = useState(false);
+  const [statsResetAt, setStatsResetAt] = useState<number>(() => {
+    const v = localStorage.getItem("overview.statsResetAt");
+    return v ? Number(v) : 0;
+  });
+
 
   // Total unique cameras (matches Cameras page logic)
   const totalCameras = useMemo(() => {
@@ -35,11 +57,39 @@ const Overview = () => {
     return set.size;
   }, [store.media]);
 
-  // Load audit log (last 30 days) for operator stats + peak hours
+  // Load admin display names + usernames so we can filter them out of operator stats
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+      const adminIds = (roles ?? []).map((r) => r.user_id);
+      if (adminIds.length === 0) {
+        if (!cancelled) setAdminNames(new Set());
+        return;
+      }
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("user_id, username, display_name")
+        .in("user_id", adminIds);
+      const set = new Set<string>();
+      for (const p of profs ?? []) {
+        if (p.username) set.add(p.username);
+        if (p.display_name) set.add(p.display_name);
+      }
+      if (!cancelled) setAdminNames(set);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load audit log (since reset cutoff, max 30 days) for operator stats
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const thirtyDays = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const since = new Date(Math.max(thirtyDays, statsResetAt)).toISOString();
       const { data } = await supabase
         .from("event_audit_log")
         .select("id, action, actor, ts")
@@ -62,13 +112,14 @@ const Overview = () => {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [statsResetAt]);
 
-  // Operator stats — actions per actor
+  // Operator stats — actions per actor, viewers only (admins excluded)
   const operators = useMemo(() => {
     const map = new Map<string, { actor: string; total: number; read: number; archived: number; other: number; lastTs: number }>();
     for (const a of audit) {
       const actor = (a.actor && a.actor.trim()) || "unknown";
+      if (adminNames.has(actor)) continue; // exclude admins
       const t = new Date(a.ts).getTime();
       const row = map.get(actor) ?? { actor, total: 0, read: 0, archived: 0, other: 0, lastTs: 0 };
       row.total += 1;
@@ -79,13 +130,13 @@ const Overview = () => {
       map.set(actor, row);
     }
     return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [audit]);
+  }, [audit, adminNames]);
 
   const totalOperators = operators.length;
 
-  // Peak hours — alerts (webhook events) grouped by hour-of-day, last 7 days
+  // Peak hours — alerts (webhook events) grouped by hour-of-day, last 7 days (respect reset)
   const peakHours = useMemo(() => {
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Math.max(Date.now() - 7 * 24 * 60 * 60 * 1000, statsResetAt);
     const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: `${h.toString().padStart(2, "0")}:00`, count: 0 }));
     for (const ev of store.events) {
       const t = new Date(ev.ts).getTime();
@@ -94,30 +145,70 @@ const Overview = () => {
       buckets[h].count += 1;
     }
     return buckets;
-  }, [store.events]);
+  }, [store.events, statsResetAt]);
 
-  // Peak hours per day-of-week (last 30 days)
+  // Peak hours per day-of-week (last 30 days, respect reset)
   const peakByDay = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const buckets = labels.map((label) => ({ label, count: 0 }));
+    const cutoff = Math.max(Date.now() - 30 * 24 * 60 * 60 * 1000, statsResetAt);
+    const buckets = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => ({ label, count: 0 }));
     for (const ev of store.events) {
       const d = new Date(ev.ts);
       if (d.getTime() < cutoff) continue;
       buckets[d.getDay()].count += 1;
     }
     return buckets;
-  }, [store.events]);
+  }, [store.events, statsResetAt]);
+
+  const handleReset = () => {
+    const now = Date.now();
+    setResetting(true);
+    try {
+      localStorage.setItem("overview.statsResetAt", String(now));
+      setStatsResetAt(now);
+      toast({ title: "Stats reset", description: "Showing activity from this moment forward." });
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const cards = [
     { label: "Total Cameras", value: totalCameras, icon: Camera, color: "text-primary" },
-    { label: "Operators (30d)", value: totalOperators, icon: Users, color: "text-accent" },
-    { label: "Alerts (7d)", value: peakHours.reduce((s, b) => s + b.count, 0), icon: Activity, color: "text-warning" },
+    { label: "Operators", value: totalOperators, icon: Users, color: "text-accent" },
   ];
+
 
   return (
     <DashboardLayout title="Overview" subtitle="Operator activity and alert patterns">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <p className="text-xs text-muted-foreground">
+          {statsResetAt > 0 ? `Stats since ${new Date(statsResetAt).toLocaleString()}` : "Showing rolling window"}
+        </p>
+        {isAdmin && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={resetting}>
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset Stats
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset overview stats?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This sets a new starting point for the operator stats and alert charts. Older
+                  audit log entries are not deleted — they're just hidden from the dashboard from now on.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleReset}>Reset</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         {cards.map((c) => (
           <Card key={c.label} className="bg-gradient-card border-border shadow-card p-5">
             <div className="flex items-start justify-between">
