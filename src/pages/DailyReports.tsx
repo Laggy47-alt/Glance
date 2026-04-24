@@ -113,7 +113,7 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
     if (!local.recipients.length) { toast.error("Add at least one recipient first"); return; }
     setSending(true);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
-      body: { config_id: local.id },
+      body: { config_id: local.id, recipients: local.recipients },
     });
     setSending(false);
     if (error) { toast.error(error.message); return; }
