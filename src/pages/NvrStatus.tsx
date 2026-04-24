@@ -4,8 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState, useCallback } from "react";
-import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, Camera, WifiOff } from "lucide-react";
-import { frigateProxyUrl } from "@/lib/webhookStore";
+import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, Camera, WifiOff, Wifi } from "lucide-react";
+import { frigateUrl } from "@/lib/webhookStore";
 import { cn } from "@/lib/utils";
 
 type CameraStatus = {
@@ -55,12 +55,14 @@ const NvrStatus = () => {
   const [statuses, setStatuses] = useState<Record<string, NvrStatus>>({});
 
   const fetchOne = useCallback(async (instanceId: string) => {
+    const inst = store.frigates.find((x) => x.id === instanceId);
+    if (!inst) return;
     setStatuses((prev) => ({
       ...prev,
       [instanceId]: { ...(prev[instanceId] ?? { instanceId, cameras: [], fetchedAt: null }), loading: true, error: null, instanceId },
     }));
     try {
-      const url = frigateProxyUrl(`/${instanceId}/api/stats`);
+      const url = frigateUrl(inst, "/api/stats");
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -75,7 +77,7 @@ const NvrStatus = () => {
         [instanceId]: { instanceId, loading: false, error: (e as Error).message, cameras: [], fetchedAt: Date.now() },
       }));
     }
-  }, []);
+  }, [store.frigates]);
 
   const fetchAll = useCallback(() => {
     for (const f of store.frigates) {
