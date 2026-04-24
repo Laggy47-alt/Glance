@@ -16,6 +16,7 @@ const adminItems = [
   { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
   { to: "/archive", label: "Archive", icon: Archive },
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
+  { to: "/daily-reports", label: "Daily Reports", icon: Mail },
   { to: "/customization", label: "Customization", icon: Palette },
 ];
 
