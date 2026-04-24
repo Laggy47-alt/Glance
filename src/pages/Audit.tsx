@@ -26,15 +26,25 @@ const Audit = () => {
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
+  const [operatorNames, setOperatorNames] = useState<Set<string>>(new Set());
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("event_audit_log")
-      .select("*")
-      .order("ts", { ascending: false })
-      .limit(1000);
-    setEntries((data ?? []) as AuditEntry[]);
+    const [{ data: auditData }, { data: profileData }] = await Promise.all([
+      supabase
+        .from("event_audit_log")
+        .select("*")
+        .order("ts", { ascending: false })
+        .limit(1000),
+      supabase.from("profiles").select("username, display_name"),
+    ]);
+    const names = new Set<string>();
+    (profileData ?? []).forEach((p: any) => {
+      if (p.display_name) names.add(p.display_name);
+      if (p.username) names.add(p.username);
+    });
+    setOperatorNames(names);
+    setEntries((auditData ?? []) as AuditEntry[]);
     setLoading(false);
   };
 
@@ -89,6 +99,8 @@ const Audit = () => {
   const filtered = useMemo(() => {
     const f = filter.trim().toLowerCase();
     return entries.filter((e) => {
+      // Only show actions performed by actual operators/viewers (users with profiles)
+      if (!e.actor || !operatorNames.has(e.actor)) return false;
       if (actionFilter !== "all" && e.action !== actionFilter) return false;
       if (!f) return true;
       const cam = e.event_id ? eventMeta[e.event_id]?.camera ?? "" : "";
@@ -99,7 +111,7 @@ const Audit = () => {
         e.alert_key.toLowerCase().includes(f)
       );
     });
-  }, [entries, filter, actionFilter, eventMeta]);
+  }, [entries, filter, actionFilter, eventMeta, operatorNames]);
 
   return (
     <DashboardLayout
