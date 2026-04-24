@@ -107,8 +107,8 @@ const Audit = () => {
     return entries.filter((e) => {
       // Hide auto-archived (low-signal) system entries
       if ((e.note ?? "").toLowerCase().includes("auto-archived")) return false;
-      // Only show actions performed by actual operators/viewers (users with profiles)
-      if (!e.actor || !operatorNames.has(e.actor)) return false;
+      // Require an actor — system inserts without one are noise
+      if (!e.actor) return false;
       if (actionFilter !== "all" && e.action !== actionFilter) return false;
       if (!f) return true;
       const cam = e.event_id ? eventMeta[e.event_id]?.camera ?? "" : "";
@@ -119,7 +119,8 @@ const Audit = () => {
         e.alert_key.toLowerCase().includes(f)
       );
     });
-  }, [entries, filter, actionFilter, eventMeta, operatorNames]);
+  }, [entries, filter, actionFilter, eventMeta]);
+
 
   return (
     <DashboardLayout
