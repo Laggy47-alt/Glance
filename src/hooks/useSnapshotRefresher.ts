@@ -31,14 +31,16 @@ async function refreshInstance(inst: { id: string; base_url: string; is_local: b
 }
 
 async function runRefresh() {
-  const { data: instances } = await supabase
-    .from("frigate_instances")
-    .select("id, base_url, is_local, enabled")
-    .eq("enabled", true);
-  for (const inst of (instances ?? []) as any[]) {
-    await refreshInstance(inst);
-  }
-  localStorage.setItem(STORAGE_KEY, String(Date.now()));
+  try {
+    const { data: instances } = await supabase
+      .from("frigate_instances")
+      .select("id, base_url, is_local, enabled")
+      .eq("enabled", true);
+    for (const inst of (instances ?? []) as any[]) {
+      try { await refreshInstance(inst); } catch { /* ignore per-instance */ }
+    }
+    localStorage.setItem(STORAGE_KEY, String(Date.now()));
+  } catch { /* ignore */ }
 }
 
 /** Periodically uploads the latest snapshot of every camera to cloud storage,
