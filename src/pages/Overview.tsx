@@ -371,6 +371,7 @@ const Overview = () => {
                   <th className="py-2 px-4 font-medium tabular-nums">Total</th>
                   <th className="py-2 px-4 font-medium tabular-nums">Read</th>
                   <th className="py-2 px-4 font-medium tabular-nums">Archived</th>
+                  <th className="py-2 px-4 font-medium tabular-nums">Positive</th>
                   <th className="py-2 px-4 font-medium tabular-nums">Other</th>
                   <th className="py-2 pl-4 font-medium tabular-nums">Last Action</th>
                 </tr>
@@ -382,6 +383,7 @@ const Overview = () => {
                     <td className="py-2.5 px-4 tabular-nums text-foreground">{op.total}</td>
                     <td className="py-2.5 px-4 tabular-nums text-muted-foreground">{op.read}</td>
                     <td className="py-2.5 px-4 tabular-nums text-success">{op.archived}</td>
+                    <td className="py-2.5 px-4 tabular-nums text-primary">{op.positive}</td>
                     <td className="py-2.5 px-4 tabular-nums text-muted-foreground">{op.other}</td>
                     <td className="py-2.5 pl-4 tabular-nums text-muted-foreground text-xs">
                       {op.lastTs ? new Date(op.lastTs).toLocaleString() : "—"}
