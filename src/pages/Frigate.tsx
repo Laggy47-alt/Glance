@@ -122,6 +122,7 @@ const Frigate = () => {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       }
     >
       <LocalhostHelp />
