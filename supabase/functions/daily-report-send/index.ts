@@ -249,6 +249,7 @@ Deno.serve(async (req) => {
   const onlyConfigId: string | undefined = body?.config_id;
   const preview: boolean = !!body?.preview;
   const overrideRecipients: string[] | undefined = body?.recipients;
+  const providedSnapshots: Array<{ name: string; dataUrl: string }> | undefined = body?.snapshots;
 
   const { data: settings } = await supabase.from("daily_report_settings").select("*").limit(1).maybeSingle();
   const s: Settings = (settings ?? {
@@ -266,7 +267,7 @@ Deno.serve(async (req) => {
   for (const cfg of (cfgs ?? []) as Cfg[]) {
     const { data: inst } = await supabase.from("frigate_instances").select("id, name, base_url, api_key").eq("id", cfg.instance_id).maybeSingle();
     if (!inst) { results.push({ config_id: cfg.id, status: "skipped", error: "instance missing" }); continue; }
-    const email = await buildEmail(cfg, inst as Instance);
+    const email = await buildEmail(cfg, inst as Instance, providedSnapshots);
     const recipients = overrideRecipients?.length ? overrideRecipients : cfg.recipients;
     if (preview) { results.push({ config_id: cfg.id, preview: email }); continue; }
     if (!recipients?.length) {
