@@ -67,12 +67,19 @@ const Audit = () => {
     (async () => {
       const { data } = await supabase
         .from("webhook_events")
-        .select("id, camera, topic, label")
+        .select("id, camera, topic, label, source_id, webhook_sources(name)")
         .in("id", missingEvents);
       if (data) {
         setEventMeta((prev) => {
           const next = { ...prev };
-          data.forEach((r: any) => { next[r.id] = { camera: r.camera, topic: r.topic, label: r.label }; });
+          data.forEach((r: any) => {
+            next[r.id] = {
+              camera: r.camera,
+              topic: r.topic,
+              label: r.label,
+              source_name: r.webhook_sources?.name ?? null,
+            };
+          });
           return next;
         });
       }
