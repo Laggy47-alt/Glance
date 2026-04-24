@@ -221,6 +221,20 @@ const Audit = () => {
                     <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                       {(() => {
                         const meta = e.event_id ? eventMeta[e.event_id] : null;
+                        if (meta?.source_name) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 text-foreground font-medium">
+                              <Building2 className="h-3 w-3 text-primary" />
+                              {meta.source_name}
+                            </span>
+                          );
+                        }
+                        return <span className="text-muted-foreground">—</span>;
+                      })()}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                      {(() => {
+                        const meta = e.event_id ? eventMeta[e.event_id] : null;
                         const camera = meta?.camera || meta?.label;
                         if (camera) {
                           return (
