@@ -155,7 +155,7 @@ const Frigate = () => {
             const pushUrl = src ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-ingest/${src.slug}` : "";
             const isRevealed = revealed[f.id];
             return (
-              <Card key={f.id} className="bg-gradient-card border-border shadow-card p-5">
+              <Card key={f.id} id={f.id} className="bg-gradient-card border-border shadow-card p-5 scroll-mt-20 transition-shadow">
                 <div className="flex items-start gap-4">
                   <div className="h-10 w-10 rounded-md grid place-items-center shrink-0" style={{ background: f.color + "22", color: f.color }}>
                     <Server className="h-5 w-5" />
