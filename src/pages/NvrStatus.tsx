@@ -129,7 +129,14 @@ const NvrStatus = () => {
                       <Server className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground truncate">{f.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-foreground truncate">{f.name}</h3>
+                        {f.is_local && (
+                          <Badge variant="secondary" className="gap-1 text-[9px] bg-primary/15 text-primary border-primary/30 h-4 px-1.5">
+                            <Wifi className="h-2.5 w-2.5" /> Local
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-[10px] text-muted-foreground truncate">{f.base_url}</p>
                     </div>
                   </div>
