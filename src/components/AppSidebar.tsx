@@ -32,6 +32,10 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
+  const sites = [...store.frigates].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
+  const [sitesOpen, setSitesOpen] = useState(true);
 
   const items = isAdmin
     ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
