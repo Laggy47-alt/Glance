@@ -151,7 +151,7 @@ function nl2br(s: string) {
   return s.split("\n").map((l) => esc(l)).join("<br/>");
 }
 
-async function buildEmail(cfg: Cfg, inst: Instance) {
+async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ name: string; dataUrl: string }>) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const [stats, incidents] = await Promise.all([
@@ -168,10 +168,12 @@ async function buildEmail(cfg: Cfg, inst: Instance) {
     return { name: n, since: st?.since ?? null, duration: formatDuration(dur) };
   });
 
-  // Snapshots for online cameras
-  const snapshots = await Promise.all(
-    stats.online.map(async (n) => ({ name: n, dataUrl: await fetchSnapshot(inst, n) })),
-  );
+  // Snapshots: prefer client-provided (works for LAN-only Frigate), else fetch server-side
+  const snapshots = providedSnapshots?.length
+    ? providedSnapshots
+    : await Promise.all(
+        stats.online.map(async (n) => ({ name: n, dataUrl: await fetchSnapshot(inst, n) })),
+      ).then((arr) => arr.filter((s) => s.dataUrl) as Array<{ name: string; dataUrl: string }>);
 
   const date = new Date().toISOString().slice(0, 10);
   const data: Record<string, string> = {
