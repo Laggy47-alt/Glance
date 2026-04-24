@@ -117,24 +117,31 @@ async function buildEmail(cfg: Cfg, inst: Instance) {
   };
 }
 
-async function sendViaResend(opts: { from: string; to: string[]; replyTo?: string | null; subject: string; html: string; text: string; }) {
-  const key = Deno.env.get("RESEND_API_KEY");
-  if (!key) throw new Error("RESEND_API_KEY not configured");
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
+async function sendViaSmtp(s: Settings, opts: { from: string; to: string[]; replyTo?: string | null; subject: string; html: string; text: string; }) {
+  if (!s.smtp_host) throw new Error("SMTP not configured (host missing)");
+  const tls = s.smtp_secure === "tls";
+  const client = new SMTPClient({
+    connection: {
+      hostname: s.smtp_host,
+      port: s.smtp_port || (tls ? 465 : 587),
+      tls,
+      auth: s.smtp_username && s.smtp_password
+        ? { username: s.smtp_username, password: s.smtp_password }
+        : undefined,
+    },
+  });
+  try {
+    await client.send({
       from: opts.from,
       to: opts.to,
-      reply_to: opts.replyTo || undefined,
+      replyTo: opts.replyTo || undefined,
       subject: opts.subject,
+      content: opts.text,
       html: opts.html,
-      text: opts.text,
-    }),
-  });
-  const body = await r.text();
-  if (!r.ok) throw new Error(`Resend ${r.status}: ${body}`);
-  return body;
+    });
+  } finally {
+    await client.close();
+  }
 }
 
 Deno.serve(async (req) => {
@@ -149,7 +156,10 @@ Deno.serve(async (req) => {
   const overrideRecipients: string[] | undefined = body?.recipients;
 
   const { data: settings } = await supabase.from("daily_report_settings").select("*").limit(1).maybeSingle();
-  const s: Settings = settings ?? { from_name: "ABC Glance", from_email: "onboarding@resend.dev", reply_to: null };
+  const s: Settings = (settings ?? {
+    from_name: "ABC Glance", from_email: "noreply@example.com", reply_to: null,
+    smtp_host: null, smtp_port: 587, smtp_username: null, smtp_password: null, smtp_secure: "starttls",
+  }) as Settings;
   const fromHeader = `${s.from_name} <${s.from_email}>`;
 
   let q = supabase.from("daily_report_configs").select("*");
