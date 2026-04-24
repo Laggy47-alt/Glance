@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
   const onlyConfigId: string | undefined = body?.config_id;
   const preview: boolean = !!body?.preview;
   const overrideRecipients: string[] | undefined = body?.recipients;
-  const providedSnapshots: Array<{ name: string; dataUrl: string }> | undefined = body?.snapshots;
+  const providedSnapshots: Array<{ name: string; url: string }> | undefined = body?.snapshots;
 
   const { data: settings } = await supabase.from("daily_report_settings").select("*").limit(1).maybeSingle();
   const s: Settings = (settings ?? {
