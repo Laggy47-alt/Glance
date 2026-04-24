@@ -179,7 +179,36 @@ const Overview = () => {
 
   return (
     <DashboardLayout title="Overview" subtitle="Operator activity and alert patterns">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <p className="text-xs text-muted-foreground">
+          {statsResetAt > 0 ? `Stats since ${new Date(statsResetAt).toLocaleString()}` : "Showing rolling window"}
+        </p>
+        {isAdmin && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={resetting}>
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset Stats
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset overview stats?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This sets a new starting point for the operator stats and alert charts. Older
+                  audit log entries are not deleted — they're just hidden from the dashboard from now on.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleReset}>Reset</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         {cards.map((c) => (
           <Card key={c.label} className="bg-gradient-card border-border shadow-card p-5">
             <div className="flex items-start justify-between">
