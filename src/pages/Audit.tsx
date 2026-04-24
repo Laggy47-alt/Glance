@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { AuditEntry } from "@/lib/auditLog";
 import { formatDuration } from "@/lib/duration";
 
-type EventMeta = { camera: string | null; topic: string | null; label: string | null };
+type EventMeta = { camera: string | null; topic: string | null; label: string | null; source_name: string | null };
 
 const ACTION_STYLES: Record<string, string> = {
   ack: "bg-success/15 text-success border-success/30",
