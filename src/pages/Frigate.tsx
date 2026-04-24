@@ -8,7 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff, Webhook, Wifi } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff, Webhook, Wifi, Plug } from "lucide-react";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 
@@ -67,12 +68,16 @@ const Frigate = () => {
       title="Frigate NVR"
       subtitle="Connect multiple Frigate instances — events stream in via push and polling"
       actions={
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-          <DialogTrigger asChild>
-            <Button onClick={openNew} className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow">
-              <Plus className="h-4 w-4 mr-2" /> Add Frigate
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/sources"><Plug className="h-4 w-4 mr-2" />Webhook sources</Link>
+          </Button>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+            <DialogTrigger asChild>
+              <Button onClick={openNew} className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow">
+                <Plus className="h-4 w-4 mr-2" /> Add Frigate
+              </Button>
+            </DialogTrigger>
           <DialogContent className="bg-card border-border">
             <DialogHeader><DialogTitle>{editing ? "Edit Frigate instance" : "Add Frigate instance"}</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-2">
