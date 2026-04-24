@@ -39,7 +39,7 @@ const Overview = () => {
   const store = useWebhookStore();
   const { isAdmin } = useAuth();
   const [audit, setAudit] = useState<AuditRow[]>([]);
-  const [adminNames, setAdminNames] = useState<Set<string>>(new Set());
+  const [viewers, setViewers] = useState<{ names: Set<string>; list: { username: string; display_name: string | null }[] }>({ names: new Set(), list: [] });
   const [resetting, setResetting] = useState(false);
   const [statsResetAt, setStatsResetAt] = useState<number>(() => {
     const v = localStorage.getItem("overview.statsResetAt");
@@ -57,31 +57,31 @@ const Overview = () => {
     return set.size;
   }, [store.media]);
 
-  // Load admin display names + usernames so we can filter them out of operator stats
+  // Load all viewer profiles (non-admin users with a login). They're the only ones shown in operator stats.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "admin");
-      const adminIds = (roles ?? []).map((r) => r.user_id);
-      if (adminIds.length === 0) {
-        if (!cancelled) setAdminNames(new Set());
-        return;
+    const load = async () => {
+      const [{ data: roles }, { data: profs }] = await Promise.all([
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("profiles").select("user_id, username, display_name"),
+      ]);
+      const adminIds = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
+      const viewerProfiles = (profs ?? []).filter((p) => !adminIds.has(p.user_id));
+      const names = new Set<string>();
+      for (const p of viewerProfiles) {
+        if (p.username) names.add(p.username);
+        if (p.display_name) names.add(p.display_name);
       }
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("user_id, username, display_name")
-        .in("user_id", adminIds);
-      const set = new Set<string>();
-      for (const p of profs ?? []) {
-        if (p.username) set.add(p.username);
-        if (p.display_name) set.add(p.display_name);
-      }
-      if (!cancelled) setAdminNames(set);
-    })();
-    return () => { cancelled = true; };
+      if (!cancelled) setViewers({ names, list: viewerProfiles.map((p) => ({ username: p.username, display_name: p.display_name })) });
+    };
+    void load();
+
+    const ch = supabase
+      .channel("overview_viewers")
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void load())
+      .subscribe();
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, []);
 
   // Load audit log (since reset cutoff, max 30 days) for operator stats
@@ -114,23 +114,41 @@ const Overview = () => {
     };
   }, [statsResetAt]);
 
-  // Operator stats — actions per actor, viewers only (admins excluded)
+  // Operator stats — every viewer login is shown, even with zero activity.
+  // Only audit rows whose actor matches a viewer's username/display_name are counted.
   const operators = useMemo(() => {
-    const map = new Map<string, { actor: string; total: number; read: number; archived: number; other: number; lastTs: number }>();
+    type Row = { actor: string; total: number; read: number; archived: number; other: number; lastTs: number };
+    const map = new Map<string, Row>();
+
+    // Seed with all viewers so operators with 0 actions still appear
+    for (const v of viewers.list) {
+      const key = v.display_name || v.username;
+      map.set(key, { actor: key, total: 0, read: 0, archived: 0, other: 0, lastTs: 0 });
+    }
+
+    // Build a lookup: any name (username OR display_name) → display key
+    const nameToKey = new Map<string, string>();
+    for (const v of viewers.list) {
+      const key = v.display_name || v.username;
+      nameToKey.set(v.username, key);
+      if (v.display_name) nameToKey.set(v.display_name, key);
+    }
+
     for (const a of audit) {
-      const actor = (a.actor && a.actor.trim()) || "unknown";
-      if (adminNames.has(actor)) continue; // exclude admins
-      const t = new Date(a.ts).getTime();
-      const row = map.get(actor) ?? { actor, total: 0, read: 0, archived: 0, other: 0, lastTs: 0 };
+      const actor = (a.actor && a.actor.trim()) || "";
+      const key = nameToKey.get(actor);
+      if (!key) continue; // skip non-viewers (admins, unknown, legacy strings)
+      const row = map.get(key)!;
       row.total += 1;
       if (a.action === "read" || a.action === "mark_read") row.read += 1;
       else if (a.action === "archive" || a.action === "archived") row.archived += 1;
       else row.other += 1;
+      const t = new Date(a.ts).getTime();
       row.lastTs = Math.max(row.lastTs, t);
-      map.set(actor, row);
     }
-    return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [audit, adminNames]);
+
+    return [...map.values()].sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
+  }, [audit, viewers]);
 
   const totalOperators = operators.length;
 
