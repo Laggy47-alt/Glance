@@ -112,30 +112,55 @@ const Overview = () => {
     };
   }, [statsResetAt]);
 
+  // Load "positive incident" media tags (for positive-incident counter per operator)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const thirtyDays = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const since = new Date(Math.max(thirtyDays, statsResetAt)).toISOString();
+      const { data } = await supabase
+        .from("media_tags")
+        .select("created_by, created_at, tag")
+        .ilike("tag", "positive%")
+        .gte("created_at", since)
+        .limit(5000);
+      if (!cancelled && data) setPositiveTags(data as { created_by: string | null; created_at: string }[]);
+    };
+    void load();
+
+    const ch = supabase
+      .channel("overview_positive_tags")
+      .on("postgres_changes", { event: "*", schema: "public", table: "media_tags" }, () => void load())
+      .subscribe();
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
+  }, [statsResetAt]);
+
   // Operator stats — every viewer login is shown, even with zero activity.
-  // Only audit rows whose actor matches a viewer's username/display_name are counted.
+  // Audit rows are matched by actor name; positive-incident tags are matched by user_id.
   const operators = useMemo(() => {
-    type Row = { actor: string; total: number; read: number; archived: number; other: number; lastTs: number };
+    type Row = { actor: string; total: number; read: number; archived: number; positive: number; other: number; lastTs: number };
     const map = new Map<string, Row>();
 
     // Seed with all viewers so operators with 0 actions still appear
     for (const v of viewers.list) {
       const key = v.display_name || v.username;
-      map.set(key, { actor: key, total: 0, read: 0, archived: 0, other: 0, lastTs: 0 });
+      map.set(key, { actor: key, total: 0, read: 0, archived: 0, positive: 0, other: 0, lastTs: 0 });
     }
 
-    // Build a lookup: any name (username OR display_name) → display key
+    // Lookups: name → key, user_id → key
     const nameToKey = new Map<string, string>();
+    const idToKey = new Map<string, string>();
     for (const v of viewers.list) {
       const key = v.display_name || v.username;
       nameToKey.set(v.username, key);
       if (v.display_name) nameToKey.set(v.display_name, key);
+      idToKey.set(v.user_id, key);
     }
 
     for (const a of audit) {
       const actor = (a.actor && a.actor.trim()) || "";
       const key = nameToKey.get(actor);
-      if (!key) continue; // skip non-viewers (admins, unknown, legacy strings)
+      if (!key) continue;
       const row = map.get(key)!;
       row.total += 1;
       if (a.action === "read" || a.action === "mark_read") row.read += 1;
@@ -145,8 +170,19 @@ const Overview = () => {
       row.lastTs = Math.max(row.lastTs, t);
     }
 
+    for (const tag of positiveTags) {
+      if (!tag.created_by) continue;
+      const key = idToKey.get(tag.created_by);
+      if (!key) continue;
+      const row = map.get(key)!;
+      row.positive += 1;
+      row.total += 1;
+      const t = new Date(tag.created_at).getTime();
+      row.lastTs = Math.max(row.lastTs, t);
+    }
+
     return [...map.values()].sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
-  }, [audit, viewers]);
+  }, [audit, viewers, positiveTags]);
 
   const totalOperators = operators.length;
 
