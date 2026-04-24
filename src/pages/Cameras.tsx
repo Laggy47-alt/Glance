@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Camera, Film, Play, VideoOff, Server, Radio } from "lucide-react";
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
 import type { MediaItem } from "@/lib/webhookStore";
-import { resolveMediaUrl, frigateProxyUrl } from "@/lib/webhookStore";
+import { resolveMediaUrl, frigateUrl } from "@/lib/webhookStore";
 import { cn } from "@/lib/utils";
 
 type CameraEntry = {
@@ -75,15 +75,10 @@ const Cameras = () => {
     return grouped.get(activeInstance) ?? [];
   }, [cameras, grouped, activeInstance]);
 
-  const liveSrc = live ? `${frigateProxyUrl(`/${live.instanceId}/api/${encodeURIComponent(live.name)}`)}` : null;
-  const liveStreamSrc = live
-    ? `${frigateProxyUrl(`/${live.instanceId}/api/${encodeURIComponent(live.name)}/mjpeg.html`)}`
-    : null;
-  // Frigate provides MJPEG at /api/<camera> by default (as a stream when Accept: multipart),
-  // but the most reliable image endpoint for an <img> tag is /api/<camera>/latest.jpg refreshed,
-  // and for true MJPEG: /api/<camera>?h=720 returns multipart/x-mixed-replace.
-  const liveImgSrc = live
-    ? `${frigateProxyUrl(`/${live.instanceId}/api/${encodeURIComponent(live.name)}`)}?h=720`
+  const liveInstance = live ? store.frigates.find((f) => f.id === live.instanceId) : null;
+  // Frigate provides MJPEG at /api/<camera>?h=720 (multipart/x-mixed-replace) — works directly in <img>.
+  const liveImgSrc = live && liveInstance
+    ? `${frigateUrl(liveInstance, `/api/${encodeURIComponent(live.name)}`)}?h=720`
     : null;
 
   return (
@@ -161,8 +156,9 @@ const Cameras = () => {
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {visibleCameras.map((cam) => {
               const recentClips = cam.clips.slice().sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 3);
-              const liveThumb = cam.instanceId
-                ? `${frigateProxyUrl(`/${cam.instanceId}/api/${encodeURIComponent(cam.name)}/latest.jpg`)}?t=${tick}`
+              const instance = cam.instanceId ? store.frigates.find((f) => f.id === cam.instanceId) : null;
+              const liveThumb = instance
+                ? `${frigateUrl(instance, `/api/${encodeURIComponent(cam.name)}/latest.jpg`)}?t=${tick}`
                 : null;
               const snapshotSrc = liveThumb ?? (cam.latestSnapshot ? resolveMediaUrl(cam.latestSnapshot.url) : null);
               const lightboxSnapshot = cam.latestSnapshot
