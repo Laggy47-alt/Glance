@@ -111,6 +111,8 @@ const Audit = () => {
   const filtered = useMemo(() => {
     const f = filter.trim().toLowerCase();
     return entries.filter((e) => {
+      // Hide auto-archived (low-signal) system entries
+      if ((e.note ?? "").toLowerCase().includes("auto-archived")) return false;
       // Only show actions performed by actual operators/viewers (users with profiles)
       if (!e.actor || !operatorNames.has(e.actor)) return false;
       if (actionFilter !== "all" && e.action !== actionFilter) return false;
