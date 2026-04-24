@@ -35,7 +35,8 @@ async function runRefresh() {
     const { data: instances } = await supabase
       .from("frigate_instances")
       .select("id, base_url, is_local, enabled")
-      .eq("enabled", true);
+      .eq("enabled", true)
+      .eq("is_local", true);
     for (const inst of (instances ?? []) as any[]) {
       try { await refreshInstance(inst); } catch { /* ignore per-instance */ }
     }
