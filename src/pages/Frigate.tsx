@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff, Webhook } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff, Webhook, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 
@@ -140,6 +140,11 @@ const Frigate = () => {
                     <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="text-sm font-semibold">{f.name}</h3>
                       <code className="text-xs text-muted-foreground truncate max-w-md">{f.base_url}</code>
+                      {f.is_local && (
+                        <Badge variant="secondary" className="gap-1 bg-primary/15 text-primary border-primary/30">
+                          <Wifi className="h-3 w-3" /> Local
+                        </Badge>
+                      )}
                       {f.last_error ? (
                         <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Error</Badge>
                       ) : f.last_polled_at ? (
