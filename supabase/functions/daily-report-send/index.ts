@@ -31,6 +31,11 @@ type Settings = {
   from_name: string;
   from_email: string;
   reply_to: string | null;
+  smtp_host: string | null;
+  smtp_port: number;
+  smtp_username: string | null;
+  smtp_password: string | null;
+  smtp_secure: string; // 'none' | 'starttls' | 'tls'
 };
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
