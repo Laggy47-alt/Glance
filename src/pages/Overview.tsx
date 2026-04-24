@@ -35,11 +35,14 @@ type AuditRow = {
   ts: string;
 };
 
+type ViewerProfile = { user_id: string; username: string; display_name: string | null };
+
 const Overview = () => {
   const store = useWebhookStore();
   const { isAdmin } = useAuth();
   const [audit, setAudit] = useState<AuditRow[]>([]);
-  const [viewers, setViewers] = useState<{ names: Set<string>; list: { username: string; display_name: string | null }[] }>({ names: new Set(), list: [] });
+  const [viewers, setViewers] = useState<{ list: ViewerProfile[] }>({ list: [] });
+  const [positiveTags, setPositiveTags] = useState<{ created_by: string | null; created_at: string }[]>([]);
   const [resetting, setResetting] = useState(false);
   const [statsResetAt, setStatsResetAt] = useState<number>(() => {
     const v = localStorage.getItem("overview.statsResetAt");
