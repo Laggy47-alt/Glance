@@ -57,11 +57,39 @@ const Overview = () => {
     return set.size;
   }, [store.media]);
 
-  // Load audit log (last 30 days) for operator stats + peak hours
+  // Load admin display names + usernames so we can filter them out of operator stats
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+      const adminIds = (roles ?? []).map((r) => r.user_id);
+      if (adminIds.length === 0) {
+        if (!cancelled) setAdminNames(new Set());
+        return;
+      }
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("user_id, username, display_name")
+        .in("user_id", adminIds);
+      const set = new Set<string>();
+      for (const p of profs ?? []) {
+        if (p.username) set.add(p.username);
+        if (p.display_name) set.add(p.display_name);
+      }
+      if (!cancelled) setAdminNames(set);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load audit log (since reset cutoff, max 30 days) for operator stats
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const thirtyDays = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const since = new Date(Math.max(thirtyDays, statsResetAt)).toISOString();
       const { data } = await supabase
         .from("event_audit_log")
         .select("id, action, actor, ts")
@@ -84,13 +112,14 @@ const Overview = () => {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [statsResetAt]);
 
-  // Operator stats — actions per actor
+  // Operator stats — actions per actor, viewers only (admins excluded)
   const operators = useMemo(() => {
     const map = new Map<string, { actor: string; total: number; read: number; archived: number; other: number; lastTs: number }>();
     for (const a of audit) {
       const actor = (a.actor && a.actor.trim()) || "unknown";
+      if (adminNames.has(actor)) continue; // exclude admins
       const t = new Date(a.ts).getTime();
       const row = map.get(actor) ?? { actor, total: 0, read: 0, archived: 0, other: 0, lastTs: 0 };
       row.total += 1;
@@ -101,13 +130,13 @@ const Overview = () => {
       map.set(actor, row);
     }
     return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [audit]);
+  }, [audit, adminNames]);
 
   const totalOperators = operators.length;
 
-  // Peak hours — alerts (webhook events) grouped by hour-of-day, last 7 days
+  // Peak hours — alerts (webhook events) grouped by hour-of-day, last 7 days (respect reset)
   const peakHours = useMemo(() => {
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Math.max(Date.now() - 7 * 24 * 60 * 60 * 1000, statsResetAt);
     const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: `${h.toString().padStart(2, "0")}:00`, count: 0 }));
     for (const ev of store.events) {
       const t = new Date(ev.ts).getTime();
@@ -116,26 +145,37 @@ const Overview = () => {
       buckets[h].count += 1;
     }
     return buckets;
-  }, [store.events]);
+  }, [store.events, statsResetAt]);
 
-  // Peak hours per day-of-week (last 30 days)
+  // Peak hours per day-of-week (last 30 days, respect reset)
   const peakByDay = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const buckets = labels.map((label) => ({ label, count: 0 }));
+    const cutoff = Math.max(Date.now() - 30 * 24 * 60 * 60 * 1000, statsResetAt);
+    const buckets = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => ({ label, count: 0 }));
     for (const ev of store.events) {
       const d = new Date(ev.ts);
       if (d.getTime() < cutoff) continue;
       buckets[d.getDay()].count += 1;
     }
     return buckets;
-  }, [store.events]);
+  }, [store.events, statsResetAt]);
+
+  const handleReset = () => {
+    const now = Date.now();
+    setResetting(true);
+    try {
+      localStorage.setItem("overview.statsResetAt", String(now));
+      setStatsResetAt(now);
+      toast({ title: "Stats reset", description: "Showing activity from this moment forward." });
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const cards = [
     { label: "Total Cameras", value: totalCameras, icon: Camera, color: "text-primary" },
-    { label: "Operators (30d)", value: totalOperators, icon: Users, color: "text-accent" },
-    { label: "Alerts (7d)", value: peakHours.reduce((s, b) => s + b.count, 0), icon: Activity, color: "text-warning" },
+    { label: "Operators", value: totalOperators, icon: Users, color: "text-accent" },
   ];
+
 
   return (
     <DashboardLayout title="Overview" subtitle="Operator activity and alert patterns">
