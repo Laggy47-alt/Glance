@@ -101,15 +101,17 @@ export function AppSidebar() {
                 <p className="px-3 py-1.5 text-[11px] text-muted-foreground italic">No sites yet</p>
               ) : (
                 sites.map((s) => (
-                  <button
+                  <a
                     key={s.id}
-                    onClick={() => navigate(`/frigate#${s.id}`)}
+                    href={s.base_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors text-left"
                   >
                     <span className="h-2 w-2 rounded-full shrink-0" style={{ background: s.color }} />
                     <span className="flex-1 truncate">{s.name}</span>
                     {!s.enabled && <span className="text-[9px] uppercase text-muted-foreground">off</span>}
-                  </button>
+                  </a>
                 ))
               )}
             </div>
