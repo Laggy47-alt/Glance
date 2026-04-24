@@ -26,15 +26,25 @@ const Audit = () => {
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
+  const [operatorNames, setOperatorNames] = useState<Set<string>>(new Set());
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("event_audit_log")
-      .select("*")
-      .order("ts", { ascending: false })
-      .limit(1000);
-    setEntries((data ?? []) as AuditEntry[]);
+    const [{ data: auditData }, { data: profileData }] = await Promise.all([
+      supabase
+        .from("event_audit_log")
+        .select("*")
+        .order("ts", { ascending: false })
+        .limit(1000),
+      supabase.from("profiles").select("username, display_name"),
+    ]);
+    const names = new Set<string>();
+    (profileData ?? []).forEach((p: any) => {
+      if (p.display_name) names.add(p.display_name);
+      if (p.username) names.add(p.username);
+    });
+    setOperatorNames(names);
+    setEntries((auditData ?? []) as AuditEntry[]);
     setLoading(false);
   };
 
