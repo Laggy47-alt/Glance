@@ -73,6 +73,33 @@ export type Database = {
           },
         ]
       }
+      camera_status: {
+        Row: {
+          camera: string
+          id: string
+          instance_id: string
+          last_checked: string
+          online: boolean
+          since: string
+        }
+        Insert: {
+          camera: string
+          id?: string
+          instance_id: string
+          last_checked?: string
+          online: boolean
+          since?: string
+        }
+        Update: {
+          camera?: string
+          id?: string
+          instance_id?: string
+          last_checked?: string
+          online?: boolean
+          since?: string
+        }
+        Relationships: []
+      }
       daily_report_configs: {
         Row: {
           body_template: string
