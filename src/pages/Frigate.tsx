@@ -96,6 +96,9 @@ const Frigate = () => {
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
                     Skip the cloud proxy and call this NVR directly from the browser. Use this when you self-host the dashboard on the same LAN as the NVR. Cloud polling is disabled for local NVRs — push webhooks still work if the NVR can reach the internet.
                   </p>
+                  <p className="text-[10px] text-amber-500/90 leading-relaxed mt-1.5">
+                    ⚠ Self-signed HTTPS: browsers block requests until the cert is trusted. Visit the NVR URL once in each browser and accept the warning, or install a trusted cert (mkcert / reverse proxy).
+                  </p>
                 </div>
               </div>
               <div className="space-y-1.5">
