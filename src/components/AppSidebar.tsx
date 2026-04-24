@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2 } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -16,6 +16,7 @@ const adminItems = [
   { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
   { to: "/archive", label: "Archive", icon: Archive },
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
+  { to: "/daily-reports", label: "Daily Reports", icon: Mail },
   { to: "/customization", label: "Customization", icon: Palette },
 ];
 

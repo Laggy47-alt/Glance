@@ -22,6 +22,7 @@ import ChangePassword from "./pages/ChangePassword.tsx";
 import Users from "./pages/Users.tsx";
 import Customization from "./pages/Customization.tsx";
 import NvrStatus from "./pages/NvrStatus.tsx";
+import DailyReports from "./pages/DailyReports.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/audit" element={protect(<Audit />, true)} />
               <Route path="/users" element={protect(<Users />, true)} />
               <Route path="/customization" element={protect(<Customization />, true)} />
+              <Route path="/daily-reports" element={protect(<DailyReports />, true)} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <AuthorBadge />
