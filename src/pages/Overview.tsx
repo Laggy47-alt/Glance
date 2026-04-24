@@ -114,23 +114,41 @@ const Overview = () => {
     };
   }, [statsResetAt]);
 
-  // Operator stats — actions per actor, viewers only (admins excluded)
+  // Operator stats — every viewer login is shown, even with zero activity.
+  // Only audit rows whose actor matches a viewer's username/display_name are counted.
   const operators = useMemo(() => {
-    const map = new Map<string, { actor: string; total: number; read: number; archived: number; other: number; lastTs: number }>();
+    type Row = { actor: string; total: number; read: number; archived: number; other: number; lastTs: number };
+    const map = new Map<string, Row>();
+
+    // Seed with all viewers so operators with 0 actions still appear
+    for (const v of viewers.list) {
+      const key = v.display_name || v.username;
+      map.set(key, { actor: key, total: 0, read: 0, archived: 0, other: 0, lastTs: 0 });
+    }
+
+    // Build a lookup: any name (username OR display_name) → display key
+    const nameToKey = new Map<string, string>();
+    for (const v of viewers.list) {
+      const key = v.display_name || v.username;
+      nameToKey.set(v.username, key);
+      if (v.display_name) nameToKey.set(v.display_name, key);
+    }
+
     for (const a of audit) {
-      const actor = (a.actor && a.actor.trim()) || "unknown";
-      if (adminNames.has(actor)) continue; // exclude admins
-      const t = new Date(a.ts).getTime();
-      const row = map.get(actor) ?? { actor, total: 0, read: 0, archived: 0, other: 0, lastTs: 0 };
+      const actor = (a.actor && a.actor.trim()) || "";
+      const key = nameToKey.get(actor);
+      if (!key) continue; // skip non-viewers (admins, unknown, legacy strings)
+      const row = map.get(key)!;
       row.total += 1;
       if (a.action === "read" || a.action === "mark_read") row.read += 1;
       else if (a.action === "archive" || a.action === "archived") row.archived += 1;
       else row.other += 1;
+      const t = new Date(a.ts).getTime();
       row.lastTs = Math.max(row.lastTs, t);
-      map.set(actor, row);
     }
-    return [...map.values()].sort((a, b) => b.total - a.total);
-  }, [audit, adminNames]);
+
+    return [...map.values()].sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
+  }, [audit, viewers]);
 
   const totalOperators = operators.length;
 
