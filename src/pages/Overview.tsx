@@ -191,6 +191,7 @@ const Overview = () => {
     const cutoff = Math.max(Date.now() - 7 * 24 * 60 * 60 * 1000, statsResetAt);
     const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: `${h.toString().padStart(2, "0")}:00`, count: 0 }));
     for (const ev of store.events) {
+      if ((ev.label ?? "").toLowerCase() === "car") continue;
       const t = new Date(ev.ts).getTime();
       if (t < cutoff) continue;
       const h = new Date(ev.ts).getHours();
@@ -204,6 +205,7 @@ const Overview = () => {
     const cutoff = Math.max(Date.now() - 30 * 24 * 60 * 60 * 1000, statsResetAt);
     const buckets = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => ({ label, count: 0 }));
     for (const ev of store.events) {
+      if ((ev.label ?? "").toLowerCase() === "car") continue;
       const d = new Date(ev.ts);
       if (d.getTime() < cutoff) continue;
       buckets[d.getDay()].count += 1;
