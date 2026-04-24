@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
       continue;
     }
     try {
-      await sendViaResend({ from: fromHeader, to: recipients, replyTo: s.reply_to, subject: email.subject, html: email.html, text: email.text });
+      await sendViaSmtp(s, { from: fromHeader, to: recipients, replyTo: s.reply_to, subject: email.subject, html: email.html, text: email.text });
       await supabase.from("daily_report_runs").insert({ config_id: cfg.id, instance_id: cfg.instance_id, recipients, status: "sent", subject: email.subject });
       await supabase.from("daily_report_configs").update({ last_sent_at: new Date().toISOString() }).eq("id", cfg.id);
       results.push({ config_id: cfg.id, status: "sent", recipients });
