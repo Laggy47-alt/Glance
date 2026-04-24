@@ -65,24 +65,29 @@ const Audit = () => {
     const missingEvents = eventIds.filter((id) => !(id in eventMeta));
     if (missingEvents.length === 0) return;
     (async () => {
-      const { data } = await supabase
+      const { data: events } = await supabase
         .from("webhook_events")
-        .select("id, camera, topic, label, source_id, webhook_sources(name)")
+        .select("id, camera, topic, label, source_id")
         .in("id", missingEvents);
-      if (data) {
-        setEventMeta((prev) => {
-          const next = { ...prev };
-          data.forEach((r: any) => {
-            next[r.id] = {
-              camera: r.camera,
-              topic: r.topic,
-              label: r.label,
-              source_name: r.webhook_sources?.name ?? null,
-            };
-          });
-          return next;
+      if (!events) return;
+      const sourceIds = Array.from(new Set(events.map((e: any) => e.source_id).filter(Boolean)));
+      const { data: instances } = sourceIds.length
+        ? await supabase.from("frigate_instances").select("source_id, name").in("source_id", sourceIds)
+        : { data: [] as any[] };
+      const nvrBySource = new Map<string, string>();
+      (instances ?? []).forEach((i: any) => { nvrBySource.set(i.source_id, i.name); });
+      setEventMeta((prev) => {
+        const next = { ...prev };
+        events.forEach((r: any) => {
+          next[r.id] = {
+            camera: r.camera,
+            topic: r.topic,
+            label: r.label,
+            source_name: nvrBySource.get(r.source_id) ?? null,
+          };
         });
-      }
+        return next;
+      });
     })();
   }, [entries, eventMeta]);
 
