@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock, Camera as CameraIcon } from "lucide-react";
+import { ScrollText, RefreshCw, User as UserIcon, Filter as FilterIcon, Clock, Camera as CameraIcon, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuditEntry } from "@/lib/auditLog";
 import { formatDuration } from "@/lib/duration";
 
-type EventMeta = { camera: string | null; topic: string | null; label: string | null };
+type EventMeta = { camera: string | null; topic: string | null; label: string | null; source_name: string | null };
 
 const ACTION_STYLES: Record<string, string> = {
   ack: "bg-success/15 text-success border-success/30",
@@ -67,12 +67,19 @@ const Audit = () => {
     (async () => {
       const { data } = await supabase
         .from("webhook_events")
-        .select("id, camera, topic, label")
+        .select("id, camera, topic, label, source_id, webhook_sources(name)")
         .in("id", missingEvents);
       if (data) {
         setEventMeta((prev) => {
           const next = { ...prev };
-          data.forEach((r: any) => { next[r.id] = { camera: r.camera, topic: r.topic, label: r.label }; });
+          data.forEach((r: any) => {
+            next[r.id] = {
+              camera: r.camera,
+              topic: r.topic,
+              label: r.label,
+              source_name: r.webhook_sources?.name ?? null,
+            };
+          });
           return next;
         });
       }
@@ -169,6 +176,7 @@ const Audit = () => {
                   <th className="px-4 py-2.5 font-semibold">User</th>
                   <th className="px-4 py-2.5 font-semibold">Action</th>
                   <th className="px-4 py-2.5 font-semibold">Response time</th>
+                  <th className="px-4 py-2.5 font-semibold">Site</th>
                   <th className="px-4 py-2.5 font-semibold">Camera</th>
                   <th className="px-4 py-2.5 font-semibold">Note</th>
                 </tr>
@@ -209,6 +217,20 @@ const Audit = () => {
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                      {(() => {
+                        const meta = e.event_id ? eventMeta[e.event_id] : null;
+                        if (meta?.source_name) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 text-foreground font-medium">
+                              <Building2 className="h-3 w-3 text-primary" />
+                              {meta.source_name}
+                            </span>
+                          );
+                        }
+                        return <span className="text-muted-foreground">—</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-2.5 text-xs whitespace-nowrap">
                       {(() => {
