@@ -15,6 +15,7 @@ export function DashboardLayout({
   actions?: ReactNode;
   hideSidebar?: boolean;
 }) {
+  useSnapshotRefresher();
   return (
     <div className="min-h-screen flex w-full bg-background">
       {!hideSidebar && <AppSidebar />}
