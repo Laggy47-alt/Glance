@@ -176,6 +176,7 @@ const Audit = () => {
                   <th className="px-4 py-2.5 font-semibold">User</th>
                   <th className="px-4 py-2.5 font-semibold">Action</th>
                   <th className="px-4 py-2.5 font-semibold">Response time</th>
+                  <th className="px-4 py-2.5 font-semibold">Site</th>
                   <th className="px-4 py-2.5 font-semibold">Camera</th>
                   <th className="px-4 py-2.5 font-semibold">Note</th>
                 </tr>
