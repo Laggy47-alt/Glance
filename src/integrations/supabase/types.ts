@@ -166,6 +166,11 @@ export type Database = {
           reply_to: string | null
           send_hour_utc: number
           send_minute_utc: number
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: number
+          smtp_secure: string
+          smtp_username: string | null
           updated_at: string
         }
         Insert: {
@@ -175,6 +180,11 @@ export type Database = {
           reply_to?: string | null
           send_hour_utc?: number
           send_minute_utc?: number
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number
+          smtp_secure?: string
+          smtp_username?: string | null
           updated_at?: string
         }
         Update: {
@@ -184,6 +194,11 @@ export type Database = {
           reply_to?: string | null
           send_hour_utc?: number
           send_minute_utc?: number
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: number
+          smtp_secure?: string
+          smtp_username?: string | null
           updated_at?: string
         }
         Relationships: []
