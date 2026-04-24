@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 const adminItems = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/wall", label: "Live Wall", icon: Bell },
-  { to: "/sources", label: "Sources", icon: Plug },
   { to: "/frigate", label: "Frigate NVR", icon: Server },
   { to: "/nvr-status", label: "NVR Status", icon: HeartPulse },
   { to: "/cameras", label: "Cameras", icon: Camera },
