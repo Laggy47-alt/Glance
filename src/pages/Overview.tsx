@@ -39,7 +39,7 @@ const Overview = () => {
   const store = useWebhookStore();
   const { isAdmin } = useAuth();
   const [audit, setAudit] = useState<AuditRow[]>([]);
-  const [adminNames, setAdminNames] = useState<Set<string>>(new Set());
+  const [viewers, setViewers] = useState<{ names: Set<string>; list: { username: string; display_name: string | null }[] }>({ names: new Set(), list: [] });
   const [resetting, setResetting] = useState(false);
   const [statsResetAt, setStatsResetAt] = useState<number>(() => {
     const v = localStorage.getItem("overview.statsResetAt");
