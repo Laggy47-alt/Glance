@@ -164,8 +164,7 @@ const Cameras = () => {
               const lightboxSnapshot = cam.latestSnapshot
                 ? { ...cam.latestSnapshot, url: resolveMediaUrl(cam.latestSnapshot.url) }
                 : null;
-              const instance = cam.instanceId ? store.frigates.find((f) => f.id === cam.instanceId) : null;
-              const canGoLive = !!cam.instanceId;
+              const canGoLive = !!cam.instanceId && !!instance;
               return (
                 <Card key={`${cam.instanceId ?? "_"}-${cam.name}`} className="bg-gradient-card border-border shadow-card overflow-hidden flex flex-col">
                   <button
