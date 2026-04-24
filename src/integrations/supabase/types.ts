@@ -111,6 +111,7 @@ export type Database = {
           created_at: string
           enabled: boolean
           id: string
+          is_local: boolean
           last_error: string | null
           last_event_ts: string | null
           last_polled_at: string | null
@@ -126,6 +127,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          is_local?: boolean
           last_error?: string | null
           last_event_ts?: string | null
           last_polled_at?: string | null
@@ -141,6 +143,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           id?: string
+          is_local?: boolean
           last_error?: string | null
           last_event_ts?: string | null
           last_polled_at?: string | null
