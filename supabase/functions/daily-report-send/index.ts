@@ -38,7 +38,23 @@ type Settings = {
   smtp_secure: string; // 'none' | 'starttls' | 'tls'
 };
 
+type CamState = { name: string; online: boolean; since: string };
+
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
+
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  if (h < 24) return remM ? `${h}h ${remM}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH ? `${d}d ${remH}h` : `${d}d`;
+}
 
 async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; offline: string[] }> {
   try {
@@ -58,6 +74,29 @@ async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; of
   } catch {
     return { online: [], offline: [] };
   }
+}
+
+async function reconcileStatus(supabase: any, instId: string, online: string[], offline: string[]): Promise<Map<string, CamState>> {
+  const now = new Date().toISOString();
+  const { data: existing } = await supabase.from("camera_status").select("*").eq("instance_id", instId);
+  const map = new Map<string, any>((existing ?? []).map((r: any) => [r.camera, r]));
+  const result = new Map<string, CamState>();
+  const upserts: any[] = [];
+  const all = [...online.map((n) => ({ n, online: true })), ...offline.map((n) => ({ n, online: false }))];
+  for (const { n, online: isOnline } of all) {
+    const prev = map.get(n);
+    if (!prev || prev.online !== isOnline) {
+      upserts.push({ instance_id: instId, camera: n, online: isOnline, since: now, last_checked: now });
+      result.set(n, { name: n, online: isOnline, since: now });
+    } else {
+      upserts.push({ instance_id: instId, camera: n, online: isOnline, since: prev.since, last_checked: now });
+      result.set(n, { name: n, online: isOnline, since: prev.since });
+    }
+  }
+  if (upserts.length) {
+    await supabase.from("camera_status").upsert(upserts, { onConflict: "instance_id,camera" });
+  }
+  return result;
 }
 
 async function fetchPositiveIncidents(supabase: any, instanceId: string, since: string) {
@@ -82,12 +121,34 @@ async function fetchPositiveIncidents(supabase: any, instanceId: string, since: 
   }));
 }
 
+async function fetchSnapshot(inst: Instance, camera: string): Promise<string | null> {
+  try {
+    const headers: Record<string, string> = {};
+    if (inst.api_key) headers["Authorization"] = `Bearer ${inst.api_key}`;
+    const r = await fetch(`${trimUrl(inst.base_url)}/api/${encodeURIComponent(camera)}/latest.jpg?h=300`, {
+      headers, signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) return null;
+    const buf = new Uint8Array(await r.arrayBuffer());
+    let bin = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < buf.length; i += chunk) bin += String.fromCharCode(...buf.subarray(i, i + chunk));
+    return `data:image/jpeg;base64,${btoa(bin)}`;
+  } catch {
+    return null;
+  }
+}
+
 function render(template: string, data: Record<string, string>) {
   return template.replace(/\{\{\s*([\w_]+)\s*\}\}/g, (_, key) => data[key] ?? `{{${key}}}`);
 }
 
+function esc(s: string) {
+  return s.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] as string));
+}
+
 function nl2br(s: string) {
-  return s.split("\n").map((l) => l.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] as string))).join("<br/>");
+  return s.split("\n").map((l) => esc(l)).join("<br/>");
 }
 
 async function buildEmail(cfg: Cfg, inst: Instance) {
@@ -97,6 +158,21 @@ async function buildEmail(cfg: Cfg, inst: Instance) {
     fetchFrigateStats(inst),
     fetchPositiveIncidents(supabase, inst.id, since),
   ]);
+
+  // Track status transitions and compute offline duration
+  const status = await reconcileStatus(supabase, inst.id, stats.online, stats.offline);
+  const now = Date.now();
+  const offlineWithDur = stats.offline.map((n) => {
+    const st = status.get(n);
+    const dur = st ? now - new Date(st.since).getTime() : 0;
+    return { name: n, since: st?.since ?? null, duration: formatDuration(dur) };
+  });
+
+  // Snapshots for online cameras
+  const snapshots = await Promise.all(
+    stats.online.map(async (n) => ({ name: n, dataUrl: await fetchSnapshot(inst, n) })),
+  );
+
   const date = new Date().toISOString().slice(0, 10);
   const data: Record<string, string> = {
     nvr_name: inst.name,
@@ -104,17 +180,34 @@ async function buildEmail(cfg: Cfg, inst: Instance) {
     cameras_online_count: String(stats.online.length),
     cameras_offline_count: String(stats.offline.length),
     cameras_online_list: stats.online.length ? stats.online.map((c) => `• ${c}`).join("\n") : "(none)",
-    cameras_offline_list: stats.offline.length ? stats.offline.map((c) => `• ${c}`).join("\n") : "(none)",
+    cameras_offline_list: offlineWithDur.length
+      ? offlineWithDur.map((o) => `• ${o.name} — offline for ${o.duration}`).join("\n")
+      : "(none)",
     positive_incidents_count: String(incidents.length),
     positive_incidents_list: incidents.length
       ? incidents.map((i: any) => `• ${i.camera} @ ${new Date(i.ts).toLocaleString()}${i.note ? " — " + i.note : ""}`).join("\n")
       : "(none)",
   };
-  return {
-    subject: render(cfg.subject, data),
-    text: render(cfg.body_template, data),
-    html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111">${nl2br(render(cfg.body_template, data))}</div>`,
-  };
+
+  const text = render(cfg.body_template, data);
+
+  // Build HTML with snapshots gallery
+  const snapsHtml = snapshots.filter((s) => s.dataUrl).map((s) => `
+    <div style="display:inline-block;margin:4px;text-align:center;vertical-align:top;">
+      <img src="${s.dataUrl}" alt="${esc(s.name)}" style="max-width:240px;height:auto;border-radius:6px;border:1px solid #ddd;display:block;" />
+      <div style="font-size:12px;color:#444;margin-top:2px;">${esc(s.name)}</div>
+    </div>`).join("");
+  const offlineHtml = offlineWithDur.length
+    ? `<ul style="margin:8px 0;padding-left:20px;">${offlineWithDur.map((o) => `<li><strong>${esc(o.name)}</strong> — offline for ${esc(o.duration)}</li>`).join("")}</ul>`
+    : "";
+
+  const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111">
+    ${nl2br(text)}
+    ${offlineWithDur.length ? `<h3 style="margin-top:20px;color:#b91c1c;">Offline cameras</h3>${offlineHtml}` : ""}
+    ${snapsHtml ? `<h3 style="margin-top:20px;">Latest snapshots</h3><div>${snapsHtml}</div>` : ""}
+  </div>`;
+
+  return { subject: render(cfg.subject, data), text, html };
 }
 
 async function sendViaSmtp(s: Settings, opts: { from: string; to: string[]; replyTo?: string | null; subject: string; html: string; text: string; }) {
