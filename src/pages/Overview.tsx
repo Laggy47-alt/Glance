@@ -57,31 +57,31 @@ const Overview = () => {
     return set.size;
   }, [store.media]);
 
-  // Load admin display names + usernames so we can filter them out of operator stats
+  // Load all viewer profiles (non-admin users with a login). They're the only ones shown in operator stats.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "admin");
-      const adminIds = (roles ?? []).map((r) => r.user_id);
-      if (adminIds.length === 0) {
-        if (!cancelled) setAdminNames(new Set());
-        return;
+    const load = async () => {
+      const [{ data: roles }, { data: profs }] = await Promise.all([
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("profiles").select("user_id, username, display_name"),
+      ]);
+      const adminIds = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
+      const viewerProfiles = (profs ?? []).filter((p) => !adminIds.has(p.user_id));
+      const names = new Set<string>();
+      for (const p of viewerProfiles) {
+        if (p.username) names.add(p.username);
+        if (p.display_name) names.add(p.display_name);
       }
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("user_id, username, display_name")
-        .in("user_id", adminIds);
-      const set = new Set<string>();
-      for (const p of profs ?? []) {
-        if (p.username) set.add(p.username);
-        if (p.display_name) set.add(p.display_name);
-      }
-      if (!cancelled) setAdminNames(set);
-    })();
-    return () => { cancelled = true; };
+      if (!cancelled) setViewers({ names, list: viewerProfiles.map((p) => ({ username: p.username, display_name: p.display_name })) });
+    };
+    void load();
+
+    const ch = supabase
+      .channel("overview_viewers")
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void load())
+      .subscribe();
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, []);
 
   // Load audit log (since reset cutoff, max 30 days) for operator stats
