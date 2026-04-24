@@ -1,9 +1,23 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { Card } from "@/components/ui/card";
-import { Camera, Users, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Camera, Users, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/hooks/use-toast";
 import {
   Bar,
   BarChart,
@@ -23,7 +37,15 @@ type AuditRow = {
 
 const Overview = () => {
   const store = useWebhookStore();
+  const { isAdmin } = useAuth();
   const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [adminNames, setAdminNames] = useState<Set<string>>(new Set());
+  const [resetting, setResetting] = useState(false);
+  const [statsResetAt, setStatsResetAt] = useState<number>(() => {
+    const v = localStorage.getItem("overview.statsResetAt");
+    return v ? Number(v) : 0;
+  });
+
 
   // Total unique cameras (matches Cameras page logic)
   const totalCameras = useMemo(() => {
