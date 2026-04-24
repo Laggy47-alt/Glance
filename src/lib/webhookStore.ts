@@ -62,6 +62,7 @@ export type FrigateInstance = {
   last_polled_at: string | null;
   last_event_ts: string | null;
   last_error: string | null;
+  is_local: boolean;
   created_at: string;
 };
 
@@ -205,7 +206,7 @@ class WebhookStore {
   }
 
   // ─── Frigate instances ───
-  async createFrigate(input: { name: string; base_url: string; api_key?: string; color?: string }) {
+  async createFrigate(input: { name: string; base_url: string; api_key?: string; color?: string; is_local?: boolean }) {
     const slugBase = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "frigate";
     const slug = `frigate-${slugBase}-${crypto.randomUUID().slice(0, 6)}`;
     const secret = crypto.randomUUID().replace(/-/g, "");
@@ -226,6 +227,9 @@ class WebhookStore {
       base_url: input.base_url.replace(/\/+$/, ""),
       api_key: input.api_key || null,
       color,
+      is_local: input.is_local ?? false,
+      // Cloud-poll won't reach LAN URLs, so disable polling by default for local instances
+      poll_enabled: input.is_local ? false : true,
     });
     if (error) {
       // Roll back the orphan source
@@ -233,7 +237,7 @@ class WebhookStore {
       throw error;
     }
   }
-  async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds">>) {
+  async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local">>) {
     const { error } = await supabase.from("frigate_instances").update(patch).eq("id", id);
     if (error) throw error;
   }
@@ -263,6 +267,22 @@ export function frigateProxyUrl(relative: string) {
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const path = relative.startsWith("/") ? relative : "/" + relative;
   return `https://${projectId}.supabase.co/functions/v1/frigate-proxy${path}`;
+}
+
+/**
+ * Returns the best URL for a Frigate API path, given an instance.
+ * - For LOCAL instances (`is_local = true`), returns `<base_url><path>` so the
+ *   browser talks directly to the NVR on the LAN (no cloud round-trip).
+ * - Otherwise, returns the cloud Frigate proxy URL.
+ *
+ * `path` should start with `/api/...` (e.g. `/api/stats`).
+ */
+export function frigateUrl(instance: { id: string; base_url: string; is_local: boolean }, path: string) {
+  const p = path.startsWith("/") ? path : "/" + path;
+  if (instance.is_local) {
+    return `${instance.base_url.replace(/\/+$/, "")}${p}`;
+  }
+  return frigateProxyUrl(`/${instance.id}${p}`);
 }
 
 export function resolveMediaUrl(url: string) {

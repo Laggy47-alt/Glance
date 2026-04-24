@@ -1,0 +1,1 @@
+ALTER TABLE public.frigate_instances ADD COLUMN IF NOT EXISTS is_local boolean NOT NULL DEFAULT false;

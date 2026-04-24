@@ -4,8 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState, useCallback } from "react";
-import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, Camera, WifiOff } from "lucide-react";
-import { frigateProxyUrl } from "@/lib/webhookStore";
+import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, Camera, WifiOff, Wifi } from "lucide-react";
+import { frigateUrl } from "@/lib/webhookStore";
 import { cn } from "@/lib/utils";
 
 type CameraStatus = {
@@ -55,12 +55,14 @@ const NvrStatus = () => {
   const [statuses, setStatuses] = useState<Record<string, NvrStatus>>({});
 
   const fetchOne = useCallback(async (instanceId: string) => {
+    const inst = store.frigates.find((x) => x.id === instanceId);
+    if (!inst) return;
     setStatuses((prev) => ({
       ...prev,
       [instanceId]: { ...(prev[instanceId] ?? { instanceId, cameras: [], fetchedAt: null }), loading: true, error: null, instanceId },
     }));
     try {
-      const url = frigateProxyUrl(`/${instanceId}/api/stats`);
+      const url = frigateUrl(inst, "/api/stats");
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -75,7 +77,7 @@ const NvrStatus = () => {
         [instanceId]: { instanceId, loading: false, error: (e as Error).message, cameras: [], fetchedAt: Date.now() },
       }));
     }
-  }, []);
+  }, [store.frigates]);
 
   const fetchAll = useCallback(() => {
     for (const f of store.frigates) {
@@ -127,7 +129,14 @@ const NvrStatus = () => {
                       <Server className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground truncate">{f.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-foreground truncate">{f.name}</h3>
+                        {f.is_local && (
+                          <Badge variant="secondary" className="gap-1 text-[9px] bg-primary/15 text-primary border-primary/30 h-4 px-1.5">
+                            <Wifi className="h-2.5 w-2.5" /> Local
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-[10px] text-muted-foreground truncate">{f.base_url}</p>
                     </div>
                   </div>

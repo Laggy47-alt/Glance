@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff, Webhook } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, Copy, Eye, EyeOff, Webhook, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 
@@ -22,15 +22,16 @@ const Frigate = () => {
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [color, setColor] = useState(PALETTE[0]);
+  const [isLocal, setIsLocal] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [secretRevealed, setSecretRevealed] = useState<Record<string, boolean>>({});
   const [polling, setPolling] = useState<Record<string, boolean>>({});
 
-  const reset = () => { setEditing(null); setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]); };
+  const reset = () => { setEditing(null); setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]); setIsLocal(false); };
 
   const openNew = () => { reset(); setOpen(true); };
   const openEdit = (f: FrigateInstance) => {
-    setEditing(f); setName(f.name); setBaseUrl(f.base_url); setApiKey(f.api_key ?? ""); setColor(f.color); setOpen(true);
+    setEditing(f); setName(f.name); setBaseUrl(f.base_url); setApiKey(f.api_key ?? ""); setColor(f.color); setIsLocal(f.is_local); setOpen(true);
   };
 
   const save = async () => {
@@ -38,10 +39,10 @@ const Frigate = () => {
     if (!/^https?:\/\//i.test(baseUrl.trim())) { toast.error("Base URL must start with http:// or https://"); return; }
     try {
       if (editing) {
-        await store.updateFrigate(editing.id, { name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || null, color });
+        await store.updateFrigate(editing.id, { name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || null, color, is_local: isLocal });
         toast.success("Instance updated");
       } else {
-        await store.createFrigate({ name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || undefined, color });
+        await store.createFrigate({ name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || undefined, color, is_local: isLocal });
         toast.success("Frigate instance added");
       }
       setOpen(false); reset();
@@ -81,8 +82,21 @@ const Frigate = () => {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Base URL</Label>
-                <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://frigate.mydomain.com" className="bg-secondary border-border font-mono" />
-                <p className="text-[10px] text-muted-foreground">Public HTTPS URL. For localhost, expose via Cloudflare Tunnel or ngrok (see below).</p>
+                <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={isLocal ? "http://192.168.1.50:5000" : "https://frigate.mydomain.com"} className="bg-secondary border-border font-mono" />
+                <p className="text-[10px] text-muted-foreground">
+                  {isLocal
+                    ? "LAN URL reachable from your browser (e.g. http://192.168.1.50:5000)."
+                    : "Public HTTPS URL. For localhost, expose via Cloudflare Tunnel or ngrok (see below)."}
+                </p>
+              </div>
+              <div className="rounded-md border border-border bg-secondary/40 px-3 py-2.5 flex items-start gap-3">
+                <Switch checked={isLocal} onCheckedChange={setIsLocal} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground">Local NVR (direct browser access)</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Skip the cloud proxy and call this NVR directly from the browser. Use this when you self-host the dashboard on the same LAN as the NVR. Cloud polling is disabled for local NVRs — push webhooks still work if the NVR can reach the internet.
+                  </p>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">API key <span className="text-muted-foreground">(optional)</span></Label>
@@ -126,6 +140,11 @@ const Frigate = () => {
                     <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="text-sm font-semibold">{f.name}</h3>
                       <code className="text-xs text-muted-foreground truncate max-w-md">{f.base_url}</code>
+                      {f.is_local && (
+                        <Badge variant="secondary" className="gap-1 bg-primary/15 text-primary border-primary/30">
+                          <Wifi className="h-3 w-3" /> Local
+                        </Badge>
+                      )}
                       {f.last_error ? (
                         <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Error</Badge>
                       ) : f.last_polled_at ? (
