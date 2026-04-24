@@ -136,32 +136,37 @@ const Overview = () => {
   }, [statsResetAt]);
 
   // Operator stats — every viewer login is shown, even with zero activity.
-  // Audit rows are matched by actor name; positive-incident tags are matched by user_id.
+  // Audit rows are matched by the actor name *recorded at the time of the action*,
+  // so renaming a user or onboarding a new one never reassigns historical activity.
   const operators = useMemo(() => {
     type Row = { actor: string; total: number; read: number; archived: number; positive: number; other: number; lastTs: number };
     const map = new Map<string, Row>();
 
-    // Seed with all viewers so operators with 0 actions still appear
+    const ensure = (key: string): Row => {
+      let row = map.get(key);
+      if (!row) {
+        row = { actor: key, total: 0, read: 0, archived: 0, positive: 0, other: 0, lastTs: 0 };
+        map.set(key, row);
+      }
+      return row;
+    };
+
+    // Seed with all current viewers so operators with 0 actions still appear
     for (const v of viewers.list) {
-      const key = v.display_name || v.username;
-      map.set(key, { actor: key, total: 0, read: 0, archived: 0, positive: 0, other: 0, lastTs: 0 });
+      ensure(v.display_name || v.username);
     }
 
-    // Lookups: name → key, user_id → key
-    const nameToKey = new Map<string, string>();
-    const idToKey = new Map<string, string>();
+    // user_id → current display name (only used to credit positive-incident tags,
+    // which are stored by user_id rather than actor name).
+    const idToCurrentKey = new Map<string, string>();
     for (const v of viewers.list) {
-      const key = v.display_name || v.username;
-      nameToKey.set(v.username, key);
-      if (v.display_name) nameToKey.set(v.display_name, key);
-      idToKey.set(v.user_id, key);
+      idToCurrentKey.set(v.user_id, v.display_name || v.username);
     }
 
     for (const a of audit) {
       const actor = (a.actor && a.actor.trim()) || "";
-      const key = nameToKey.get(actor);
-      if (!key) continue;
-      const row = map.get(key)!;
+      if (!actor) continue;
+      const row = ensure(actor);
       row.total += 1;
       if (a.action === "read" || a.action === "mark_read") row.read += 1;
       else if (a.action === "archive" || a.action === "archived") row.archived += 1;
@@ -172,9 +177,9 @@ const Overview = () => {
 
     for (const tag of positiveTags) {
       if (!tag.created_by) continue;
-      const key = idToKey.get(tag.created_by);
+      const key = idToCurrentKey.get(tag.created_by);
       if (!key) continue;
-      const row = map.get(key)!;
+      const row = ensure(key);
       row.positive += 1;
       row.total += 1;
       const t = new Date(tag.created_at).getTime();

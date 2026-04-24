@@ -26,24 +26,18 @@ const Audit = () => {
   const [filter, setFilter] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [eventMeta, setEventMeta] = useState<Record<string, EventMeta>>({});
-  const [operatorNames, setOperatorNames] = useState<Set<string>>(new Set());
 
   const load = async () => {
     setLoading(true);
-    const [{ data: auditData }, { data: profileData }] = await Promise.all([
-      supabase
-        .from("event_audit_log")
-        .select("*")
-        .order("ts", { ascending: false })
-        .limit(1000),
-      supabase.from("profiles").select("username, display_name"),
-    ]);
-    const names = new Set<string>();
-    (profileData ?? []).forEach((p: any) => {
-      if (p.display_name) names.add(p.display_name);
-      if (p.username) names.add(p.username);
-    });
-    setOperatorNames(names);
+    // Always show the last 30 days of audit history, regardless of whether
+    // the operator who performed the action still has an active profile.
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: auditData } = await supabase
+      .from("event_audit_log")
+      .select("*")
+      .gte("ts", since)
+      .order("ts", { ascending: false })
+      .limit(5000);
     setEntries((auditData ?? []) as AuditEntry[]);
     setLoading(false);
   };
@@ -53,7 +47,7 @@ const Audit = () => {
     const ch = supabase
       .channel("audit-log")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "event_audit_log" }, (p) => {
-        setEntries((prev) => [p.new as AuditEntry, ...prev].slice(0, 1000));
+        setEntries((prev) => [p.new as AuditEntry, ...prev].slice(0, 5000));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -113,8 +107,8 @@ const Audit = () => {
     return entries.filter((e) => {
       // Hide auto-archived (low-signal) system entries
       if ((e.note ?? "").toLowerCase().includes("auto-archived")) return false;
-      // Only show actions performed by actual operators/viewers (users with profiles)
-      if (!e.actor || !operatorNames.has(e.actor)) return false;
+      // Require an actor — system inserts without one are noise
+      if (!e.actor) return false;
       if (actionFilter !== "all" && e.action !== actionFilter) return false;
       if (!f) return true;
       const cam = e.event_id ? eventMeta[e.event_id]?.camera ?? "" : "";
@@ -125,7 +119,8 @@ const Audit = () => {
         e.alert_key.toLowerCase().includes(f)
       );
     });
-  }, [entries, filter, actionFilter, eventMeta, operatorNames]);
+  }, [entries, filter, actionFilter, eventMeta]);
+
 
   return (
     <DashboardLayout
