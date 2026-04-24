@@ -149,7 +149,7 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
 
   const previewEmail = async () => {
     setPreview("loading");
-    const snapshots = await collectSnapshots(local.instance_id);
+    const snapshots = await refreshAndUploadSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
       body: { config_id: local.id, preview: true, snapshots },
     });
@@ -162,7 +162,7 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
   const sendTest = async () => {
     if (!local.recipients.length) { toast.error("Add at least one recipient first"); return; }
     setSending(true);
-    const snapshots = await collectSnapshots(local.instance_id);
+    const snapshots = await refreshAndUploadSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
       body: { config_id: local.id, recipients: local.recipients, snapshots },
     });
