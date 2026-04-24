@@ -73,6 +73,121 @@ export type Database = {
           },
         ]
       }
+      daily_report_configs: {
+        Row: {
+          body_template: string
+          created_at: string
+          enabled: boolean
+          id: string
+          instance_id: string
+          last_sent_at: string | null
+          recipients: string[]
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          body_template?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          instance_id: string
+          last_sent_at?: string | null
+          recipients?: string[]
+          subject?: string
+          updated_at?: string
+        }
+        Update: {
+          body_template?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          instance_id?: string
+          last_sent_at?: string | null
+          recipients?: string[]
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_report_configs_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: true
+            referencedRelation: "frigate_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_report_runs: {
+        Row: {
+          config_id: string | null
+          error: string | null
+          id: string
+          instance_id: string | null
+          recipients: string[]
+          sent_at: string
+          status: string
+          subject: string | null
+        }
+        Insert: {
+          config_id?: string | null
+          error?: string | null
+          id?: string
+          instance_id?: string | null
+          recipients?: string[]
+          sent_at?: string
+          status: string
+          subject?: string | null
+        }
+        Update: {
+          config_id?: string | null
+          error?: string | null
+          id?: string
+          instance_id?: string | null
+          recipients?: string[]
+          sent_at?: string
+          status?: string
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_report_runs_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "daily_report_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_report_settings: {
+        Row: {
+          from_email: string
+          from_name: string
+          id: string
+          reply_to: string | null
+          send_hour_utc: number
+          send_minute_utc: number
+          updated_at: string
+        }
+        Insert: {
+          from_email?: string
+          from_name?: string
+          id?: string
+          reply_to?: string | null
+          send_hour_utc?: number
+          send_minute_utc?: number
+          updated_at?: string
+        }
+        Update: {
+          from_email?: string
+          from_name?: string
+          id?: string
+          reply_to?: string | null
+          send_hour_utc?: number
+          send_minute_utc?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_audit_log: {
         Row: {
           action: string
