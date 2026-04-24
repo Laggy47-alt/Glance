@@ -140,8 +140,9 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
 
   const previewEmail = async () => {
     setPreview("loading");
+    const snapshots = await collectSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
-      body: { config_id: local.id, preview: true },
+      body: { config_id: local.id, preview: true, snapshots },
     });
     if (error) { toast.error(error.message); setPreview(null); return; }
     const p = (data?.results?.[0]?.preview);
