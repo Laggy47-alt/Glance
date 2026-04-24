@@ -27,6 +27,21 @@ const Frigate = () => {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [secretRevealed, setSecretRevealed] = useState<Record<string, boolean>>({});
   const [polling, setPolling] = useState<Record<string, boolean>>({});
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!location.hash || !store.frigates.length) return;
+    const id = location.hash.replace(/^#/, "");
+    const tryScroll = () => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.classList.add("ring-2", "ring-primary");
+        setTimeout(() => el.classList.remove("ring-2", "ring-primary"), 2000);
+      }
+    };
+    setTimeout(tryScroll, 50);
+  }, [location.hash, store.frigates.length]);
 
   const reset = () => { setEditing(null); setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]); setIsLocal(false); };
 
