@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
+import { useSnapshotRefresher } from "@/hooks/useSnapshotRefresher";
 
 export function DashboardLayout({
   children,
