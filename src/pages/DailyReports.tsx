@@ -14,43 +14,52 @@ import { Mail, Send, Save, Plus, X, Eye, Server, Clock, AlertCircle } from "luci
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+async function blobFromFrigate(inst: any, camera: string): Promise<Blob | null> {
+  try {
+    const r = await fetch(frigateUrl(inst, `/api/${encodeURIComponent(camera)}/latest.jpg?h=400`));
+    if (!r.ok) return null;
+    const b = await r.blob();
+    return b.type.startsWith("image/") ? b : null;
+  } catch { return null; }
 }
 
-/** Fetch latest snapshots for all online cameras of an instance, browser-side. */
-async function collectSnapshots(instanceId: string): Promise<Array<{ name: string; dataUrl: string }>> {
+/** Fetch latest snapshots for all online cameras of an instance and upload them to storage.
+ *  Returns the public URLs keyed by camera name. */
+async function refreshAndUploadSnapshots(instanceId: string): Promise<Array<{ name: string; url: string }>> {
   const { data: inst } = await supabase
     .from("frigate_instances")
     .select("id, base_url, is_local")
     .eq("id", instanceId)
     .maybeSingle();
   if (!inst) return [];
+  let online: string[] = [];
   try {
     const statsRes = await fetch(frigateUrl(inst as any, "/api/stats"));
     if (!statsRes.ok) return [];
     const stats: any = await statsRes.json();
     const cams = stats?.cameras ?? {};
-    const online = Object.entries<any>(cams)
+    online = Object.entries<any>(cams)
       .filter(([, d]) => Number(d?.camera_fps ?? 0) > 0)
       .map(([n]) => n);
-    const results = await Promise.all(online.map(async (name) => {
-      try {
-        const r = await fetch(frigateUrl(inst as any, `/api/${encodeURIComponent(name)}/latest.jpg?h=300`));
-        if (!r.ok) return null;
-        const b = await r.blob();
-        if (!b.type.startsWith("image/")) return null;
-        return { name, dataUrl: await blobToDataUrl(b) };
-      } catch { return null; }
-    }));
-    return results.filter(Boolean) as Array<{ name: string; dataUrl: string }>;
   } catch { return []; }
+
+  const uploaded: Array<{ name: string; url: string }> = [];
+  await Promise.all(online.map(async (name) => {
+    const blob = await blobFromFrigate(inst as any, name);
+    if (!blob) return;
+    const safe = name.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const path = `${instanceId}/${safe}.jpg`;
+    const { error } = await supabase.storage
+      .from("camera-snapshots")
+      .upload(path, blob, { upsert: true, contentType: "image/jpeg", cacheControl: "60" });
+    if (error) return;
+    const { data: pub } = supabase.storage.from("camera-snapshots").getPublicUrl(path);
+    // bust browser cache for the email render
+    uploaded.push({ name, url: `${pub.publicUrl}?t=${Date.now()}` });
+  }));
+  return uploaded;
 }
+
 
 
 type Cfg = {
@@ -140,7 +149,7 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
 
   const previewEmail = async () => {
     setPreview("loading");
-    const snapshots = await collectSnapshots(local.instance_id);
+    const snapshots = await refreshAndUploadSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
       body: { config_id: local.id, preview: true, snapshots },
     });
@@ -153,7 +162,7 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
   const sendTest = async () => {
     if (!local.recipients.length) { toast.error("Add at least one recipient first"); return; }
     setSending(true);
-    const snapshots = await collectSnapshots(local.instance_id);
+    const snapshots = await refreshAndUploadSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
       body: { config_id: local.id, recipients: local.recipients, snapshots },
     });

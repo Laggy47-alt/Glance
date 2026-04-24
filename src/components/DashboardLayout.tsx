@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
+import { useSnapshotRefresher } from "@/hooks/useSnapshotRefresher";
 
 export function DashboardLayout({
   children,
@@ -14,6 +15,7 @@ export function DashboardLayout({
   actions?: ReactNode;
   hideSidebar?: boolean;
 }) {
+  useSnapshotRefresher();
   return (
     <div className="min-h-screen flex w-full bg-background">
       {!hideSidebar && <AppSidebar />}

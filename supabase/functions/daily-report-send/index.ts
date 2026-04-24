@@ -121,22 +121,16 @@ async function fetchPositiveIncidents(supabase: any, instanceId: string, since: 
   }));
 }
 
-async function fetchSnapshot(inst: Instance, camera: string): Promise<string | null> {
-  try {
-    const headers: Record<string, string> = {};
-    if (inst.api_key) headers["Authorization"] = `Bearer ${inst.api_key}`;
-    const r = await fetch(`${trimUrl(inst.base_url)}/api/${encodeURIComponent(camera)}/latest.jpg?h=300`, {
-      headers, signal: AbortSignal.timeout(10000),
-    });
-    if (!r.ok) return null;
-    const buf = new Uint8Array(await r.arrayBuffer());
-    let bin = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < buf.length; i += chunk) bin += String.fromCharCode(...buf.subarray(i, i + chunk));
-    return `data:image/jpeg;base64,${btoa(bin)}`;
-  } catch {
-    return null;
-  }
+async function listStoredSnapshots(supabase: any, instanceId: string): Promise<Array<{ name: string; url: string }>> {
+  const { data: files } = await supabase.storage.from("camera-snapshots").list(instanceId, { limit: 1000 });
+  if (!files?.length) return [];
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  return files
+    .filter((f: any) => f.name?.endsWith(".jpg"))
+    .map((f: any) => ({
+      name: f.name.replace(/\.jpg$/, ""),
+      url: `${supabaseUrl}/storage/v1/object/public/camera-snapshots/${instanceId}/${f.name}`,
+    }));
 }
 
 function render(template: string, data: Record<string, string>) {
@@ -151,7 +145,7 @@ function nl2br(s: string) {
   return s.split("\n").map((l) => esc(l)).join("<br/>");
 }
 
-async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ name: string; dataUrl: string }>) {
+async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ name: string; url: string }>) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const [stats, incidents] = await Promise.all([
@@ -168,12 +162,11 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
     return { name: n, since: st?.since ?? null, duration: formatDuration(dur) };
   });
 
-  // Snapshots: prefer client-provided (works for LAN-only Frigate), else fetch server-side
+  // Snapshots: prefer freshly-uploaded ones from the client; otherwise use the latest
+  // ones stored in cloud storage (uploaded by the browser hourly while the app is open).
   const snapshots = providedSnapshots?.length
     ? providedSnapshots
-    : await Promise.all(
-        stats.online.map(async (n) => ({ name: n, dataUrl: await fetchSnapshot(inst, n) })),
-      ).then((arr) => arr.filter((s) => s.dataUrl) as Array<{ name: string; dataUrl: string }>);
+    : await listStoredSnapshots(supabase, inst.id);
 
   const date = new Date().toISOString().slice(0, 10);
   const data: Record<string, string> = {
@@ -194,9 +187,9 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
   const text = render(cfg.body_template, data);
 
   // Build HTML with snapshots gallery
-  const snapsHtml = snapshots.filter((s) => s.dataUrl).map((s) => `
+  const snapsHtml = snapshots.map((s) => `
     <div style="display:inline-block;margin:4px;text-align:center;vertical-align:top;">
-      <img src="${s.dataUrl}" alt="${esc(s.name)}" style="max-width:240px;height:auto;border-radius:6px;border:1px solid #ddd;display:block;" />
+      <img src="${esc(s.url)}" alt="${esc(s.name)}" style="max-width:240px;height:auto;border-radius:6px;border:1px solid #ddd;display:block;" />
       <div style="font-size:12px;color:#444;margin-top:2px;">${esc(s.name)}</div>
     </div>`).join("");
   const offlineHtml = offlineWithDur.length
@@ -249,7 +242,7 @@ Deno.serve(async (req) => {
   const onlyConfigId: string | undefined = body?.config_id;
   const preview: boolean = !!body?.preview;
   const overrideRecipients: string[] | undefined = body?.recipients;
-  const providedSnapshots: Array<{ name: string; dataUrl: string }> | undefined = body?.snapshots;
+  const providedSnapshots: Array<{ name: string; url: string }> | undefined = body?.snapshots;
 
   const { data: settings } = await supabase.from("daily_report_settings").select("*").limit(1).maybeSingle();
   const s: Settings = (settings ?? {
