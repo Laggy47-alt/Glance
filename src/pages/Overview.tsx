@@ -70,12 +70,7 @@ const Overview = () => {
       ]);
       const adminIds = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
       const viewerProfiles = (profs ?? []).filter((p) => !adminIds.has(p.user_id));
-      const names = new Set<string>();
-      for (const p of viewerProfiles) {
-        if (p.username) names.add(p.username);
-        if (p.display_name) names.add(p.display_name);
-      }
-      if (!cancelled) setViewers({ names, list: viewerProfiles.map((p) => ({ username: p.username, display_name: p.display_name })) });
+      if (!cancelled) setViewers({ list: viewerProfiles.map((p) => ({ user_id: p.user_id, username: p.username, display_name: p.display_name })) });
     };
     void load();
 
