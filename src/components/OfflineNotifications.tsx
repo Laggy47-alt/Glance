@@ -22,6 +22,14 @@ type NvrSnapshot = {
 
 const POLL_MS = 30000;
 const STORAGE_KEY = "offline-escalation-recipients";
+const SUBJECT_KEY = "offline-escalation-subject";
+const INTRO_KEY = "offline-escalation-intro";
+const SIGNATURE_KEY = "offline-escalation-signature";
+const INCLUDE_LIST_KEY = "offline-escalation-include-list";
+
+const DEFAULT_SUBJECT = "[Escalation] Offline equipment detected";
+const DEFAULT_INTRO = "The following equipment is currently offline and requires attention.";
+const DEFAULT_SIGNATURE = "— Control Room";
 
 function parseStats(stats: unknown): string[] {
   // returns offline camera names
