@@ -198,6 +198,15 @@ const Wall = () => {
       );
       const camera = m.camera ?? "unknown";
       const label = "motion";
+      const mMs = new Date(m.ts).getTime();
+
+      // Per-camera bundling (same rule as event path)
+      const lastShown = cameraCooldownRef.current.get(camera);
+      if (lastShown !== undefined && mMs - lastShown < CAMERA_COOLDOWN_MS) {
+        continue;
+      }
+      cameraCooldownRef.current.set(camera, mMs);
+
       const alert: Alert = {
         key,
         event: null,
@@ -209,7 +218,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (new Date(m.ts).getTime() >= mountedAtRef.current - 5_000) freshOnes.push(alert);
+      if (mMs >= mountedAtRef.current - 5_000) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
