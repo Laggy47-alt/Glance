@@ -22,6 +22,7 @@ import ChangePassword from "./pages/ChangePassword.tsx";
 import Users from "./pages/Users.tsx";
 import Customization from "./pages/Customization.tsx";
 import NvrStatus from "./pages/NvrStatus.tsx";
+import CameraStatus from "./pages/CameraStatus.tsx";
 import DailyReports from "./pages/DailyReports.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/sources" element={protect(<Sources />, true)} />
               <Route path="/frigate" element={protect(<Frigate />, true)} />
               <Route path="/nvr-status" element={protect(<NvrStatus />, true)} />
+              <Route path="/camera-status" element={protect(<CameraStatus />)} />
               <Route path="/wall" element={protect(<Wall />)} />
               <Route path="/cameras" element={protect(<Cameras />)} />
               <Route path="/media" element={protect(<Media />)} />
