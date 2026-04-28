@@ -13,7 +13,7 @@ export function useWebhookStore() {
       ":" + (webhookStore.loaded ? "1" : "0") +
       ":" + (webhookStore.error ?? "") +
       ":" + webhookStore.events.map((e) => `${e.id}${e.read ? 1 : 0}`).join(",") +
-      ":" + webhookStore.frigates.map((f) => `${f.id}${f.enabled ? 1 : 0}${f.poll_enabled ? 1 : 0}${f.last_polled_at ?? ""}`).join(","),
+      ":" + webhookStore.frigates.map((f) => `${f.id}${f.enabled ? 1 : 0}${f.poll_enabled ? 1 : 0}${f.last_polled_at ?? ""}${f.mute_enabled ? 1 : 0}${f.mute_start ?? ""}${f.mute_end ?? ""}`).join(","),
     () => "0"
   );
   return webhookStore;
