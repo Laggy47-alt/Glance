@@ -255,6 +255,10 @@ class WebhookStore {
       is_local: input.is_local ?? false,
       // Cloud-poll won't reach LAN URLs, so disable polling by default for local instances
       poll_enabled: input.is_local ? false : true,
+      // Default daytime mute window so alerts only fire after hours
+      mute_enabled: true,
+      mute_start: "06:00:00",
+      mute_end: "17:30:00",
     });
     if (error) {
       // Roll back the orphan source
