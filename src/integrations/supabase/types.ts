@@ -272,6 +272,9 @@ export type Database = {
           last_error: string | null
           last_event_ts: string | null
           last_polled_at: string | null
+          mute_enabled: boolean
+          mute_end: string | null
+          mute_start: string | null
           name: string
           poll_enabled: boolean
           poll_interval_seconds: number
@@ -288,6 +291,9 @@ export type Database = {
           last_error?: string | null
           last_event_ts?: string | null
           last_polled_at?: string | null
+          mute_enabled?: boolean
+          mute_end?: string | null
+          mute_start?: string | null
           name: string
           poll_enabled?: boolean
           poll_interval_seconds?: number
@@ -304,6 +310,9 @@ export type Database = {
           last_error?: string | null
           last_event_ts?: string | null
           last_polled_at?: string | null
+          mute_enabled?: boolean
+          mute_end?: string | null
+          mute_start?: string | null
           name?: string
           poll_enabled?: boolean
           poll_interval_seconds?: number

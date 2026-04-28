@@ -63,8 +63,33 @@ export type FrigateInstance = {
   last_event_ts: string | null;
   last_error: string | null;
   is_local: boolean;
+  mute_enabled: boolean;
+  mute_start: string | null; // "HH:MM:SS"
+  mute_end: string | null;   // "HH:MM:SS"
   created_at: string;
 };
+
+/**
+ * Returns true if the NVR's alert mute window covers `now` (local time).
+ * Supports overnight windows (e.g. 22:00 → 06:00).
+ */
+export function isFrigateMutedNow(
+  inst: Pick<FrigateInstance, "mute_enabled" | "mute_start" | "mute_end">,
+  now: Date = new Date()
+): boolean {
+  if (!inst.mute_enabled || !inst.mute_start || !inst.mute_end) return false;
+  const toMin = (s: string) => {
+    const [h, m] = s.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  const start = toMin(inst.mute_start);
+  const end = toMin(inst.mute_end);
+  const cur = now.getHours() * 60 + now.getMinutes();
+  if (start === end) return false;
+  if (start < end) return cur >= start && cur < end;
+  // overnight window
+  return cur >= start || cur < end;
+}
 
 type Listener = () => void;
 
@@ -237,7 +262,7 @@ class WebhookStore {
       throw error;
     }
   }
-  async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local">>) {
+  async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local" | "mute_enabled" | "mute_start" | "mute_end">>) {
     const { error } = await supabase.from("frigate_instances").update(patch).eq("id", id);
     if (error) throw error;
   }
