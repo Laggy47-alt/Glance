@@ -14,7 +14,7 @@ const adminItems = [
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
   { to: "/cameras", label: "Cameras", icon: Camera },
   { to: "/media", label: "Media", icon: Film },
-  { to: "/auto-read", label: "Auto-Read Rules", icon: Filter },
+  
   { to: "/archive", label: "Archive", icon: Archive },
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
   { to: "/daily-reports", label: "Daily Reports", icon: Mail },
