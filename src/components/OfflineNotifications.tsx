@@ -255,9 +255,20 @@ export function OfflineNotifications() {
 
           {hasIssue && (
             <div className="space-y-3 border-t border-border pt-3">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold text-foreground">Escalate via email</h4>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary" />
+                  <h4 className="text-sm font-semibold text-foreground">Escalate via email</h4>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowCustomize((v) => !v)}
+                >
+                  {showCustomize ? "Hide customization" : "Customize email"}
+                </Button>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground">Recipient emails (comma-separated)</label>
@@ -267,16 +278,72 @@ export function OfflineNotifications() {
                   onChange={(e) => setRecipients(e.target.value)}
                 />
               </div>
+
+              {showCustomize && (
+                <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Subject</label>
+                    <Input
+                      placeholder={DEFAULT_SUBJECT}
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Intro message</label>
+                    <Textarea
+                      placeholder={DEFAULT_INTRO}
+                      rows={2}
+                      value={intro}
+                      onChange={(e) => setIntro(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Signature</label>
+                    <Input
+                      placeholder={DEFAULT_SIGNATURE}
+                      value={signature}
+                      onChange={(e) => setSignature(e.target.value)}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeList}
+                      onChange={(e) => setIncludeList(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-border"
+                    />
+                    Include offline equipment list in email
+                  </label>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setSubject(DEFAULT_SUBJECT);
+                        setIntro(DEFAULT_INTRO);
+                        setSignature(DEFAULT_SIGNATURE);
+                        setIncludeList(true);
+                      }}
+                    >
+                      Reset to defaults
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">Note (optional)</label>
+                <label className="text-xs text-muted-foreground">Additional note for this escalation (optional)</label>
                 <Textarea
-                  placeholder="Add context for the escalation…"
+                  placeholder="Add context specific to this incident…"
                   rows={3}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground">Uses SMTP settings configured in Daily Reports.</p>
+              <p className="text-[10px] text-muted-foreground">Uses SMTP settings configured in Daily Reports. Customizations are saved on this device.</p>
             </div>
           )}
 
