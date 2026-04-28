@@ -22,6 +22,14 @@ type NvrSnapshot = {
 
 const POLL_MS = 30000;
 const STORAGE_KEY = "offline-escalation-recipients";
+const SUBJECT_KEY = "offline-escalation-subject";
+const INTRO_KEY = "offline-escalation-intro";
+const SIGNATURE_KEY = "offline-escalation-signature";
+const INCLUDE_LIST_KEY = "offline-escalation-include-list";
+
+const DEFAULT_SUBJECT = "[Escalation] Offline equipment detected";
+const DEFAULT_INTRO = "The following equipment is currently offline and requires attention.";
+const DEFAULT_SIGNATURE = "— Control Room";
 
 function parseStats(stats: unknown): string[] {
   // returns offline camera names
@@ -56,6 +64,19 @@ export function OfflineNotifications() {
   const [recipients, setRecipients] = useState<string>(() => {
     try { return localStorage.getItem(STORAGE_KEY) ?? ""; } catch { return ""; }
   });
+  const [subject, setSubject] = useState<string>(() => {
+    try { return localStorage.getItem(SUBJECT_KEY) ?? DEFAULT_SUBJECT; } catch { return DEFAULT_SUBJECT; }
+  });
+  const [intro, setIntro] = useState<string>(() => {
+    try { return localStorage.getItem(INTRO_KEY) ?? DEFAULT_INTRO; } catch { return DEFAULT_INTRO; }
+  });
+  const [signature, setSignature] = useState<string>(() => {
+    try { return localStorage.getItem(SIGNATURE_KEY) ?? DEFAULT_SIGNATURE; } catch { return DEFAULT_SIGNATURE; }
+  });
+  const [includeList, setIncludeList] = useState<boolean>(() => {
+    try { return (localStorage.getItem(INCLUDE_LIST_KEY) ?? "1") === "1"; } catch { return true; }
+  });
+  const [showCustomize, setShowCustomize] = useState(false);
   const [note, setNote] = useState("");
   const seenRef = useRef<Map<string, Set<string>>>(new Map()); // instance_id -> set of "offline:cam" or "unreachable"
   const firstRunRef = useRef(true);
@@ -134,14 +155,22 @@ export function OfflineNotifications() {
     }
     try {
       localStorage.setItem(STORAGE_KEY, recipients);
+      localStorage.setItem(SUBJECT_KEY, subject);
+      localStorage.setItem(INTRO_KEY, intro);
+      localStorage.setItem(SIGNATURE_KEY, signature);
+      localStorage.setItem(INCLUDE_LIST_KEY, includeList ? "1" : "0");
     } catch { /* ignore */ }
     setSending(true);
     try {
+      const composedNote = [intro, note, signature].filter((s) => s && s.trim().length).join("\n\n");
       const { data, error } = await supabase.functions.invoke("escalate-offline", {
         body: {
           recipients: list,
-          note,
-          nvrs: snapshots.map((s) => ({ name: s.name, reachable: s.reachable, offlineCameras: s.offlineCameras })),
+          subject: subject?.trim() || DEFAULT_SUBJECT,
+          note: composedNote,
+          nvrs: includeList
+            ? snapshots.map((s) => ({ name: s.name, reachable: s.reachable, offlineCameras: s.offlineCameras }))
+            : [],
         },
       });
       if (error) throw error;
@@ -226,9 +255,20 @@ export function OfflineNotifications() {
 
           {hasIssue && (
             <div className="space-y-3 border-t border-border pt-3">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold text-foreground">Escalate via email</h4>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary" />
+                  <h4 className="text-sm font-semibold text-foreground">Escalate via email</h4>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowCustomize((v) => !v)}
+                >
+                  {showCustomize ? "Hide customization" : "Customize email"}
+                </Button>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground">Recipient emails (comma-separated)</label>
@@ -238,16 +278,72 @@ export function OfflineNotifications() {
                   onChange={(e) => setRecipients(e.target.value)}
                 />
               </div>
+
+              {showCustomize && (
+                <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Subject</label>
+                    <Input
+                      placeholder={DEFAULT_SUBJECT}
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Intro message</label>
+                    <Textarea
+                      placeholder={DEFAULT_INTRO}
+                      rows={2}
+                      value={intro}
+                      onChange={(e) => setIntro(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Signature</label>
+                    <Input
+                      placeholder={DEFAULT_SIGNATURE}
+                      value={signature}
+                      onChange={(e) => setSignature(e.target.value)}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeList}
+                      onChange={(e) => setIncludeList(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-border"
+                    />
+                    Include offline equipment list in email
+                  </label>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setSubject(DEFAULT_SUBJECT);
+                        setIntro(DEFAULT_INTRO);
+                        setSignature(DEFAULT_SIGNATURE);
+                        setIncludeList(true);
+                      }}
+                    >
+                      Reset to defaults
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground">Note (optional)</label>
+                <label className="text-xs text-muted-foreground">Additional note for this escalation (optional)</label>
                 <Textarea
-                  placeholder="Add context for the escalation…"
+                  placeholder="Add context specific to this incident…"
                   rows={3}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground">Uses SMTP settings configured in Daily Reports.</p>
+              <p className="text-[10px] text-muted-foreground">Uses SMTP settings configured in Daily Reports. Customizations are saved on this device.</p>
             </div>
           )}
 
