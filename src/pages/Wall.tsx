@@ -37,6 +37,12 @@ const Wall = () => {
   const autoArchivedRef = useRef<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
+  // Per-camera cooldown: timestamp (ms) of the last alert shown for each camera.
+  // Used to bundle bursts: only the first alert per camera is shown, then any
+  // additional alerts within CAMERA_COOLDOWN_MS are suppressed (auto-archived).
+  // After a quiet gap, the next incoming alert displays again and resets the timer.
+  const cameraCooldownRef = useRef<Map<string, number>>(new Map());
+  const CAMERA_COOLDOWN_MS = 15_000;
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
@@ -118,6 +124,20 @@ const Wall = () => {
       seenRef.current.add(key);
       const camera = e.camera ?? "unknown";
       const label = e.label ?? e.kind ?? "motion";
+      const evMs = new Date(e.ts).getTime();
+
+      // Per-camera bundling: if this camera fired within the cooldown, suppress.
+      const lastShown = cameraCooldownRef.current.get(camera);
+      if (lastShown !== undefined && evMs - lastShown < CAMERA_COOLDOWN_MS) {
+        // Auto-archive bundled bursts so they don't pile up in the events feed
+        if (!autoArchivedRef.current.has(e.id)) {
+          autoArchivedRef.current.add(e.id);
+          void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", e.id);
+        }
+        continue;
+      }
+      cameraCooldownRef.current.set(camera, evMs);
+
       const alert: Alert = {
         key,
         event: e,
@@ -129,7 +149,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (new Date(e.ts).getTime() >= mountedAtRef.current - 5_000) freshOnes.push(alert);
+      if (evMs >= mountedAtRef.current - 5_000) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
@@ -178,6 +198,15 @@ const Wall = () => {
       );
       const camera = m.camera ?? "unknown";
       const label = "motion";
+      const mMs = new Date(m.ts).getTime();
+
+      // Per-camera bundling (same rule as event path)
+      const lastShown = cameraCooldownRef.current.get(camera);
+      if (lastShown !== undefined && mMs - lastShown < CAMERA_COOLDOWN_MS) {
+        continue;
+      }
+      cameraCooldownRef.current.set(camera, mMs);
+
       const alert: Alert = {
         key,
         event: null,
@@ -189,7 +218,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (new Date(m.ts).getTime() >= mountedAtRef.current - 5_000) freshOnes.push(alert);
+      if (mMs >= mountedAtRef.current - 5_000) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
