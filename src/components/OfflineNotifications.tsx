@@ -155,14 +155,22 @@ export function OfflineNotifications() {
     }
     try {
       localStorage.setItem(STORAGE_KEY, recipients);
+      localStorage.setItem(SUBJECT_KEY, subject);
+      localStorage.setItem(INTRO_KEY, intro);
+      localStorage.setItem(SIGNATURE_KEY, signature);
+      localStorage.setItem(INCLUDE_LIST_KEY, includeList ? "1" : "0");
     } catch { /* ignore */ }
     setSending(true);
     try {
+      const composedNote = [intro, note, signature].filter((s) => s && s.trim().length).join("\n\n");
       const { data, error } = await supabase.functions.invoke("escalate-offline", {
         body: {
           recipients: list,
-          note,
-          nvrs: snapshots.map((s) => ({ name: s.name, reachable: s.reachable, offlineCameras: s.offlineCameras })),
+          subject: subject?.trim() || DEFAULT_SUBJECT,
+          note: composedNote,
+          nvrs: includeList
+            ? snapshots.map((s) => ({ name: s.name, reachable: s.reachable, offlineCameras: s.offlineCameras }))
+            : [],
         },
       });
       if (error) throw error;
