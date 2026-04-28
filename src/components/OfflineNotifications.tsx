@@ -64,6 +64,19 @@ export function OfflineNotifications() {
   const [recipients, setRecipients] = useState<string>(() => {
     try { return localStorage.getItem(STORAGE_KEY) ?? ""; } catch { return ""; }
   });
+  const [subject, setSubject] = useState<string>(() => {
+    try { return localStorage.getItem(SUBJECT_KEY) ?? DEFAULT_SUBJECT; } catch { return DEFAULT_SUBJECT; }
+  });
+  const [intro, setIntro] = useState<string>(() => {
+    try { return localStorage.getItem(INTRO_KEY) ?? DEFAULT_INTRO; } catch { return DEFAULT_INTRO; }
+  });
+  const [signature, setSignature] = useState<string>(() => {
+    try { return localStorage.getItem(SIGNATURE_KEY) ?? DEFAULT_SIGNATURE; } catch { return DEFAULT_SIGNATURE; }
+  });
+  const [includeList, setIncludeList] = useState<boolean>(() => {
+    try { return (localStorage.getItem(INCLUDE_LIST_KEY) ?? "1") === "1"; } catch { return true; }
+  });
+  const [showCustomize, setShowCustomize] = useState(false);
   const [note, setNote] = useState("");
   const seenRef = useRef<Map<string, Set<string>>>(new Map()); // instance_id -> set of "offline:cam" or "unreachable"
   const firstRunRef = useRef(true);
