@@ -56,9 +56,11 @@ const Frigate = () => {
     try {
       if (editing) {
         await store.updateFrigate(editing.id, { name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || null, color, is_local: isLocal });
+        await store.refreshAll();
         toast.success("Instance updated");
       } else {
         await store.createFrigate({ name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || undefined, color, is_local: isLocal });
+        await store.refreshAll();
         toast.success("Frigate instance added");
       }
       setOpen(false); reset();
