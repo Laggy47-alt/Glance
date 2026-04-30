@@ -267,8 +267,20 @@ class WebhookStore {
     }
   }
   async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local" | "mute_enabled" | "mute_start" | "mute_end">>) {
-    const { error } = await supabase.from("frigate_instances").update(patch).eq("id", id);
+    const cleaned = {
+      ...patch,
+      ...(patch.base_url !== undefined ? { base_url: patch.base_url.replace(/\/+$/, "") } : {}),
+    };
+    const connectionChanged = "base_url" in patch || "api_key" in patch || "is_local" in patch;
+    const update = connectionChanged
+      ? { ...cleaned, last_error: null, last_polled_at: null }
+      : cleaned;
+    const { data, error } = await supabase.from("frigate_instances").update(update).eq("id", id).select("*").single();
     if (error) throw error;
+    if (data) {
+      this.frigates = this.frigates.map((x) => x.id === id ? data as FrigateInstance : x);
+      this.emit();
+    }
   }
   async deleteFrigate(id: string) {
     const inst = this.frigates.find((f) => f.id === id);
