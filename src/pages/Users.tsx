@@ -172,6 +172,7 @@ function CreateUserDialog({
 }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [password, setPassword] = useState("changeme");
   const [role, setRole] = useState<UserRole>("user");
   const [busy, setBusy] = useState(false);
@@ -181,7 +182,7 @@ function CreateUserDialog({
     setBusy(true);
     const { data, error } = await supabase.functions.invoke("admin-users/create", {
       method: "POST",
-      body: { username, password, display_name: displayName || username, role },
+      body: { username, password, display_name: displayName || username, role, contact_email: contactEmail || null },
     });
     setBusy(false);
     if (error || (data as { ok?: boolean })?.ok === false) {
@@ -189,7 +190,7 @@ function CreateUserDialog({
       return;
     }
     toast.success(`User "${username}" created. They must change their password on first login.`);
-    setUsername(""); setDisplayName(""); setPassword("changeme"); setRole("user");
+    setUsername(""); setDisplayName(""); setContactEmail(""); setPassword("changeme"); setRole("user");
     onOpenChange(false);
     onCreated();
   };
