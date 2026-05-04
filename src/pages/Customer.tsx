@@ -396,10 +396,11 @@ function CalloutDialog({
   const { user } = useAuth();
   const [reason, setReason] = useState("");
   const [phone, setPhone] = useState("");
+  const [acceptedFee, setAcceptedFee] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (target) { setReason(""); setPhone(""); }
+    if (target) { setReason(""); setPhone(""); setAcceptedFee(false); }
   }, [target]);
 
   if (!target) return null;
@@ -477,10 +478,19 @@ function CalloutDialog({
               placeholder="+1 555 …"
             />
           </div>
+          <label className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={acceptedFee}
+              onChange={(e) => setAcceptedFee(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+            />
+            <span className="text-xs text-foreground">I accept a call out fee of R645</span>
+          </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button onClick={submit} disabled={busy} className="gap-2">
+          <Button onClick={submit} disabled={busy || !acceptedFee} className="gap-2">
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Phone className="h-3.5 w-3.5" />}
             Submit
           </Button>
