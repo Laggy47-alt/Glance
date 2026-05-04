@@ -420,6 +420,7 @@ const Customer = () => {
             )}
           </div>
 
+          {recentCallouts.length > 0 && (
             <div className="rounded-lg border border-border bg-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-card/60">
                 <h3 className="text-sm font-semibold text-foreground">Your recent callout requests</h3>
