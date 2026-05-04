@@ -53,22 +53,18 @@ function EventThumb({ inst, camera }: { inst: FrigateInstance; camera: string })
   );
 }
 
-/** Apply per-camera bundling: only the first event per camera is kept,
- *  any further events from the same camera within CAMERA_COOLDOWN_MS are dropped.
- *  Input must be sorted newest-first; we walk oldest-first to mirror time order. */
-function bundleByCamera(rows: EvRow[]): EvRow[] {
-  const oldestFirst = [...rows].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
-  const lastShown = new Map<string, number>();
+/** Keep only the latest event per camera. Input is sorted newest-first; we keep the first
+ *  occurrence of each camera (which is the most recent). */
+function latestPerCamera(rows: EvRow[]): EvRow[] {
+  const seen = new Set<string>();
   const kept: EvRow[] = [];
-  for (const r of oldestFirst) {
+  for (const r of rows) {
     const cam = r.camera ?? "unknown";
-    const ms = new Date(r.ts).getTime();
-    const prev = lastShown.get(cam);
-    if (prev !== undefined && ms - prev < CAMERA_COOLDOWN_MS) continue;
-    lastShown.set(cam, ms);
+    if (seen.has(cam)) continue;
+    seen.add(cam);
     kept.push(r);
   }
-  return kept.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+  return kept;
 }
 
 const CustomerEvents = () => {
