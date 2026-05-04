@@ -11,7 +11,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
-import { Loader2, Plus, KeyRound, Trash2, ShieldCheck, User as UserIcon, Building2, Server } from "lucide-react";
+import { Loader2, Plus, KeyRound, Trash2, ShieldCheck, User as UserIcon, Building2, Server, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 type UserRole = "admin" | "user" | "customer";
@@ -21,6 +21,7 @@ type Row = {
   username: string;
   display_name: string | null;
   must_change_password: boolean;
+  contact_email: string | null;
   role: UserRole;
 };
 
@@ -32,11 +33,12 @@ const Users = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [resetFor, setResetFor] = useState<Row | null>(null);
   const [assignFor, setAssignFor] = useState<Row | null>(null);
+  const [emailFor, setEmailFor] = useState<Row | null>(null);
 
   const load = async () => {
     setLoading(true);
     const [{ data: profs }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("user_id, username, display_name, must_change_password").order("username"),
+      supabase.from("profiles").select("user_id, username, display_name, must_change_password, contact_email").order("username"),
       supabase.from("user_roles").select("user_id, role"),
     ]);
     const roleMap = new Map<string, UserRole>();
@@ -47,11 +49,12 @@ const Users = () => {
       const cur = (r.role as UserRole);
       if (!existing || order[cur] > order[existing]) roleMap.set(r.user_id, cur);
     });
-    const merged: Row[] = (profs ?? []).map((p) => ({
+    const merged: Row[] = (profs ?? []).map((p: any) => ({
       user_id: p.user_id,
       username: p.username,
       display_name: p.display_name,
       must_change_password: p.must_change_password,
+      contact_email: p.contact_email ?? null,
       role: roleMap.get(p.user_id) ?? "user",
     }));
     setRows(merged);
