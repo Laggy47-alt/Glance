@@ -399,4 +399,52 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
   );
 }
 
+function EditEmailDialog({ row, onClose, onDone }: { row: Row | null; onClose: () => void; onDone: () => void }) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (row) setEmail(row.contact_email ?? ""); }, [row]);
+  if (!row) return null;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("admin-users/set-contact-email", {
+      method: "POST",
+      body: { user_id: row.user_id, contact_email: email },
+    });
+    setBusy(false);
+    if (error || (data as { ok?: boolean })?.ok === false) {
+      toast.error((data as { error?: string })?.error ?? error?.message ?? "Failed to update email");
+      return;
+    }
+    toast.success("Contact email updated");
+    onClose();
+    onDone();
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Contact email — {row.username}</DialogTitle>
+          <DialogDescription>Email address used for callout-resolved notifications. Leave blank to remove.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Email address</Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="customer@example.com" autoFocus />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={busy}>
+              {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default Users;
