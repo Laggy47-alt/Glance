@@ -462,6 +462,14 @@ function CalloutDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {camerasCsv && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+                Affected camera{target.cameras.length === 1 ? "" : "s"}
+              </div>
+              <div className="text-xs text-foreground break-words">{camerasCsv}</div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">What's wrong? (optional)</label>
             <Textarea
