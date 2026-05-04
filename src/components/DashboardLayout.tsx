@@ -1,9 +1,10 @@
 import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { LogOut, Webhook } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
 import { useSnapshotRefresher } from "@/hooks/useSnapshotRefresher";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranding } from "@/hooks/useBranding";
 import { Button } from "@/components/ui/button";
 
 export function DashboardLayout({
