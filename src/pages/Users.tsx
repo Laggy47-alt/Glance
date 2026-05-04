@@ -93,6 +93,7 @@ const Users = () => {
             <TableRow>
               <TableHead>Username</TableHead>
               <TableHead>Display name</TableHead>
+              <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -100,17 +101,18 @@ const Users = () => {
           </TableHeader>
           <TableBody>
             {loading && (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 inline animate-spin mr-2" /> Loading…
               </TableCell></TableRow>
             )}
             {!loading && rows.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">No users</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No users</TableCell></TableRow>
             )}
             {rows.map((r) => (
               <TableRow key={r.user_id}>
                 <TableCell className="font-medium">{r.username}</TableCell>
                 <TableCell>{r.display_name ?? "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{r.contact_email ?? "—"}</TableCell>
                 <TableCell>
                   {r.role === "admin" ? (
                     <Badge className="gap-1"><ShieldCheck className="h-3 w-3" /> Admin</Badge>
@@ -134,6 +136,9 @@ const Users = () => {
                         <Server className="h-3.5 w-3.5" /> NVRs
                       </Button>
                     )}
+                    <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setEmailFor(r)}>
+                      <Mail className="h-3.5 w-3.5" /> Email
+                    </Button>
                     <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setResetFor(r)}>
                       <KeyRound className="h-3.5 w-3.5" /> Reset password
                     </Button>
@@ -157,6 +162,7 @@ const Users = () => {
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={load} />
       <ResetPasswordDialog row={resetFor} onClose={() => setResetFor(null)} onDone={load} />
       <AssignNvrsDialog row={assignFor} onClose={() => setAssignFor(null)} />
+      <EditEmailDialog row={emailFor} onClose={() => setEmailFor(null)} onDone={load} />
     </DashboardLayout>
   );
 };
