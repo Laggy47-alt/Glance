@@ -89,7 +89,7 @@ const Customer = () => {
   const [armedMap, setArmedMap] = useState<Map<string, boolean>>(new Map()); // key = `${instance_id}::${camera}`
   const [views, setViews] = useState<NvrView[]>([]);
   const [loading, setLoading] = useState(true);
-  const [calloutFor, setCalloutFor] = useState<{ inst: FrigateInstance; camera?: string } | null>(null);
+  const [calloutFor, setCalloutFor] = useState<{ inst: FrigateInstance; cameras: string[] } | null>(null);
   const [recentCallouts, setRecentCallouts] = useState<any[]>([]);
 
   const armedKey = (instId: string, cam: string) => `${instId}::${cam}`;
@@ -279,14 +279,24 @@ const Customer = () => {
                       </Button>
                     );
                   })()}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5"
-                    onClick={() => setCalloutFor({ inst: v.inst })}
-                  >
-                    <Phone className="h-3.5 w-3.5" /> Request callout
-                  </Button>
+                  {(() => {
+                    const offlineCams = v.reachable
+                      ? v.cameras.filter((c) => !c.online).map((c) => c.name)
+                      : [];
+                    const hasOffline = offlineCams.length > 0 || !v.reachable;
+                    return (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        disabled={!hasOffline}
+                        title={hasOffline ? undefined : "All cameras are online"}
+                        onClick={() => setCalloutFor({ inst: v.inst, cameras: offlineCams })}
+                      >
+                        <Phone className="h-3.5 w-3.5" /> Request callout
+                      </Button>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -306,16 +316,6 @@ const Customer = () => {
                             <Badge variant="destructive" className="gap-1 text-[10px]"><VideoOff className="h-3 w-3" /> Offline</Badge>
                           )}
                         </div>
-                        {!c.online && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs gap-1"
-                            onClick={() => setCalloutFor({ inst: v.inst, camera: c.name })}
-                          >
-                            <Phone className="h-3 w-3" /> Callout
-                          </Button>
-                        )}
                         <div className="flex items-center gap-2 min-w-[110px] justify-end">
                           {c.armed ? (
                             <ShieldCheck className="h-4 w-4 text-success" />
@@ -335,7 +335,7 @@ const Customer = () => {
               ) : (
                 <div className="px-4 py-6 text-center">
                   <p className="text-xs text-muted-foreground mb-3">We can't reach this NVR right now.</p>
-                  <Button size="sm" variant="destructive" className="gap-1.5" onClick={() => setCalloutFor({ inst: v.inst })}>
+                  <Button size="sm" variant="destructive" className="gap-1.5" onClick={() => setCalloutFor({ inst: v.inst, cameras: [] })}>
                     <Phone className="h-3.5 w-3.5" /> Request callout
                   </Button>
                 </div>
