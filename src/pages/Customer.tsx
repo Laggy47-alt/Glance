@@ -132,6 +132,39 @@ const Customer = () => {
     return () => { supabase.removeChannel(ch); };
   }, [assignedIds, loadArmed]);
 
+  // Load latest 10 events for assigned NVR sources
+  const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  const assignedSourceIds = useMemo(
+    () => store.frigates.filter((f) => assignedIds.includes(f.id)).map((f) => f.source_id).filter(Boolean),
+    [store.frigates, assignedIds]
+  );
+  const loadEvents = useCallback(async () => {
+    if (assignedSourceIds.length === 0) { setRecentEvents([]); return; }
+    const { data } = await supabase
+      .from("webhook_events")
+      .select("id, ts, camera, label, score, source_id, frigate_event_id")
+      .in("source_id", assignedSourceIds)
+      .eq("kind", "event")
+      .order("ts", { ascending: false })
+      .limit(10);
+    setRecentEvents(data ?? []);
+  }, [assignedSourceIds]);
+  useEffect(() => { void loadEvents(); }, [loadEvents]);
+  useEffect(() => {
+    if (assignedSourceIds.length === 0) return;
+    const ch = supabase
+      .channel("customer-events")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "webhook_events" }, (payload) => {
+        const row: any = payload.new;
+        if (row?.kind !== "event") return;
+        if (!assignedSourceIds.includes(row.source_id)) return;
+        setRecentEvents((prev) => [row, ...prev].slice(0, 10));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [assignedSourceIds]);
+
+
   // Load callouts (own)
   const loadCallouts = useCallback(async () => {
     if (!user) return;
