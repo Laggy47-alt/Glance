@@ -146,19 +146,20 @@ const CustomerEvents = () => {
       ts: e.ts,
       mediaId: mediaSnap?.id,
       eventId: e.id,
+      readOnly: true,
     });
   };
 
   return (
     <DashboardLayout
       title="Recent Detections"
-      subtitle="Latest detections from your cameras (bundled per camera)"
+      subtitle="Latest detection per camera"
     >
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-card/60 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Latest 10 detections</h3>
+            <h3 className="text-sm font-semibold text-foreground">Latest detection per camera</h3>
           </div>
           <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
             <Radio className="h-3 w-3 text-success animate-pulse" /> Live
