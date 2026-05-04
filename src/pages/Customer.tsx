@@ -199,6 +199,27 @@ const Customer = () => {
     }
   };
 
+  const setAllArmed = async (view: NvrView, armed: boolean) => {
+    if (view.cameras.length === 0) return;
+    const rows = view.cameras.map((c) => ({
+      instance_id: view.inst.id, camera: c.name, armed, updated_by: user?.id ?? null,
+    }));
+    setArmedMap((prev) => {
+      const next = new Map(prev);
+      rows.forEach((r) => next.set(armedKey(r.instance_id, r.camera), armed));
+      return next;
+    });
+    const { error } = await supabase
+      .from("camera_armed_state")
+      .upsert(rows, { onConflict: "instance_id,camera" });
+    if (error) {
+      toast({ title: "Bulk update failed", description: error.message, variant: "destructive" });
+      void loadArmed();
+    } else {
+      toast({ title: armed ? "All cameras armed" : "All cameras disarmed", description: view.inst.name });
+    }
+  };
+
   const offlineCount = views.reduce((a, v) => a + v.cameras.filter((c) => !c.online).length, 0);
   const unreachableCount = views.filter((v) => !v.reachable).length;
 
