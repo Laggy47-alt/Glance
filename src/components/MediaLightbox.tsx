@@ -113,7 +113,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                 <video src={item.url} controls autoPlay className="max-h-[70vh] w-full" poster={item.thumbnail} />
               )}
             </div>
-            {item.mediaId && (
+            {item.mediaId && !item.readOnly && (
               <div className="px-4 py-3 border-t border-border bg-secondary/20 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                   <TagIcon className="h-3.5 w-3.5 text-primary" /> Tags
