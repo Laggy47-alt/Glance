@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,9 +8,8 @@ import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
 import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
 import { Activity, ImageOff, Radio, Loader2 } from "lucide-react";
 
-const CAMERA_COOLDOWN_MS = 15_000;
-const FETCH_LIMIT = 60; // fetch more so bundling can leave us with ~10 distinct alerts
-const SHOW_LIMIT = 10;
+// Fetch enough recent events to find at least one per camera, then dedupe to latest per camera.
+const FETCH_LIMIT = 200;
 
 type EvRow = {
   id: string;
