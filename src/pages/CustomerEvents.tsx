@@ -145,18 +145,26 @@ const CustomerEvents = () => {
 
   const openSnapshot = (e: EvRow) => {
     const inst = store.frigates.find((f) => f.source_id === e.source_id);
-    if (!inst || !e.camera) return;
-    // Try DB-stored snapshot media first (matches by frigate_event_id), then latest stored snapshot, then live.
+    if (!inst) {
+      console.warn("[CustomerEvents] No NVR instance for event", e);
+      return;
+    }
+    const camera = e.camera ?? "unknown";
+    // Prefer DB-stored snapshot media (matches by frigate_event_id)
     const mediaSnap = e.frigate_event_id
       ? store.media?.find((m) => m.kind === "snapshot" && m.frigate_event_id === e.frigate_event_id)
       : null;
+    // Then Frigate's per-event snapshot (the actual detection frame)
+    // Then the cached latest snapshot from storage
+    // Then the camera's live latest.jpg
     const url = mediaSnap?.url
-      ?? snapshotUrl(inst, e.camera)
-      ?? frigateUrl(inst, `/api/${encodeURIComponent(e.camera)}/latest.jpg`);
+      ?? (e.frigate_event_id ? frigateUrl(inst, `/api/events/${encodeURIComponent(e.frigate_event_id)}/snapshot.jpg`) : null)
+      ?? snapshotUrl(inst, camera)
+      ?? frigateUrl(inst, `/api/${encodeURIComponent(camera)}/latest.jpg`);
     setLightbox({
       kind: "snapshot",
       url,
-      camera: e.camera,
+      camera,
       topic: inst.name,
       ts: e.ts,
       mediaId: mediaSnap?.id,
