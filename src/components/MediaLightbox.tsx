@@ -18,6 +18,8 @@ export type LightboxItem = {
   frigateUrl?: string | null;
   mediaId?: string;
   eventId?: string | null;
+  /** Optional ordered fallback URLs tried in sequence if `url` (and prior fallbacks) fail to load. */
+  fallbackUrls?: string[];
   /** When true, hide tagging UI and ack metadata — view-only mode (e.g. customer portal). */
   readOnly?: boolean;
 };
