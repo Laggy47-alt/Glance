@@ -73,7 +73,6 @@ const CustomerEvents = () => {
   const [rawEvents, setRawEvents] = useState<EvRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
-  const cameraCooldownRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!user) return;
@@ -98,18 +97,7 @@ const CustomerEvents = () => {
       .eq("kind", "event")
       .order("ts", { ascending: false })
       .limit(FETCH_LIMIT);
-    const rows = (data ?? []) as EvRow[];
-    setRawEvents(rows);
-    // Seed cooldown map with the most recent shown timestamp per camera so realtime inserts honor bundling
-    const bundled = bundleByCamera(rows);
-    const seed = new Map<string, number>();
-    bundled.forEach((r) => {
-      const cam = r.camera ?? "unknown";
-      const ms = new Date(r.ts).getTime();
-      const prev = seed.get(cam);
-      if (prev === undefined || ms > prev) seed.set(cam, ms);
-    });
-    cameraCooldownRef.current = seed;
+    setRawEvents((data ?? []) as EvRow[]);
     setLoading(false);
   }, [assignedSourceIds]);
 
@@ -123,20 +111,14 @@ const CustomerEvents = () => {
         const row = payload.new as EvRow & { kind?: string };
         if (row?.kind !== "event") return;
         if (!assignedSourceIds.includes(row.source_id)) return;
-
-        const cam = row.camera ?? "unknown";
-        const ms = new Date(row.ts).getTime();
-        const prev = cameraCooldownRef.current.get(cam);
-        if (prev !== undefined && ms - prev < CAMERA_COOLDOWN_MS) return; // bundle
-        cameraCooldownRef.current.set(cam, ms);
-
         setRawEvents((p) => [row, ...p].slice(0, FETCH_LIMIT));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [assignedSourceIds]);
 
-  const events = useMemo(() => bundleByCamera(rawEvents).slice(0, SHOW_LIMIT), [rawEvents]);
+  // One row per camera — the latest detection for each.
+  const events = useMemo(() => latestPerCamera(rawEvents), [rawEvents]);
 
   const openSnapshot = (e: EvRow) => {
     const inst = store.frigates.find((f) => f.source_id === e.source_id);
