@@ -258,6 +258,7 @@ const Customer = () => {
                   <ul className="divide-y divide-border">
                     {v.cameras.map((c) => (
                       <li key={c.name} className="px-4 py-3 flex items-center gap-3">
+                        <CameraThumb inst={v.inst} camera={c.name} online={c.online} />
                         <div className="flex-1 min-w-0 flex items-center gap-2">
                           <span className="text-sm font-medium text-foreground capitalize truncate">{c.name}</span>
                           {c.online ? (
