@@ -10,11 +10,10 @@ import { supabase } from "@/integrations/supabase/client";
  *  - Optional adminOnly flag.
  */
 export function AuthGate({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
-  const { session, profile, isAdmin, loading } = useAuth();
+  const { session, profile, isAdmin, isCustomer, loading } = useAuth();
   const location = useLocation();
   const [seedTried, setSeedTried] = useState(false);
 
-  // Bootstrap the admin/admin account on first ever load (idempotent server-side).
   useEffect(() => {
     if (seedTried) return;
     setSeedTried(true);
@@ -37,8 +36,16 @@ export function AuthGate({ children, adminOnly = false }: { children: ReactNode;
     return <Navigate to="/change-password" replace />;
   }
 
+  // Customers are restricted to their own portal + password change.
+  if (isCustomer && !isAdmin) {
+    const allowed = ["/customer", "/change-password"];
+    if (!allowed.some((p) => location.pathname === p || location.pathname.startsWith(p + "/"))) {
+      return <Navigate to="/customer" replace />;
+    }
+  }
+
   if (adminOnly && !isAdmin) {
-    return <Navigate to="/wall" replace />;
+    return <Navigate to={isCustomer ? "/customer" : "/wall"} replace />;
   }
 
   return <>{children}</>;
