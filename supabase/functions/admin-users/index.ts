@@ -123,6 +123,9 @@ Deno.serve(async (req) => {
       if (!username || !password) return json({ ok: false, error: "username and password required" }, 400);
       if (!/^[a-z0-9_.-]{2,32}$/.test(username)) return json({ ok: false, error: "invalid username" }, 400);
 
+      const contact_email_raw = String(body.contact_email ?? "").trim();
+      const contact_email = contact_email_raw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact_email_raw) ? contact_email_raw : null;
+
       const email = usernameToEmail(username);
       const { data: created, error } = await a.auth.admin.createUser({
         email,
@@ -132,7 +135,21 @@ Deno.serve(async (req) => {
       });
       if (error) return json({ ok: false, error: error.message }, 400);
       await a.from("user_roles").insert({ user_id: created.user!.id, role });
+      if (contact_email) {
+        await a.from("profiles").update({ contact_email }).eq("user_id", created.user!.id);
+      }
       return json({ ok: true, user_id: created.user!.id });
+    }
+
+    if (action === "set-contact-email") {
+      const user_id = String(body.user_id ?? "");
+      const raw = String(body.contact_email ?? "").trim();
+      const contact_email = raw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? raw : null;
+      if (!user_id) return json({ ok: false, error: "user_id required" }, 400);
+      if (raw && !contact_email) return json({ ok: false, error: "invalid email" }, 400);
+      const { error } = await a.from("profiles").update({ contact_email }).eq("user_id", user_id);
+      if (error) return json({ ok: false, error: error.message }, 400);
+      return json({ ok: true });
     }
 
     if (action === "reset-password") {
