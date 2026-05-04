@@ -1,15 +1,34 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
+import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
 import { Activity, ImageOff, Radio, Loader2 } from "lucide-react";
 
-function EventThumb({ inst, camera }: { inst: FrigateInstance; camera: string }) {
+const CAMERA_COOLDOWN_MS = 15_000;
+const FETCH_LIMIT = 60; // fetch more so bundling can leave us with ~10 distinct alerts
+const SHOW_LIMIT = 10;
+
+type EvRow = {
+  id: string;
+  ts: string;
+  camera: string | null;
+  label: string | null;
+  score: number | null;
+  source_id: string;
+  frigate_event_id: string | null;
+};
+
+function snapshotUrl(inst: FrigateInstance, camera: string) {
   const safe = camera.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const stored = supabase.storage.from("camera-snapshots").getPublicUrl(`${inst.id}/${safe}.jpg`).data?.publicUrl;
+  return supabase.storage.from("camera-snapshots").getPublicUrl(`${inst.id}/${safe}.jpg`).data?.publicUrl ?? null;
+}
+
+function EventThumb({ inst, camera }: { inst: FrigateInstance; camera: string }) {
+  const stored = snapshotUrl(inst, camera);
   const live = frigateUrl(inst, `/api/${encodeURIComponent(camera)}/latest.jpg?h=120`);
   const [src, setSrc] = useState<string | null>(live ?? stored ?? null);
   const [errored, setErrored] = useState(false);
@@ -34,12 +53,32 @@ function EventThumb({ inst, camera }: { inst: FrigateInstance; camera: string })
   );
 }
 
+/** Apply per-camera bundling: only the first event per camera is kept,
+ *  any further events from the same camera within CAMERA_COOLDOWN_MS are dropped.
+ *  Input must be sorted newest-first; we walk oldest-first to mirror time order. */
+function bundleByCamera(rows: EvRow[]): EvRow[] {
+  const oldestFirst = [...rows].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+  const lastShown = new Map<string, number>();
+  const kept: EvRow[] = [];
+  for (const r of oldestFirst) {
+    const cam = r.camera ?? "unknown";
+    const ms = new Date(r.ts).getTime();
+    const prev = lastShown.get(cam);
+    if (prev !== undefined && ms - prev < CAMERA_COOLDOWN_MS) continue;
+    lastShown.set(cam, ms);
+    kept.push(r);
+  }
+  return kept.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+}
+
 const CustomerEvents = () => {
   const { user } = useAuth();
   const store = useWebhookStore();
   const [assignedIds, setAssignedIds] = useState<string[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
+  const [rawEvents, setRawEvents] = useState<EvRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
+  const cameraCooldownRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!user) return;
@@ -56,15 +95,26 @@ const CustomerEvents = () => {
   );
 
   const load = useCallback(async () => {
-    if (assignedSourceIds.length === 0) { setEvents([]); setLoading(false); return; }
+    if (assignedSourceIds.length === 0) { setRawEvents([]); setLoading(false); return; }
     const { data } = await supabase
       .from("webhook_events")
       .select("id, ts, camera, label, score, source_id, frigate_event_id")
       .in("source_id", assignedSourceIds)
       .eq("kind", "event")
       .order("ts", { ascending: false })
-      .limit(10);
-    setEvents(data ?? []);
+      .limit(FETCH_LIMIT);
+    const rows = (data ?? []) as EvRow[];
+    setRawEvents(rows);
+    // Seed cooldown map with the most recent shown timestamp per camera so realtime inserts honor bundling
+    const bundled = bundleByCamera(rows);
+    const seed = new Map<string, number>();
+    bundled.forEach((r) => {
+      const cam = r.camera ?? "unknown";
+      const ms = new Date(r.ts).getTime();
+      const prev = seed.get(cam);
+      if (prev === undefined || ms > prev) seed.set(cam, ms);
+    });
+    cameraCooldownRef.current = seed;
     setLoading(false);
   }, [assignedSourceIds]);
 
@@ -75,19 +125,49 @@ const CustomerEvents = () => {
     const ch = supabase
       .channel("customer-events-page")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "webhook_events" }, (payload) => {
-        const row: any = payload.new;
+        const row = payload.new as EvRow & { kind?: string };
         if (row?.kind !== "event") return;
         if (!assignedSourceIds.includes(row.source_id)) return;
-        setEvents((prev) => [row, ...prev].slice(0, 10));
+
+        const cam = row.camera ?? "unknown";
+        const ms = new Date(row.ts).getTime();
+        const prev = cameraCooldownRef.current.get(cam);
+        if (prev !== undefined && ms - prev < CAMERA_COOLDOWN_MS) return; // bundle
+        cameraCooldownRef.current.set(cam, ms);
+
+        setRawEvents((p) => [row, ...p].slice(0, FETCH_LIMIT));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [assignedSourceIds]);
 
+  const events = useMemo(() => bundleByCamera(rawEvents).slice(0, SHOW_LIMIT), [rawEvents]);
+
+  const openSnapshot = (e: EvRow) => {
+    const inst = store.frigates.find((f) => f.source_id === e.source_id);
+    if (!inst || !e.camera) return;
+    // Try DB-stored snapshot media first (matches by frigate_event_id), then latest stored snapshot, then live.
+    const mediaSnap = e.frigate_event_id
+      ? store.media?.find((m) => m.kind === "snapshot" && m.frigate_event_id === e.frigate_event_id)
+      : null;
+    const url = mediaSnap?.url
+      ?? snapshotUrl(inst, e.camera)
+      ?? frigateUrl(inst, `/api/${encodeURIComponent(e.camera)}/latest.jpg`);
+    setLightbox({
+      kind: "snapshot",
+      url,
+      camera: e.camera,
+      topic: inst.name,
+      ts: e.ts,
+      mediaId: mediaSnap?.id,
+      eventId: e.id,
+    });
+  };
+
   return (
     <DashboardLayout
       title="Recent Detections"
-      subtitle="Latest 10 events from your cameras"
+      subtitle="Latest detections from your cameras (bundled per camera)"
     >
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-card/60 flex items-center justify-between gap-3">
@@ -110,7 +190,11 @@ const CustomerEvents = () => {
             {events.map((e) => {
               const inst = store.frigates.find((f) => f.source_id === e.source_id);
               return (
-                <li key={e.id} className="px-4 py-3 flex items-center gap-3">
+                <li
+                  key={e.id}
+                  className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-muted/40 transition-colors"
+                  onClick={() => openSnapshot(e)}
+                >
                   {inst && e.camera ? (
                     <EventThumb inst={inst} camera={e.camera} />
                   ) : (
@@ -137,6 +221,8 @@ const CustomerEvents = () => {
           </ul>
         )}
       </div>
+
+      <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
     </DashboardLayout>
   );
 };
