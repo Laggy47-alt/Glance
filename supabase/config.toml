@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.callout-request]
 verify_jwt = false
+
+[functions.frigate-proxy]
+verify_jwt = false
