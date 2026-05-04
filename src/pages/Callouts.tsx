@@ -55,8 +55,16 @@ const Callouts = () => {
     if (status === "resolved") patch.resolved_at = new Date().toISOString();
     if (admin_note !== undefined) patch.admin_note = admin_note;
     const { error } = await supabase.from("callout_requests").update(patch).eq("id", id);
-    if (error) toast.error(error.message);
-    else toast.success("Updated");
+    if (error) { toast.error(error.message); return; }
+    toast.success("Updated");
+    if (status === "resolved") {
+      const { data, error: emailErr } = await supabase.functions.invoke("callout-resolved", { body: { callout_id: id } });
+      if (emailErr || (data as { error?: string })?.error) {
+        toast.error(`Email not sent: ${(data as { error?: string })?.error ?? emailErr?.message}`);
+      } else {
+        toast.success("Customer notified by email");
+      }
+    }
   };
 
   const remove = async (id: string) => {
