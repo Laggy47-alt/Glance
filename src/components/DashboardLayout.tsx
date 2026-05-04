@@ -1,7 +1,6 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { useSnapshotRefresher } from "@/hooks/useSnapshotRefresher";
-import { OfflineNotifications } from "./OfflineNotifications";
 
 export function DashboardLayout({
   children,
