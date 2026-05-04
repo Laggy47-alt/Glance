@@ -396,10 +396,11 @@ function CalloutDialog({
   const { user } = useAuth();
   const [reason, setReason] = useState("");
   const [phone, setPhone] = useState("");
+  const [acceptedFee, setAcceptedFee] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (target) { setReason(""); setPhone(""); }
+    if (target) { setReason(""); setPhone(""); setAcceptedFee(false); }
   }, [target]);
 
   if (!target) return null;
