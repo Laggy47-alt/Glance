@@ -212,6 +212,11 @@ function CreateUserDialog({
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
+            <Label className="text-xs">Contact email (optional)</Label>
+            <Input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="customer@example.com" />
+            <p className="text-[11px] text-muted-foreground">Used for callout-resolved notifications.</p>
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-xs">Default password</Label>
             <Input value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
           </div>
