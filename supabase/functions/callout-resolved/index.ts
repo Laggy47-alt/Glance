@@ -74,26 +74,29 @@ Deno.serve(async (req) => {
     const when = new Date(callout.resolved_at ?? new Date().toISOString()).toLocaleString();
     const subject = `Callout resolved — ${nvr_name}`;
 
-    const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111;">
-      <h2 style="margin:0 0 6px;color:#15803d;">Your callout has been resolved</h2>
-      <div style="color:#6b7280;font-size:12px;margin-bottom:14px;">Resolved ${esc(when)}</div>
-      <p style="margin:0 0 12px;">Hi ${esc(customer)},</p>
-      <p style="margin:0 0 12px;">Your callout request for <strong>${esc(nvr_name)}</strong> has been marked as resolved.</p>
-      <table style="border-collapse:collapse;font-size:14px;margin-bottom:14px;">
-        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Site</td><td><strong>${esc(nvr_name)}</strong></td></tr>
-        ${callout.camera ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Camera</td><td>${esc(callout.camera)}</td></tr>` : ""}
-      </table>
-      ${callout.reason ? `<div style="margin:6px 0 4px;color:#6b7280;font-size:12px;">Original reason</div>
-        <div style="margin:0 0 14px;padding:10px 12px;background:#f9fafb;border-left:3px solid #9ca3af;color:#374151;white-space:pre-wrap;">${esc(callout.reason)}</div>` : ""}
-      ${callout.admin_note ? `<div style="margin:6px 0 4px;color:#6b7280;font-size:12px;">How it was resolved</div>
-        <div style="margin:0 0 14px;padding:10px 12px;background:#ecfdf5;border-left:3px solid #16a34a;color:#14532d;white-space:pre-wrap;">${esc(callout.admin_note)}</div>` : `<p style="color:#6b7280;font-style:italic;">No additional notes were added.</p>`}
-      <p style="color:#6b7280;font-size:12px;margin-top:18px;">Thank you,<br/>The operations team</p>
-    </div>`;
+    const cameraList = (callout.camera ?? "")
+      .split(/[,\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const camerasHtml = cameraList.length
+      ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">Camera${cameraList.length === 1 ? "" : "s"}</td><td>${cameraList.map((c) => `<div>${esc(c)}</div>`).join("")}</td></tr>`
+      : "";
+
+    const reasonHtml = callout.reason
+      ? `<div style="margin:6px 0 4px;color:#6b7280;font-size:12px;">Original reason</div><div style="margin:0 0 14px;padding:10px 12px;background:#f9fafb;border-left:3px solid #9ca3af;color:#374151;white-space:pre-wrap;">${esc(callout.reason)}</div>`
+      : "";
+
+    const noteHtml = callout.admin_note
+      ? `<div style="margin:6px 0 4px;color:#6b7280;font-size:12px;">How it was resolved</div><div style="margin:0 0 14px;padding:10px 12px;background:#ecfdf5;border-left:3px solid #16a34a;color:#14532d;white-space:pre-wrap;">${esc(callout.admin_note)}</div>`
+      : `<p style="color:#6b7280;font-style:italic;">No additional notes were added.</p>`;
+
+    const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111;"><h2 style="margin:0 0 6px;color:#15803d;">Your callout has been resolved</h2><div style="color:#6b7280;font-size:12px;margin-bottom:14px;">Resolved ${esc(when)}</div><p style="margin:0 0 12px;">Hi ${esc(customer)},</p><p style="margin:0 0 12px;">Your callout request for <strong>${esc(nvr_name)}</strong> has been marked as resolved.</p><table style="border-collapse:collapse;font-size:14px;margin-bottom:14px;"><tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Site</td><td><strong>${esc(nvr_name)}</strong></td></tr>${camerasHtml}</table>${reasonHtml}${noteHtml}<p style="color:#6b7280;font-size:12px;margin-top:18px;">Thank you,<br/>The operations team</p></div>`;
 
     const text = [
       `Your callout has been resolved (${when})`,
       `Site: ${nvr_name}`,
-      callout.camera ? `Camera: ${callout.camera}` : "",
+      cameraList.length ? `Camera${cameraList.length === 1 ? "" : "s"}:\n${cameraList.map((c) => `  - ${c}`).join("\n")}` : "",
       "",
       callout.reason ? `Original reason:\n${callout.reason}` : "",
       "",
