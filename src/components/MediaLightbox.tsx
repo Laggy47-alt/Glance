@@ -18,6 +18,8 @@ export type LightboxItem = {
   frigateUrl?: string | null;
   mediaId?: string;
   eventId?: string | null;
+  /** When true, hide tagging UI and ack metadata — view-only mode (e.g. customer portal). */
+  readOnly?: boolean;
 };
 
 type MediaTag = { id: string; tag: string; note: string | null };
@@ -111,7 +113,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                 <video src={item.url} controls autoPlay className="max-h-[70vh] w-full" poster={item.thumbnail} />
               )}
             </div>
-            {item.mediaId && (
+            {item.mediaId && !item.readOnly && (
               <div className="px-4 py-3 border-t border-border bg-secondary/20 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                   <TagIcon className="h-3.5 w-3.5 text-primary" /> Tags
@@ -160,7 +162,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                 </form>
               </div>
             )}
-            {ack && (
+            {ack && !item.readOnly && (
               <div className="px-4 py-2.5 border-t border-border bg-success/10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                 <div className="flex items-center gap-1.5 text-success font-semibold">
                   <Check className="h-3.5 w-3.5" /> Acknowledged
@@ -181,12 +183,14 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
             )}
             <div className="px-4 py-2.5 text-xs text-muted-foreground border-t border-border flex justify-between items-center gap-3">
               <span>{new Date(item.ts).toLocaleString()}</span>
-              {item.frigateUrl ? (
-                <a href={item.frigateUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">
-                  Open in Frigate ↗
-                </a>
-              ) : (
-                <a href={item.url} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">{item.url}</a>
+              {!item.readOnly && (
+                item.frigateUrl ? (
+                  <a href={item.frigateUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">
+                    Open in Frigate ↗
+                  </a>
+                ) : (
+                  <a href={item.url} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">{item.url}</a>
+                )
               )}
             </div>
           </div>

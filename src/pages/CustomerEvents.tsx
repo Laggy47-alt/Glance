@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,9 +8,8 @@ import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
 import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
 import { Activity, ImageOff, Radio, Loader2 } from "lucide-react";
 
-const CAMERA_COOLDOWN_MS = 15_000;
-const FETCH_LIMIT = 60; // fetch more so bundling can leave us with ~10 distinct alerts
-const SHOW_LIMIT = 10;
+// Fetch enough recent events to find at least one per camera, then dedupe to latest per camera.
+const FETCH_LIMIT = 200;
 
 type EvRow = {
   id: string;
@@ -53,22 +52,18 @@ function EventThumb({ inst, camera }: { inst: FrigateInstance; camera: string })
   );
 }
 
-/** Apply per-camera bundling: only the first event per camera is kept,
- *  any further events from the same camera within CAMERA_COOLDOWN_MS are dropped.
- *  Input must be sorted newest-first; we walk oldest-first to mirror time order. */
-function bundleByCamera(rows: EvRow[]): EvRow[] {
-  const oldestFirst = [...rows].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
-  const lastShown = new Map<string, number>();
+/** Keep only the latest event per camera. Input is sorted newest-first; we keep the first
+ *  occurrence of each camera (which is the most recent). */
+function latestPerCamera(rows: EvRow[]): EvRow[] {
+  const seen = new Set<string>();
   const kept: EvRow[] = [];
-  for (const r of oldestFirst) {
+  for (const r of rows) {
     const cam = r.camera ?? "unknown";
-    const ms = new Date(r.ts).getTime();
-    const prev = lastShown.get(cam);
-    if (prev !== undefined && ms - prev < CAMERA_COOLDOWN_MS) continue;
-    lastShown.set(cam, ms);
+    if (seen.has(cam)) continue;
+    seen.add(cam);
     kept.push(r);
   }
-  return kept.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+  return kept;
 }
 
 const CustomerEvents = () => {
@@ -78,7 +73,6 @@ const CustomerEvents = () => {
   const [rawEvents, setRawEvents] = useState<EvRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
-  const cameraCooldownRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!user) return;
@@ -103,18 +97,7 @@ const CustomerEvents = () => {
       .eq("kind", "event")
       .order("ts", { ascending: false })
       .limit(FETCH_LIMIT);
-    const rows = (data ?? []) as EvRow[];
-    setRawEvents(rows);
-    // Seed cooldown map with the most recent shown timestamp per camera so realtime inserts honor bundling
-    const bundled = bundleByCamera(rows);
-    const seed = new Map<string, number>();
-    bundled.forEach((r) => {
-      const cam = r.camera ?? "unknown";
-      const ms = new Date(r.ts).getTime();
-      const prev = seed.get(cam);
-      if (prev === undefined || ms > prev) seed.set(cam, ms);
-    });
-    cameraCooldownRef.current = seed;
+    setRawEvents((data ?? []) as EvRow[]);
     setLoading(false);
   }, [assignedSourceIds]);
 
@@ -128,20 +111,14 @@ const CustomerEvents = () => {
         const row = payload.new as EvRow & { kind?: string };
         if (row?.kind !== "event") return;
         if (!assignedSourceIds.includes(row.source_id)) return;
-
-        const cam = row.camera ?? "unknown";
-        const ms = new Date(row.ts).getTime();
-        const prev = cameraCooldownRef.current.get(cam);
-        if (prev !== undefined && ms - prev < CAMERA_COOLDOWN_MS) return; // bundle
-        cameraCooldownRef.current.set(cam, ms);
-
         setRawEvents((p) => [row, ...p].slice(0, FETCH_LIMIT));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [assignedSourceIds]);
 
-  const events = useMemo(() => bundleByCamera(rawEvents).slice(0, SHOW_LIMIT), [rawEvents]);
+  // One row per camera — the latest detection for each.
+  const events = useMemo(() => latestPerCamera(rawEvents), [rawEvents]);
 
   const openSnapshot = (e: EvRow) => {
     const inst = store.frigates.find((f) => f.source_id === e.source_id);
@@ -169,19 +146,20 @@ const CustomerEvents = () => {
       ts: e.ts,
       mediaId: mediaSnap?.id,
       eventId: e.id,
+      readOnly: true,
     });
   };
 
   return (
     <DashboardLayout
       title="Recent Detections"
-      subtitle="Latest detections from your cameras (bundled per camera)"
+      subtitle="Latest detection per camera"
     >
       <div className="rounded-lg border border-border bg-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-card/60 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Activity className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">Latest 10 detections</h3>
+            <h3 className="text-sm font-semibold text-foreground">Latest detection per camera</h3>
           </div>
           <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
             <Radio className="h-3 w-3 text-success animate-pulse" /> Live
