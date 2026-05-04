@@ -140,7 +140,7 @@ export function AppSidebar() {
               {profile?.display_name ?? profile?.username ?? "Live"}
             </div>
             <div className="text-[10px] text-muted-foreground truncate">
-              {isAdmin ? "Admin · " : ""}{enabledSources} active source{enabledSources === 1 ? "" : "s"}
+              {isAdmin ? "Admin" : isCustomer ? "Customer" : `${enabledSources} active source${enabledSources === 1 ? "" : "s"}`}
             </div>
           </div>
         </div>
