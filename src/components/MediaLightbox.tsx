@@ -110,7 +110,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
             </div>
             <div className="bg-black grid place-items-center min-h-[300px]">
               {item.kind === "snapshot" ? (
-                <img src={item.url} alt={item.camera ?? ""} className="max-h-[70vh] w-auto" />
+                <SnapshotImage url={item.url} fallbacks={item.fallbackUrls ?? []} alt={item.camera ?? ""} />
               ) : (
                 <video src={item.url} controls autoPlay className="max-h-[70vh] w-full" poster={item.thumbnail} />
               )}
