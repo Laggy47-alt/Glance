@@ -51,7 +51,7 @@ const Callouts = () => {
   }, []);
 
   const updateStatus = async (id: string, status: string, admin_note?: string) => {
-    const patch: Record<string, unknown> = { status };
+    const patch: { status: string; resolved_at?: string; admin_note?: string } = { status };
     if (status === "resolved") patch.resolved_at = new Date().toISOString();
     if (admin_note !== undefined) patch.admin_note = admin_note;
     const { error } = await supabase.from("callout_requests").update(patch).eq("id", id);
