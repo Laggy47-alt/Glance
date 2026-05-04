@@ -388,7 +388,7 @@ const Customer = () => {
 function CalloutDialog({
   target, onClose, onSent, requesterName,
 }: {
-  target: { inst: FrigateInstance; camera?: string } | null;
+  target: { inst: FrigateInstance; cameras: string[] } | null;
   onClose: () => void;
   onSent: () => void;
   requesterName: string;
@@ -405,6 +405,8 @@ function CalloutDialog({
 
   if (!target) return null;
 
+  const camerasCsv = target.cameras.length > 0 ? target.cameras.join(", ") : null;
+
   const submit = async () => {
     if (!user) return;
     setBusy(true);
@@ -414,7 +416,7 @@ function CalloutDialog({
         .from("callout_requests")
         .insert({
           instance_id: target.inst.id,
-          camera: target.camera ?? null,
+          camera: camerasCsv,
           reason: fullReason,
           requested_by: user.id,
           requester_name: requesterName,
@@ -428,13 +430,12 @@ function CalloutDialog({
         body: {
           callout_id: inserted.id,
           nvr_name: target.inst.name,
-          camera: target.camera ?? null,
+          camera: camerasCsv,
           reason: fullReason,
           requester_name: requesterName,
         },
       });
       if (fnErr) {
-        // Record was created — just warn about email
         toast({
           title: "Callout submitted",
           description: "Saved, but email notification failed: " + fnErr.message,
@@ -457,7 +458,7 @@ function CalloutDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> Request callout</DialogTitle>
           <DialogDescription>
-            {target.inst.name}{target.camera ? ` · ${target.camera}` : ""}. Our team will contact you.
+            {target.inst.name}{camerasCsv ? ` · ${target.cameras.length} offline camera${target.cameras.length === 1 ? "" : "s"}` : ""}. Our team will contact you.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
