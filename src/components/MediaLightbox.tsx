@@ -162,7 +162,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                 </form>
               </div>
             )}
-            {ack && (
+            {ack && !item.readOnly && (
               <div className="px-4 py-2.5 border-t border-border bg-success/10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                 <div className="flex items-center gap-1.5 text-success font-semibold">
                   <Check className="h-3.5 w-3.5" /> Acknowledged
