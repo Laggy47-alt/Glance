@@ -118,7 +118,8 @@ Deno.serve(async (req) => {
       const username = String(body.username ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
       const display_name = String(body.display_name ?? username);
-      const role = (body.role === "admin" ? "admin" : "user") as "admin" | "user";
+      const requestedRole = String(body.role ?? "user");
+      const role = (["admin", "user", "customer"].includes(requestedRole) ? requestedRole : "user") as "admin" | "user" | "customer";
       if (!username || !password) return json({ ok: false, error: "username and password required" }, 400);
       if (!/^[a-z0-9_.-]{2,32}$/.test(username)) return json({ ok: false, error: "invalid username" }, 400);
 

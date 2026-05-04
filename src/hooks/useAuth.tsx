@@ -14,6 +14,7 @@ type AuthCtx = {
   user: User | null;
   profile: Profile | null;
   isAdmin: boolean;
+  isCustomer: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -25,15 +26,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isCustomer, setIsCustomer] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadProfile = async (userId: string) => {
-    const [{ data: prof }, { data: roleRow }] = await Promise.all([
+    const [{ data: prof }, { data: roles }] = await Promise.all([
       supabase.from("profiles").select("user_id, username, display_name, must_change_password").eq("user_id", userId).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle(),
+      supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
     setProfile((prof as Profile) ?? null);
-    setIsAdmin(!!roleRow);
+    const roleSet = new Set((roles ?? []).map((r) => r.role as string));
+    setIsAdmin(roleSet.has("admin"));
+    setIsCustomer(roleSet.has("customer"));
   };
 
   useEffect(() => {
@@ -45,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
         setIsAdmin(false);
+        setIsCustomer(false);
       }
     });
     supabase.auth.getSession().then(async ({ data }) => {
@@ -60,10 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     profile,
     isAdmin,
+    isCustomer,
     loading,
     signOut: async () => { await supabase.auth.signOut(); },
     refreshProfile: async () => { if (session?.user) await loadProfile(session.user.id); },
-  }), [session, profile, isAdmin, loading]);
+  }), [session, profile, isAdmin, isCustomer, loading]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

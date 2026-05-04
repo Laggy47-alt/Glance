@@ -57,7 +57,7 @@ function parseStats(stats: unknown): string[] {
 
 export function OfflineNotifications() {
   const store = useWebhookStore();
-  const { user } = useAuth();
+  const { user, isCustomer, isAdmin } = useAuth();
   const [snapshots, setSnapshots] = useState<NvrSnapshot[]>([]);
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -185,7 +185,7 @@ export function OfflineNotifications() {
     }
   };
 
-  if (!user) return null;
+  if (!user || (isCustomer && !isAdmin)) return null;
 
   return (
     <>
