@@ -47,23 +47,27 @@ Deno.serve(async (req) => {
       .replaceAll("{{camera}}", camera ?? "")
       .replaceAll("{{requester}}", requester);
 
+    const cameraList = (camera ?? "")
+      .split(/[,\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const camerasHtml = cameraList.length
+      ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">Camera${cameraList.length === 1 ? "" : "s"}</td><td>${cameraList.map((c) => `<div>${esc(c)}</div>`).join("")}</td></tr>`
+      : "";
+
     const when = new Date().toLocaleString();
-    const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111;">
-      <h2 style="margin:0 0 6px;color:#b45309;">Callout request</h2>
-      <div style="color:#6b7280;font-size:12px;margin-bottom:14px;">Submitted ${esc(when)}</div>
-      <table style="border-collapse:collapse;font-size:14px;">
-        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Customer</td><td><strong>${esc(requester)}</strong></td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;">NVR</td><td><strong>${esc(nvr_name)}</strong></td></tr>
-        ${camera ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Camera</td><td>${esc(camera)}</td></tr>` : ""}
-      </table>
-      ${reason ? `<div style="margin:14px 0;padding:10px 12px;background:#fff7ed;border-left:3px solid #ea580c;color:#7c2d12;white-space:pre-wrap;">${esc(reason)}</div>` : ""}
-    </div>`;
+    const reasonHtml = reason
+      ? `<div style="margin:14px 0;padding:10px 12px;background:#fff7ed;border-left:3px solid #ea580c;color:#7c2d12;white-space:pre-wrap;">${esc(reason)}</div>`
+      : "";
+
+    const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111;"><h2 style="margin:0 0 6px;color:#b45309;">Callout request</h2><div style="color:#6b7280;font-size:12px;margin-bottom:14px;">Submitted ${esc(when)}</div><table style="border-collapse:collapse;font-size:14px;"><tr><td style="padding:4px 12px 4px 0;color:#6b7280;">Customer</td><td><strong>${esc(requester)}</strong></td></tr><tr><td style="padding:4px 12px 4px 0;color:#6b7280;">NVR</td><td><strong>${esc(nvr_name)}</strong></td></tr>${camerasHtml}</table>${reasonHtml}</div>`;
 
     const text = [
       `Callout request (${when})`,
       `Customer: ${requester}`,
       `NVR: ${nvr_name}`,
-      camera ? `Camera: ${camera}` : "",
+      cameraList.length ? `Camera${cameraList.length === 1 ? "" : "s"}:\n${cameraList.map((c) => `  - ${c}`).join("\n")}` : "",
       "",
       reason ? `Details:\n${reason}` : "",
     ].filter(Boolean).join("\n");
