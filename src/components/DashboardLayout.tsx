@@ -26,7 +26,6 @@ export function DashboardLayout({
             {subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
           </div>
           <div className="flex items-center gap-2">
-            <OfflineNotifications />
             {actions}
           </div>
         </header>
