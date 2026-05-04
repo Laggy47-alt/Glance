@@ -13,7 +13,36 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
 import { toast } from "@/hooks/use-toast";
-import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff } from "lucide-react";
+import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff } from "lucide-react";
+
+function CameraThumb({ inst, camera, online }: { inst: FrigateInstance; camera: string; online: boolean }) {
+  const safe = camera.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const { data } = supabase.storage.from("camera-snapshots").getPublicUrl(`${inst.id}/${safe}.jpg`);
+  const stored = data?.publicUrl;
+  const live = online ? frigateUrl(inst, `/api/${encodeURIComponent(camera)}/latest.jpg?h=120`) : null;
+  const [src, setSrc] = useState<string | null>(live ?? stored ?? null);
+  const [errored, setErrored] = useState(false);
+
+  if (!src || errored) {
+    return (
+      <div className="h-12 w-20 shrink-0 rounded bg-muted border border-border flex items-center justify-center">
+        <ImageOff className="h-4 w-4 text-muted-foreground" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={camera}
+      loading="lazy"
+      className="h-12 w-20 shrink-0 rounded object-cover border border-border bg-muted"
+      onError={() => {
+        if (live && src === live && stored) { setSrc(stored); }
+        else { setErrored(true); }
+      }}
+    />
+  );
+}
 
 type CamRow = {
   name: string;
