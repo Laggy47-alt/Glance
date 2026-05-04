@@ -183,12 +183,14 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
             )}
             <div className="px-4 py-2.5 text-xs text-muted-foreground border-t border-border flex justify-between items-center gap-3">
               <span>{new Date(item.ts).toLocaleString()}</span>
-              {item.frigateUrl ? (
-                <a href={item.frigateUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">
-                  Open in Frigate ↗
-                </a>
-              ) : (
-                <a href={item.url} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">{item.url}</a>
+              {!item.readOnly && (
+                item.frigateUrl ? (
+                  <a href={item.frigateUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">
+                    Open in Frigate ↗
+                  </a>
+                ) : (
+                  <a href={item.url} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[60%]">{item.url}</a>
+                )
               )}
             </div>
           </div>
