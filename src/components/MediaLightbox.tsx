@@ -1,6 +1,6 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Film, Camera, Tag as TagIcon, X, Plus, Check, Clock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Film, Camera, Tag as TagIcon, X, Plus, Check, Clock, ImageOff } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ export type LightboxItem = {
   frigateUrl?: string | null;
   mediaId?: string;
   eventId?: string | null;
+  /** Optional ordered fallback URLs tried in sequence if `url` (and prior fallbacks) fail to load. */
+  fallbackUrls?: string[];
   /** When true, hide tagging UI and ack metadata — view-only mode (e.g. customer portal). */
   readOnly?: boolean;
 };
@@ -108,7 +110,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
             </div>
             <div className="bg-black grid place-items-center min-h-[300px]">
               {item.kind === "snapshot" ? (
-                <img src={item.url} alt={item.camera ?? ""} className="max-h-[70vh] w-auto" />
+                <SnapshotImage url={item.url} fallbacks={item.fallbackUrls ?? []} alt={item.camera ?? ""} />
               ) : (
                 <video src={item.url} controls autoPlay className="max-h-[70vh] w-full" poster={item.thumbnail} />
               )}
@@ -197,5 +199,32 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SnapshotImage({ url, fallbacks, alt }: { url: string; fallbacks: string[]; alt: string }) {
+  const candidates = useMemo(() => [url, ...fallbacks].filter(Boolean), [url, fallbacks]);
+  const [idx, setIdx] = useState(0);
+  const [failed, setFailed] = useState(false);
+  // Reset when url changes
+  useEffect(() => { setIdx(0); setFailed(false); }, [url]);
+  if (failed || candidates.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 text-muted-foreground py-16">
+        <ImageOff className="h-8 w-8" />
+        <span className="text-xs">Snapshot unavailable</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={candidates[idx]}
+      alt={alt}
+      className="max-h-[70vh] w-auto"
+      onError={() => {
+        if (idx + 1 < candidates.length) setIdx(idx + 1);
+        else setFailed(true);
+      }}
+    />
   );
 }

@@ -127,20 +127,30 @@ const CustomerEvents = () => {
       return;
     }
     const camera = e.camera ?? "unknown";
-    // Prefer DB-stored snapshot media (matches by frigate_event_id)
     const mediaSnap = e.frigate_event_id
       ? store.media?.find((m) => m.kind === "snapshot" && m.frigate_event_id === e.frigate_event_id)
       : null;
-    // Then Frigate's per-event snapshot (the actual detection frame)
-    // Then the cached latest snapshot from storage
-    // Then the camera's live latest.jpg
-    const url = mediaSnap?.url
-      ?? (e.frigate_event_id ? frigateUrl(inst, `/api/events/${encodeURIComponent(e.frigate_event_id)}/snapshot.jpg`) : null)
-      ?? snapshotUrl(inst, camera)
-      ?? frigateUrl(inst, `/api/${encodeURIComponent(camera)}/latest.jpg`);
+    // Build an ordered list of candidate URLs. The lightbox tries each on error.
+    const candidates: string[] = [];
+    if (mediaSnap?.url) candidates.push(mediaSnap.url);
+    if (e.frigate_event_id) {
+      const u = frigateUrl(inst, `/api/events/${encodeURIComponent(e.frigate_event_id)}/snapshot.jpg`);
+      if (u) candidates.push(u);
+    }
+    const cached = snapshotUrl(inst, camera);
+    if (cached) candidates.push(cached);
+    const live = frigateUrl(inst, `/api/${encodeURIComponent(camera)}/latest.jpg`);
+    if (live) candidates.push(live);
+
+    const [primary, ...rest] = candidates;
+    if (!primary) {
+      console.warn("[CustomerEvents] No snapshot URL candidates for event", e);
+      return;
+    }
     setLightbox({
       kind: "snapshot",
-      url,
+      url: primary,
+      fallbackUrls: rest,
       camera,
       topic: inst.name,
       ts: e.ts,
