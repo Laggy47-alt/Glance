@@ -73,6 +73,96 @@ export type Database = {
           },
         ]
       }
+      callout_requests: {
+        Row: {
+          admin_note: string | null
+          camera: string | null
+          created_at: string
+          id: string
+          instance_id: string
+          reason: string | null
+          requested_by: string | null
+          requester_name: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          admin_note?: string | null
+          camera?: string | null
+          created_at?: string
+          id?: string
+          instance_id: string
+          reason?: string | null
+          requested_by?: string | null
+          requester_name?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          admin_note?: string | null
+          camera?: string | null
+          created_at?: string
+          id?: string
+          instance_id?: string
+          reason?: string | null
+          requested_by?: string | null
+          requester_name?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      callout_settings: {
+        Row: {
+          id: string
+          recipients: string[]
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          recipients?: string[]
+          subject?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          recipients?: string[]
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      camera_armed_state: {
+        Row: {
+          armed: boolean
+          camera: string
+          id: string
+          instance_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          armed?: boolean
+          camera: string
+          id?: string
+          instance_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          armed?: boolean
+          camera?: string
+          id?: string
+          instance_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       camera_status: {
         Row: {
           camera: string
@@ -97,6 +187,30 @@ export type Database = {
           last_checked?: string
           online?: boolean
           since?: string
+        }
+        Relationships: []
+      }
+      customer_nvr_assignments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          instance_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instance_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instance_id?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -561,9 +675,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_has_instance: {
+        Args: { _instance_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "customer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -691,7 +809,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "customer"],
     },
   },
 } as const
