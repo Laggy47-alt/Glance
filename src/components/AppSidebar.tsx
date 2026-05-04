@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -17,6 +17,7 @@ const adminItems = [
   
   { to: "/archive", label: "Archive", icon: Archive },
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
+  { to: "/callouts", label: "Callout Requests", icon: Phone },
   { to: "/daily-reports", label: "Daily Reports", icon: Mail },
   { to: "/customization", label: "Customization", icon: Palette },
 ];
@@ -28,9 +29,13 @@ const userItems = [
   { to: "/media", label: "Media", icon: Film },
 ];
 
+const customerItems = [
+  { to: "/customer", label: "My NVRs", icon: ShieldAlert },
+];
+
 export function AppSidebar() {
   const store = useWebhookStore();
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, isCustomer, signOut } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const location = useLocation();
   const navigate = useNavigate();
@@ -42,7 +47,10 @@ export function AppSidebar() {
 
   const items = isAdmin
     ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
-    : userItems;
+    : isCustomer
+      ? customerItems
+      : userItems;
+  const showSites = !isCustomer || isAdmin;
 
   const handleSignOut = async () => {
     await signOut();
