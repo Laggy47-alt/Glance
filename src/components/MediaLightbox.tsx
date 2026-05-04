@@ -18,6 +18,8 @@ export type LightboxItem = {
   frigateUrl?: string | null;
   mediaId?: string;
   eventId?: string | null;
+  /** When true, hide tagging UI and ack metadata — view-only mode (e.g. customer portal). */
+  readOnly?: boolean;
 };
 
 type MediaTag = { id: string; tag: string; note: string | null };
