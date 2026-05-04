@@ -201,3 +201,30 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     </Dialog>
   );
 }
+
+function SnapshotImage({ url, fallbacks, alt }: { url: string; fallbacks: string[]; alt: string }) {
+  const candidates = useMemo(() => [url, ...fallbacks].filter(Boolean), [url, fallbacks]);
+  const [idx, setIdx] = useState(0);
+  const [failed, setFailed] = useState(false);
+  // Reset when url changes
+  useEffect(() => { setIdx(0); setFailed(false); }, [url]);
+  if (failed || candidates.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 text-muted-foreground py-16">
+        <ImageOff className="h-8 w-8" />
+        <span className="text-xs">Snapshot unavailable</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={candidates[idx]}
+      alt={alt}
+      className="max-h-[70vh] w-auto"
+      onError={() => {
+        if (idx + 1 < candidates.length) setIdx(idx + 1);
+        else setFailed(true);
+      }}
+    />
+  );
+}
