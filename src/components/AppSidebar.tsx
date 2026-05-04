@@ -94,6 +94,7 @@ export function AppSidebar() {
           );
         })}
 
+        {showSites && (
         <div className="pt-2">
           <button
             type="button"
@@ -128,6 +129,7 @@ export function AppSidebar() {
             </div>
           )}
         </div>
+        )}
       </nav>
 
       <div className="p-3 border-t border-sidebar-border space-y-2">
