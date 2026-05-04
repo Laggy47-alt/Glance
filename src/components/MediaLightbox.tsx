@@ -1,6 +1,6 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Film, Camera, Tag as TagIcon, X, Plus, Check, Clock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Film, Camera, Tag as TagIcon, X, Plus, Check, Clock, ImageOff } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
