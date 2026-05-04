@@ -262,14 +262,31 @@ const Customer = () => {
                   <span className="text-sm font-semibold text-foreground truncate">{v.inst.name}</span>
                   {!v.reachable && <Badge variant="destructive" className="gap-1 text-[10px]"><WifiOff className="h-3 w-3" /> Unreachable</Badge>}
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5"
-                  onClick={() => setCalloutFor({ inst: v.inst })}
-                >
-                  <Phone className="h-3.5 w-3.5" /> Request callout
-                </Button>
+                <div className="flex items-center gap-2">
+                  {v.reachable && v.cameras.length > 0 && (() => {
+                    const allArmed = v.cameras.every((c) => c.armed);
+                    return (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => setAllArmed(v, !allArmed)}
+                      >
+                        {allArmed
+                          ? <><ShieldAlert className="h-3.5 w-3.5" /> Disarm all</>
+                          : <><ShieldCheck className="h-3.5 w-3.5" /> Arm all</>}
+                      </Button>
+                    );
+                  })()}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => setCalloutFor({ inst: v.inst })}
+                  >
+                    <Phone className="h-3.5 w-3.5" /> Request callout
+                  </Button>
+                </div>
               </div>
 
               {v.reachable ? (
