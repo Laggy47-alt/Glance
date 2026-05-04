@@ -10,15 +10,18 @@ import {
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, Plus, KeyRound, Trash2, ShieldCheck, User as UserIcon } from "lucide-react";
+import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { Loader2, Plus, KeyRound, Trash2, ShieldCheck, User as UserIcon, Building2, Server } from "lucide-react";
 import { toast } from "sonner";
+
+type UserRole = "admin" | "user" | "customer";
 
 type Row = {
   user_id: string;
   username: string;
   display_name: string | null;
   must_change_password: boolean;
-  role: "admin" | "user";
+  role: UserRole;
 };
 
 const Users = () => {
@@ -28,6 +31,7 @@ const Users = () => {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [resetFor, setResetFor] = useState<Row | null>(null);
+  const [assignFor, setAssignFor] = useState<Row | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -35,10 +39,13 @@ const Users = () => {
       supabase.from("profiles").select("user_id, username, display_name, must_change_password").order("username"),
       supabase.from("user_roles").select("user_id, role"),
     ]);
-    const roleMap = new Map<string, "admin" | "user">();
+    const roleMap = new Map<string, UserRole>();
     (roles ?? []).forEach((r) => {
       const existing = roleMap.get(r.user_id);
-      if (r.role === "admin" || !existing) roleMap.set(r.user_id, r.role as "admin" | "user");
+      // admin > customer > user precedence for display
+      const order: Record<string, number> = { admin: 3, customer: 2, user: 1 };
+      const cur = (r.role as UserRole);
+      if (!existing || order[cur] > order[existing]) roleMap.set(r.user_id, cur);
     });
     const merged: Row[] = (profs ?? []).map((p) => ({
       user_id: p.user_id,
@@ -70,7 +77,7 @@ const Users = () => {
   return (
     <DashboardLayout
       title="Users"
-      subtitle="Manage operator accounts"
+      subtitle="Manage operator and customer accounts"
       actions={
         <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5" /> New user
@@ -104,6 +111,8 @@ const Users = () => {
                 <TableCell>
                   {r.role === "admin" ? (
                     <Badge className="gap-1"><ShieldCheck className="h-3 w-3" /> Admin</Badge>
+                  ) : r.role === "customer" ? (
+                    <Badge variant="outline" className="gap-1 border-primary/40 text-primary"><Building2 className="h-3 w-3" /> Customer</Badge>
                   ) : (
                     <Badge variant="secondary" className="gap-1"><UserIcon className="h-3 w-3" /> User</Badge>
                   )}
@@ -117,6 +126,11 @@ const Users = () => {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    {r.role === "customer" && (
+                      <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setAssignFor(r)}>
+                        <Server className="h-3.5 w-3.5" /> NVRs
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setResetFor(r)}>
                       <KeyRound className="h-3.5 w-3.5" /> Reset password
                     </Button>
@@ -139,6 +153,7 @@ const Users = () => {
 
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={load} />
       <ResetPasswordDialog row={resetFor} onClose={() => setResetFor(null)} onDone={load} />
+      <AssignNvrsDialog row={assignFor} onClose={() => setAssignFor(null)} />
     </DashboardLayout>
   );
 };
@@ -149,7 +164,7 @@ function CreateUserDialog({
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("changeme");
-  const [role, setRole] = useState<"admin" | "user">("user");
+  const [role, setRole] = useState<UserRole>("user");
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -195,7 +210,11 @@ function CreateUserDialog({
             <div className="flex gap-2">
               <Button type="button" size="sm" variant={role === "user" ? "default" : "outline"} onClick={() => setRole("user")}>User</Button>
               <Button type="button" size="sm" variant={role === "admin" ? "default" : "outline"} onClick={() => setRole("admin")}>Admin</Button>
+              <Button type="button" size="sm" variant={role === "customer" ? "default" : "outline"} onClick={() => setRole("customer")}>Customer</Button>
             </div>
+            {role === "customer" && (
+              <p className="text-[11px] text-muted-foreground">After creating, click <strong>NVRs</strong> in the user row to assign NVRs.</p>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -257,6 +276,109 @@ function ResetPasswordDialog({
             </Button>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => void }) {
+  const store = useWebhookStore();
+  const [assigned, setAssigned] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!row) return;
+    setLoading(true);
+    void supabase
+      .from("customer_nvr_assignments")
+      .select("instance_id")
+      .eq("user_id", row.user_id)
+      .then(({ data }) => {
+        setAssigned(new Set((data ?? []).map((d) => d.instance_id)));
+        setLoading(false);
+      });
+  }, [row]);
+
+  if (!row) return null;
+
+  const toggle = (id: string) => {
+    setAssigned((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const { data: existing } = await supabase
+        .from("customer_nvr_assignments")
+        .select("instance_id")
+        .eq("user_id", row.user_id);
+      const existingSet = new Set((existing ?? []).map((d) => d.instance_id));
+      const toAdd = [...assigned].filter((id) => !existingSet.has(id));
+      const toRemove = [...existingSet].filter((id) => !assigned.has(id));
+
+      if (toAdd.length) {
+        const { error } = await supabase
+          .from("customer_nvr_assignments")
+          .insert(toAdd.map((instance_id) => ({ user_id: row.user_id, instance_id })));
+        if (error) throw error;
+      }
+      if (toRemove.length) {
+        const { error } = await supabase
+          .from("customer_nvr_assignments")
+          .delete()
+          .eq("user_id", row.user_id)
+          .in("instance_id", toRemove);
+        if (error) throw error;
+      }
+      toast.success("NVR assignments updated");
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to update assignments");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Assign NVRs — {row.username}</DialogTitle>
+          <DialogDescription>Select which NVRs this customer can view and arm/disarm.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+          {loading ? (
+            <p className="text-xs text-muted-foreground"><Loader2 className="inline h-3 w-3 mr-1 animate-spin" /> Loading…</p>
+          ) : store.frigates.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No NVRs configured.</p>
+          ) : (
+            store.frigates.map((f) => (
+              <label key={f.id} className="flex items-center gap-3 rounded-md border border-border bg-card/50 p-3 cursor-pointer hover:bg-accent/40">
+                <input
+                  type="checkbox"
+                  checked={assigned.has(f.id)}
+                  onChange={() => toggle(f.id)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <span className="h-3 w-3 rounded-full shrink-0" style={{ background: f.color }} />
+                <span className="text-sm font-medium flex-1">{f.name}</span>
+                <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">{f.base_url}</span>
+              </label>
+            ))
+          )}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy}>
+            {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
