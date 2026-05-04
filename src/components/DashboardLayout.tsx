@@ -1,7 +1,6 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { useSnapshotRefresher } from "@/hooks/useSnapshotRefresher";
-import { OfflineNotifications } from "./OfflineNotifications";
 
 export function DashboardLayout({
   children,
@@ -27,7 +26,6 @@ export function DashboardLayout({
             {subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
           </div>
           <div className="flex items-center gap-2">
-            <OfflineNotifications />
             {actions}
           </div>
         </header>
