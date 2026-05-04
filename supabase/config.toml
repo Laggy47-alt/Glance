@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.daily-report-send]
 verify_jwt = false
+
+[functions.callout-request]
+verify_jwt = false
