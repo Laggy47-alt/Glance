@@ -25,6 +25,7 @@ import NvrStatus from "./pages/NvrStatus.tsx";
 import CameraStatus from "./pages/CameraStatus.tsx";
 import DailyReports from "./pages/DailyReports.tsx";
 import Customer from "./pages/Customer.tsx";
+import CustomerEvents from "./pages/CustomerEvents.tsx";
 import Callouts from "./pages/Callouts.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -59,6 +60,7 @@ const App = () => (
               <Route path="/daily-reports" element={protect(<DailyReports />, true)} />
               <Route path="/callouts" element={protect(<Callouts />, true)} />
               <Route path="/customer" element={protect(<Customer />)} />
+              <Route path="/customer/events" element={protect(<CustomerEvents />)} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <AuthorBadge />

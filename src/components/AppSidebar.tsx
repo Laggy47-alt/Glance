@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -31,6 +31,7 @@ const userItems = [
 
 const customerItems = [
   { to: "/customer", label: "My NVRs", icon: ShieldAlert },
+  { to: "/customer/events", label: "Recent Detections", icon: Radio },
 ];
 
 export function AppSidebar() {
