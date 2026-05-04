@@ -13,7 +13,7 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
 import { toast } from "@/hooks/use-toast";
-import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff, Activity, Radio } from "lucide-react";
+import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff } from "lucide-react";
 
 function CameraThumb({ inst, camera, online }: { inst: FrigateInstance; camera: string; online: boolean }) {
   const safe = camera.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -131,38 +131,6 @@ const Customer = () => {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [assignedIds, loadArmed]);
-
-  // Load latest 10 events for assigned NVR sources
-  const [recentEvents, setRecentEvents] = useState<any[]>([]);
-  const assignedSourceIds = useMemo(
-    () => store.frigates.filter((f) => assignedIds.includes(f.id)).map((f) => f.source_id).filter(Boolean),
-    [store.frigates, assignedIds]
-  );
-  const loadEvents = useCallback(async () => {
-    if (assignedSourceIds.length === 0) { setRecentEvents([]); return; }
-    const { data } = await supabase
-      .from("webhook_events")
-      .select("id, ts, camera, label, score, source_id, frigate_event_id")
-      .in("source_id", assignedSourceIds)
-      .eq("kind", "event")
-      .order("ts", { ascending: false })
-      .limit(10);
-    setRecentEvents(data ?? []);
-  }, [assignedSourceIds]);
-  useEffect(() => { void loadEvents(); }, [loadEvents]);
-  useEffect(() => {
-    if (assignedSourceIds.length === 0) return;
-    const ch = supabase
-      .channel("customer-events")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "webhook_events" }, (payload) => {
-        const row: any = payload.new;
-        if (row?.kind !== "event") return;
-        if (!assignedSourceIds.includes(row.source_id)) return;
-        setRecentEvents((prev) => [row, ...prev].slice(0, 10));
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [assignedSourceIds]);
 
 
   // Load callouts (own)
@@ -375,50 +343,6 @@ const Customer = () => {
             </div>
           ))}
 
-          <div className="rounded-lg border border-border bg-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-border bg-card/60 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Recent detections</h3>
-              </div>
-              <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <Radio className="h-3 w-3 text-success animate-pulse" /> Live
-              </span>
-            </div>
-            {recentEvents.length === 0 ? (
-              <p className="px-4 py-6 text-xs text-muted-foreground text-center">No detections yet.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {recentEvents.map((e) => {
-                  const inst = store.frigates.find((f) => f.source_id === e.source_id);
-                  return (
-                    <li key={e.id} className="px-4 py-2.5 flex items-center gap-3">
-                      {inst && e.camera ? (
-                        <CameraThumb inst={inst} camera={e.camera} online={true} />
-                      ) : (
-                        <div className="h-12 w-20 shrink-0 rounded bg-muted border border-border" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-foreground capitalize truncate">
-                            {e.label || "detection"}
-                          </span>
-                          {typeof e.score === "number" && (
-                            <Badge variant="outline" className="text-[10px]">
-                              {Math.round(Number(e.score) * 100)}%
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {inst?.name ?? "Unknown NVR"}{e.camera ? ` · ${e.camera}` : ""} · {new Date(e.ts).toLocaleString()}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
 
           {recentCallouts.length > 0 && (
             <div className="rounded-lg border border-border bg-card overflow-hidden">
