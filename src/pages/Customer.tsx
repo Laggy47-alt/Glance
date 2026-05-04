@@ -13,7 +13,7 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
 import { toast } from "@/hooks/use-toast";
-import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff } from "lucide-react";
+import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff, Activity, Radio } from "lucide-react";
 
 function CameraThumb({ inst, camera, online }: { inst: FrigateInstance; camera: string; online: boolean }) {
   const safe = camera.replace(/[^a-zA-Z0-9_-]/g, "_");
