@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { BrandingProvider } from "@/hooks/useBranding";
 import { AuthGate } from "@/components/AuthGate";
 import { AuthorBadge } from "@/components/AuthorBadge";
+import { OperatorOfflinePopup } from "@/components/OperatorOfflinePopup";
 import Index from "./pages/Index.tsx";
 import Sources from "./pages/Sources.tsx";
 import Frigate from "./pages/Frigate.tsx";
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="*" element={protect(<NotFound />)} />
             </Routes>
             <AuthorBadge />
+            <OperatorOfflinePopup />
           </BrandingProvider>
         </AuthProvider>
       </BrowserRouter>

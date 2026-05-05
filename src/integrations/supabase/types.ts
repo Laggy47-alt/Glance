@@ -241,6 +241,36 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_offline_instructions: {
+        Row: {
+          camera: string | null
+          id: string
+          instance_id: string
+          instructions: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          camera?: string | null
+          id?: string
+          instance_id: string
+          instructions?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          camera?: string | null
+          id?: string
+          instance_id?: string
+          instructions?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       daily_report_configs: {
         Row: {
           body_template: string
@@ -549,6 +579,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      offline_instruction_acks: {
+        Row: {
+          acknowledged_at: string
+          camera: string
+          id: string
+          instance_id: string
+          since: string
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          camera: string
+          id?: string
+          instance_id: string
+          since: string
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          camera?: string
+          id?: string
+          instance_id?: string
+          since?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
