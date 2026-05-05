@@ -95,6 +95,12 @@ const Frigate = () => {
       subtitle="Connect multiple Frigate instances — events stream in via push and polling"
       actions={
         <div className="flex items-center gap-2">
+          {store.frigates.length > 0 && (
+            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-2">
+              {allExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
+              {allExpanded ? "Collapse all" : "Expand all"}
+            </Button>
+          )}
           <Button asChild variant="outline" size="sm">
             <Link to="/sources"><Plug className="h-4 w-4 mr-2" />Webhook sources</Link>
           </Button>
