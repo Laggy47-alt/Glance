@@ -168,7 +168,6 @@ export type Database = {
           instance_id: string
           updated_at: string
           updated_by: string | null
-          user_id: string
           weekday: number
         }
         Insert: {
@@ -181,7 +180,6 @@ export type Database = {
           instance_id: string
           updated_at?: string
           updated_by?: string | null
-          user_id: string
           weekday: number
         }
         Update: {
@@ -194,7 +192,6 @@ export type Database = {
           instance_id?: string
           updated_at?: string
           updated_by?: string | null
-          user_id?: string
           weekday?: number
         }
         Relationships: []

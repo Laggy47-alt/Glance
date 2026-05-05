@@ -43,7 +43,6 @@ export function CameraScheduleDialog({
     const { data } = await supabase
       .from("camera_arm_schedules")
       .select("id, weekday, arm_time, disarm_time, enabled")
-      .eq("user_id", user.id)
       .eq("instance_id", instanceId)
       .eq("camera", camera);
     const base: Row[] = Array.from({ length: 7 }, (_, w) => ({
@@ -83,11 +82,9 @@ export function CameraScheduleDialog({
     if (!user) return;
     setSaving(true);
     try {
-      // Upsert enabled rows; delete disabled-with-id rows.
       const toUpsert = rows
         .filter((r) => r.enabled && (r.arm_time || r.disarm_time))
         .map((r) => ({
-          user_id: user.id,
           instance_id: instanceId,
           camera,
           weekday: r.weekday,
@@ -101,7 +98,7 @@ export function CameraScheduleDialog({
       if (toUpsert.length) {
         const { error } = await supabase
           .from("camera_arm_schedules")
-          .upsert(toUpsert, { onConflict: "user_id,instance_id,camera,weekday" });
+          .upsert(toUpsert, { onConflict: "instance_id,camera,weekday" });
         if (error) throw error;
       }
       if (toDelete.length) {
@@ -205,20 +202,19 @@ export function CameraScheduleDialog({
   );
 }
 
-export function CameraScheduleBadge({ instanceId, camera, userId }: { instanceId: string; camera: string; userId: string }) {
+export function CameraScheduleBadge({ instanceId, camera }: { instanceId: string; camera: string }) {
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
     void supabase
       .from("camera_arm_schedules")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
       .eq("instance_id", instanceId)
       .eq("camera", camera)
       .eq("enabled", true)
       .then(({ count }) => { if (!cancelled) setCount(count ?? 0); });
     return () => { cancelled = true; };
-  }, [instanceId, camera, userId]);
+  }, [instanceId, camera]);
   if (!count) return null;
   return <Badge variant="outline" className="text-[10px] gap-1"><Clock className="h-2.5 w-2.5" />{count}d</Badge>;
 }

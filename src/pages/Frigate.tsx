@@ -13,6 +13,7 @@ import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, C
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
+import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
 
 const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6"];
 
@@ -272,6 +273,8 @@ const Frigate = () => {
                         <span className="text-[10px] text-muted-foreground">Local time · supports overnight (e.g. 22:00 → 06:00)</span>
                       </div>
                     </div>
+
+                    <NvrSchedulesPanel inst={f} />
 
                     {f.last_error && (
                       <div className="text-xs bg-destructive/10 border border-destructive/30 rounded px-3 py-2 text-destructive font-mono break-all">{f.last_error}</div>
