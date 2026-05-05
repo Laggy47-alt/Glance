@@ -13,8 +13,9 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
 import { toast } from "@/hooks/use-toast";
-import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff } from "lucide-react";
+import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff, Clock } from "lucide-react";
 import { CustomerInstructionsCard } from "@/components/CustomerInstructionsCard";
+import { CameraScheduleDialog, CameraScheduleBadge } from "@/components/CameraScheduleDialog";
 
 function CameraThumb({ inst, camera, online }: { inst: FrigateInstance; camera: string; online: boolean }) {
   const safe = camera.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -94,6 +95,7 @@ const Customer = () => {
   const [views, setViews] = useState<NvrView[]>([]);
   const [loading, setLoading] = useState(true);
   const [calloutFor, setCalloutFor] = useState<{ inst: FrigateInstance; cameras: string[] } | null>(null);
+  const [scheduleFor, setScheduleFor] = useState<{ inst: FrigateInstance; camera: string } | null>(null);
   const [recentCallouts, setRecentCallouts] = useState<any[]>([]);
 
   const armedKey = (instId: string, cam: string) => `${instId}::${cam}`;
@@ -328,6 +330,16 @@ const Customer = () => {
                           )}
                         </div>
                         <div className="flex items-center gap-2 min-w-[110px] justify-end">
+                          {user && <CameraScheduleBadge instanceId={v.inst.id} camera={c.name} userId={user.id} />}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 gap-1 text-[11px]"
+                            onClick={() => setScheduleFor({ inst: v.inst, camera: c.name })}
+                            title="Auto arm/disarm schedule"
+                          >
+                            <Clock className="h-3.5 w-3.5" />
+                          </Button>
                           {c.armed ? (
                             <ShieldCheck className="h-4 w-4 text-success" />
                           ) : (
@@ -392,6 +404,16 @@ const Customer = () => {
         onSent={() => { void loadCallouts(); }}
         requesterName={profile?.display_name ?? profile?.username ?? "Customer"}
       />
+
+      {scheduleFor && (
+        <CameraScheduleDialog
+          open={!!scheduleFor}
+          onOpenChange={(v) => { if (!v) setScheduleFor(null); }}
+          instanceId={scheduleFor.inst.id}
+          camera={scheduleFor.camera}
+          instanceName={scheduleFor.inst.name}
+        />
+      )}
     </DashboardLayout>
   );
 };
