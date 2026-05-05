@@ -172,9 +172,11 @@ const Customer = () => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const stats = await res.json();
         const { online, offline } = parseStats(stats);
+        const allow = camFilter.get(inst.id);
+        const keep = (n: string) => !allow || allow.has(n);
         const cameras: CamRow[] = [
-          ...online.map((n) => ({ name: n, online: true, armed: armedMap.get(armedKey(inst.id, n)) ?? true })),
-          ...offline.map((n) => ({ name: n, online: false, armed: armedMap.get(armedKey(inst.id, n)) ?? true })),
+          ...online.filter(keep).map((n) => ({ name: n, online: true, armed: armedMap.get(armedKey(inst.id, n)) ?? true })),
+          ...offline.filter(keep).map((n) => ({ name: n, online: false, armed: armedMap.get(armedKey(inst.id, n)) ?? true })),
         ].sort((a, b) => a.name.localeCompare(b.name));
         return { inst, reachable: true, cameras };
       } catch {
@@ -183,7 +185,7 @@ const Customer = () => {
     }));
     setViews(results);
     setLoading(false);
-  }, [myInstances, armedMap]);
+  }, [myInstances, armedMap, camFilter]);
 
   useEffect(() => {
     void fetchAll();
