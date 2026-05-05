@@ -28,7 +28,14 @@ const Frigate = () => {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [secretRevealed, setSecretRevealed] = useState<Record<string, boolean>>({});
   const [polling, setPolling] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const location = useLocation();
+  const allExpanded = store.frigates.length > 0 && store.frigates.every((f) => expanded[f.id]);
+  const toggleAll = () => {
+    const next: Record<string, boolean> = {};
+    if (!allExpanded) for (const f of store.frigates) next[f.id] = true;
+    setExpanded(next);
+  };
 
   useEffect(() => {
     if (!location.hash || !store.frigates.length) return;
