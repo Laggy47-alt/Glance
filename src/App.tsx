@@ -65,6 +65,7 @@ const App = () => (
               <Route path="*" element={protect(<NotFound />)} />
             </Routes>
             <AuthorBadge />
+            <OperatorOfflinePopup />
           </BrandingProvider>
         </AuthProvider>
       </BrowserRouter>
