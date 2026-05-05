@@ -171,33 +171,43 @@ const Frigate = () => {
             const src = store.sources.find((s) => s.id === f.source_id);
             const pushUrl = src ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-ingest/${src.slug}` : "";
             const isRevealed = revealed[f.id];
+            const isOpen = !!expanded[f.id];
             return (
-              <Card key={f.id} id={f.id} className="bg-gradient-card border-border shadow-card p-5 scroll-mt-20 transition-shadow">
-                <div className="flex items-start gap-4">
+              <Card key={f.id} id={f.id} className="bg-gradient-card border-border shadow-card scroll-mt-20 transition-shadow overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpanded((e) => ({ ...e, [f.id]: !e[f.id] }))}
+                  className="w-full flex items-center gap-4 text-left p-4 hover:bg-secondary/30 transition-colors"
+                >
                   <div className="h-10 w-10 rounded-md grid place-items-center shrink-0" style={{ background: f.color + "22", color: f.color }}>
                     <Server className="h-5 w-5" />
                   </div>
-                  <div className="flex-1 min-w-0 space-y-3">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h3 className="text-sm font-semibold">{f.name}</h3>
-                      <code className="text-xs text-muted-foreground truncate max-w-md">{f.base_url}</code>
-                      {f.is_local && (
-                        <Badge variant="secondary" className="gap-1 bg-primary/15 text-primary border-primary/30">
-                          <Wifi className="h-3 w-3" /> Local
-                        </Badge>
-                      )}
-                      {f.last_error ? (
-                        <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Error</Badge>
-                      ) : f.last_polled_at ? (
-                        <Badge variant="secondary" className="gap-1 bg-success/15 text-success border-success/30"><CheckCircle2 className="h-3 w-3" /> Healthy</Badge>
-                      ) : (
-                        <Badge variant="secondary">Pending</Badge>
-                      )}
-                      <div className="flex items-center gap-2 ml-auto">
-                        <Switch checked={f.enabled} onCheckedChange={(v) => store.updateFrigate(f.id, { enabled: v })} />
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{f.enabled ? "Enabled" : "Disabled"}</span>
-                      </div>
+                  <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
+                    <h3 className="text-sm font-semibold">{f.name}</h3>
+                    <code className="text-xs text-muted-foreground truncate max-w-md">{f.base_url}</code>
+                    {f.is_local && (
+                      <Badge variant="secondary" className="gap-1 bg-primary/15 text-primary border-primary/30">
+                        <Wifi className="h-3 w-3" /> Local
+                      </Badge>
+                    )}
+                    {f.last_error ? (
+                      <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Error</Badge>
+                    ) : f.last_polled_at ? (
+                      <Badge variant="secondary" className="gap-1 bg-success/15 text-success border-success/30"><CheckCircle2 className="h-3 w-3" /> Healthy</Badge>
+                    ) : (
+                      <Badge variant="secondary">Pending</Badge>
+                    )}
+                    <div className="flex items-center gap-2 ml-auto" onClick={(e) => e.stopPropagation()} role="presentation">
+                      <Switch checked={f.enabled} onCheckedChange={(v) => store.updateFrigate(f.id, { enabled: v })} />
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{f.enabled ? "Enabled" : "Disabled"}</span>
+                      <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform ml-1", isOpen && "rotate-180")} />
                     </div>
+                  </div>
+                </button>
+                {isOpen && (
+                <div className="flex items-start gap-4 px-5 pb-5">
+                  <div className="h-10 w-10 shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-3">
 
                     <div className="grid sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
