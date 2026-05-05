@@ -58,8 +58,7 @@ Deno.serve(async (req) => {
   const [{ data: scheds, error }, { data: allScheds, error: e0 }] = await Promise.all([
     supabase
       .from("camera_arm_schedules")
-      .select("user_id,instance_id,camera,weekday,arm_time,disarm_time,enabled")
-      .eq("enabled", true)
+      .select("instance_id,camera,weekday,arm_time,disarm_time,enabled")
       .eq("weekday", weekday),
     supabase
       .from("camera_arm_schedules")
