@@ -120,6 +120,9 @@ const Wall = () => {
       if (seenRef.current.has(key)) continue;
       // Skip alerts whose NVR is currently muted on schedule
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
+      const evMs = new Date(e.ts).getTime();
+      // Skip stale events that pre-date this Wall session (e.g. left un-archived from before)
+      if (evMs < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
@@ -127,7 +130,6 @@ const Wall = () => {
       const label = e.label ?? e.kind ?? "motion";
       const inst = store.frigates.find((f) => f.source_id === e.source_id);
       const site = inst?.name ?? "Unknown site";
-      const evMs = new Date(e.ts).getTime();
 
       // Per-camera bundling: if this camera fired within the cooldown, suppress.
       const lastShown = cameraCooldownRef.current.get(camera);
@@ -186,6 +188,8 @@ const Wall = () => {
       if (seenRef.current.has(key)) continue;
       // Skip muted NVR (by source or instance)
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
+      // Skip stale media that pre-dates this Wall session
+      if (new Date(m.ts).getTime() < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
