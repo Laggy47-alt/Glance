@@ -241,39 +241,6 @@ const Frigate = () => {
 
                     </div>
 
-                    <div className="rounded-md border border-border bg-secondary/30 px-3 py-2.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <BellOff className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs font-medium text-foreground">Mute alerts on a schedule</span>
-                        <div className="flex items-center gap-2 ml-auto">
-                          <Switch
-                            checked={f.mute_enabled}
-                            onCheckedChange={(v) => store.updateFrigate(f.id, { mute_enabled: v })}
-                          />
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{f.mute_enabled ? "On" : "Off"}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</Label>
-                        <Input
-                          type="time"
-                          value={(f.mute_start ?? "").slice(0, 5)}
-                          onChange={(e) => store.updateFrigate(f.id, { mute_start: e.target.value ? `${e.target.value}:00` : null })}
-                          className="h-7 w-28 bg-secondary border-border text-xs tabular-nums"
-                          disabled={!f.mute_enabled}
-                        />
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">To</Label>
-                        <Input
-                          type="time"
-                          value={(f.mute_end ?? "").slice(0, 5)}
-                          onChange={(e) => store.updateFrigate(f.id, { mute_end: e.target.value ? `${e.target.value}:00` : null })}
-                          className="h-7 w-28 bg-secondary border-border text-xs tabular-nums"
-                          disabled={!f.mute_enabled}
-                        />
-                        <span className="text-[10px] text-muted-foreground">Local time · supports overnight (e.g. 22:00 → 06:00)</span>
-                      </div>
-                    </div>
-
                     <NvrSchedulesPanel inst={f} />
 
                     {f.last_error && (
