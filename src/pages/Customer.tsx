@@ -392,16 +392,6 @@ const Customer = () => {
         onSent={() => { void loadCallouts(); }}
         requesterName={profile?.display_name ?? profile?.username ?? "Customer"}
       />
-
-      {scheduleFor && (
-        <CameraScheduleDialog
-          open={!!scheduleFor}
-          onOpenChange={(v) => { if (!v) setScheduleFor(null); }}
-          instanceId={scheduleFor.inst.id}
-          camera={scheduleFor.camera}
-          instanceName={scheduleFor.inst.name}
-        />
-      )}
     </DashboardLayout>
   );
 };
