@@ -202,6 +202,10 @@ const Wall = () => {
       );
       const camera = m.camera ?? "unknown";
       const label = "motion";
+      const inst = store.frigates.find((f) =>
+        (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id
+      );
+      const site = inst?.name ?? "Unknown site";
       const mMs = new Date(m.ts).getTime();
 
       // Per-camera bundling (same rule as event path)
@@ -217,6 +221,7 @@ const Wall = () => {
         clip: m,
         snapshot,
         camera,
+        site,
         label,
         ts: m.ts,
         receivedAt: Date.now(),
