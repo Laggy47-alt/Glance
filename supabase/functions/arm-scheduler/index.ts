@@ -55,19 +55,29 @@ Deno.serve(async (req) => {
 
   const { weekday, minutes } = nowInSast();
 
-  // Pull every enabled schedule for today (small table, single round-trip)
-  const { data: scheds, error } = await supabase
-    .from("camera_arm_schedules")
-    .select("user_id,instance_id,camera,weekday,arm_time,disarm_time,enabled")
-    .eq("enabled", true)
-    .eq("weekday", weekday);
+  // Pull every enabled schedule for today + all cameras that have ANY schedule at all.
+  const [{ data: scheds, error }, { data: allScheds, error: e0 }] = await Promise.all([
+    supabase
+      .from("camera_arm_schedules")
+      .select("user_id,instance_id,camera,weekday,arm_time,disarm_time,enabled")
+      .eq("enabled", true)
+      .eq("weekday", weekday),
+    supabase
+      .from("camera_arm_schedules")
+      .select("instance_id,camera")
+      .eq("enabled", true),
+  ]);
 
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+  if (error || e0) {
+    return new Response(JSON.stringify({ error: (error || e0)!.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
+  // Cameras that have at least one enabled schedule (any day)
+  const scheduledCams = new Set<string>();
+  for (const r of allScheds ?? []) scheduledCams.add(`${r.instance_id}::${r.camera}`);
 
   // For each (instance, camera) determine the LATEST boundary that has been
   // crossed today across all customer schedules. "Schedule always wins" = we
@@ -84,14 +94,25 @@ Deno.serve(async (req) => {
     if (armM !== null && minutes >= armM) candidates.push({ action: "arm", min: armM });
     if (disarmM !== null && minutes >= disarmM) candidates.push({ action: "disarm", min: disarmM });
     if (!candidates.length) continue;
-    // Most recent boundary wins
     candidates.sort((a, b) => b.min - a.min);
     const latest = candidates[0];
 
     const existing = decisions.get(k);
-    // If multiple customers schedule the same camera, take the most recent boundary
     if (!existing || latest.min > existing.boundaryMin) {
       decisions.set(k, { action: latest.action, boundaryMin: latest.min });
+    }
+  }
+
+  // Re-arm any camera that is currently disarmed but has NO enabled schedule.
+  // "No schedule = always armed."
+  const { data: disarmedRows } = await supabase
+    .from("camera_armed_state")
+    .select("instance_id,camera,armed")
+    .eq("armed", false);
+  for (const r of disarmedRows ?? []) {
+    const k = `${r.instance_id}::${r.camera}`;
+    if (!scheduledCams.has(k) && !decisions.has(k)) {
+      decisions.set(k, { action: "arm", boundaryMin: -1 });
     }
   }
 
