@@ -188,6 +188,8 @@ const Wall = () => {
       if (seenRef.current.has(key)) continue;
       // Skip muted NVR (by source or instance)
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
+      // Skip stale media that pre-dates this Wall session
+      if (new Date(m.ts).getTime() < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
