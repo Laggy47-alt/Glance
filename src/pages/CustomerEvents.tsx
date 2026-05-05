@@ -70,23 +70,45 @@ const CustomerEvents = () => {
   const { user } = useAuth();
   const store = useWebhookStore();
   const [assignedIds, setAssignedIds] = useState<string[]>([]);
+  const [camFilter, setCamFilter] = useState<Map<string, Set<string>>>(new Map());
   const [rawEvents, setRawEvents] = useState<EvRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<LightboxItem | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    void supabase
-      .from("customer_nvr_assignments")
-      .select("instance_id")
-      .eq("user_id", user.id)
-      .then(({ data }) => setAssignedIds((data ?? []).map((d) => d.instance_id)));
+    void Promise.all([
+      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", user.id),
+      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", user.id),
+    ]).then(([{ data: nvrRows }, { data: camRows }]) => {
+      setAssignedIds((nvrRows ?? []).map((d) => d.instance_id));
+      const m = new Map<string, Set<string>>();
+      for (const r of camRows ?? []) {
+        if (!m.has(r.instance_id)) m.set(r.instance_id, new Set());
+        m.get(r.instance_id)!.add(r.camera);
+      }
+      setCamFilter(m);
+    });
   }, [user]);
 
   const assignedSourceIds = useMemo(
     () => store.frigates.filter((f) => assignedIds.includes(f.id)).map((f) => f.source_id).filter(Boolean),
     [store.frigates, assignedIds]
   );
+
+  const srcToInst = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of store.frigates) if (f.source_id) m.set(f.source_id, f.id);
+    return m;
+  }, [store.frigates]);
+
+  const allowEvent = useCallback((row: { source_id: string; camera: string | null }) => {
+    const instId = srcToInst.get(row.source_id);
+    if (!instId) return false;
+    const allow = camFilter.get(instId);
+    if (!allow) return true;
+    return !!row.camera && allow.has(row.camera);
+  }, [srcToInst, camFilter]);
 
   const load = useCallback(async () => {
     if (assignedSourceIds.length === 0) { setRawEvents([]); setLoading(false); return; }
@@ -97,9 +119,9 @@ const CustomerEvents = () => {
       .eq("kind", "event")
       .order("ts", { ascending: false })
       .limit(FETCH_LIMIT);
-    setRawEvents((data ?? []) as EvRow[]);
+    setRawEvents(((data ?? []) as EvRow[]).filter(allowEvent));
     setLoading(false);
-  }, [assignedSourceIds]);
+  }, [assignedSourceIds, allowEvent]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -111,11 +133,12 @@ const CustomerEvents = () => {
         const row = payload.new as EvRow & { kind?: string };
         if (row?.kind !== "event") return;
         if (!assignedSourceIds.includes(row.source_id)) return;
+        if (!allowEvent(row)) return;
         setRawEvents((p) => [row, ...p].slice(0, FETCH_LIMIT));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [assignedSourceIds]);
+  }, [assignedSourceIds, allowEvent]);
 
   // One row per camera — the latest detection for each.
   const events = useMemo(() => latestPerCamera(rawEvents), [rawEvents]);
