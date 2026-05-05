@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
     supabase
       .from("camera_arm_schedules")
       .select("instance_id,camera,weekday,arm_time,disarm_time,enabled")
+      .eq("enabled", true)
       .eq("weekday", weekday),
     supabase
       .from("camera_arm_schedules")
