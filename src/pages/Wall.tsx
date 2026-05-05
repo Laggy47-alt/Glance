@@ -560,7 +560,7 @@ function AlertCard({
       <div className="p-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-xs font-semibold text-foreground capitalize truncate">
-            {alert.label} · {alert.camera}
+            {alert.site} · {alert.camera}
           </div>
           <div className="text-[10px] text-muted-foreground tabular-nums truncate">
             {new Date(alert.ts).toLocaleTimeString()}
