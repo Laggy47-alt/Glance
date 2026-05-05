@@ -273,17 +273,32 @@ const Overview = () => {
     }
   };
 
+  const enabledNvrCount = useMemo(() => store.frigates.filter((f) => f.enabled).length, [store.frigates]);
+
+  const alertsInWindow = useMemo(() => {
+    const cutoff = Math.max(Date.now() - 30 * 24 * 60 * 60 * 1000, statsResetAt);
+    let n = 0;
+    for (const ev of store.events) {
+      if ((ev.label ?? "").toLowerCase() === "car") continue;
+      if (new Date(ev.ts).getTime() < cutoff) continue;
+      n += 1;
+    }
+    return n;
+  }, [store.events, statsResetAt]);
+
   const cards = [
-    { label: "Total Cameras", value: totalCameras, icon: Camera, color: "text-primary" },
-    { label: "Operators", value: totalOperators, icon: Users, color: "text-accent" },
+    { label: "Total Cameras", value: totalCameras, hint: "Across all NVRs", icon: Camera, color: "text-primary" },
+    { label: "NVRs", value: enabledNvrCount, hint: "Enabled instances", icon: Server, color: "text-accent" },
+    { label: "Operators", value: totalOperators, hint: "With portal access", icon: Users, color: "text-success" },
+    { label: "Alerts (30d)", value: alertsInWindow, hint: "Excluding cars", icon: Activity, color: "text-primary" },
   ];
 
 
   return (
     <DashboardLayout title="Overview" subtitle="Operator activity and alert patterns">
-      <div className="flex items-center justify-between gap-4 mb-4">
-        <p className="text-xs text-muted-foreground">
-          {statsResetAt > 0 ? `Stats since ${new Date(statsResetAt).toLocaleString()}` : "Showing rolling window"}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <p className="text-sm text-muted-foreground">
+          {statsResetAt > 0 ? `Stats since ${new Date(statsResetAt).toLocaleString()}` : "Showing rolling window (last 7–30 days)"}
         </p>
         {isAdmin && (
           <AlertDialog>
@@ -310,15 +325,16 @@ const Overview = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {cards.map((c) => (
           <Card key={c.label} className="bg-gradient-card border-border shadow-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">{c.label}</div>
-                <div className="text-3xl font-semibold mt-2 text-foreground tabular-nums">{c.value}</div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{c.label}</div>
+                <div className="text-4xl font-semibold mt-2 text-foreground tabular-nums leading-none">{c.value}</div>
+                <div className="text-xs text-muted-foreground mt-2">{c.hint}</div>
               </div>
-              <div className={`h-9 w-9 rounded-md bg-secondary grid place-items-center ${c.color}`}>
+              <div className={`h-10 w-10 rounded-lg bg-secondary grid place-items-center shrink-0 ${c.color}`}>
                 <c.icon className="h-5 w-5" />
               </div>
             </div>
