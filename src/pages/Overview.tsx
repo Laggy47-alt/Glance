@@ -18,6 +18,22 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
+import { frigateUrl } from "@/lib/webhookStore";
+
+function parseCameraNames(stats: unknown): string[] {
+  if (!stats || typeof stats !== "object") return [];
+  const root = stats as Record<string, unknown>;
+  const cameras = (root.cameras && typeof root.cameras === "object" ? root.cameras : root) as Record<string, unknown>;
+  const reserved = new Set(["cpu_usages","gpu_usages","service","detectors","detection_fps","processes","bandwidth_usages","version"]);
+  const out: string[] = [];
+  for (const [name, val] of Object.entries(cameras)) {
+    if (reserved.has(name)) continue;
+    if (!val || typeof val !== "object") continue;
+    const c = val as Record<string, unknown>;
+    if ("camera_fps" in c || "process_fps" in c || "detection_fps" in c || "pid" in c) out.push(name);
+  }
+  return out;
+}
 import {
   Bar,
   BarChart,
