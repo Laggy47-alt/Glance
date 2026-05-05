@@ -393,6 +393,7 @@ const Frigate = () => {
                     </div>
                   </div>
                 </div>
+                )}
               </Card>
             );
           })}
