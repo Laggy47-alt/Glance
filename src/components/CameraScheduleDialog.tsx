@@ -26,13 +26,14 @@ type Row = {
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function CameraScheduleDialog({
-  open, onOpenChange, instanceId, camera, instanceName,
+  open, onOpenChange, instanceId, camera, instanceName, availableCameras = [],
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   instanceId: string;
   camera: string;
   instanceName: string;
+  availableCameras?: string[];
 }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Row[]>(
