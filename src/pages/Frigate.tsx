@@ -13,6 +13,7 @@ import { Plus, Trash2, RefreshCw, Server, AlertCircle, CheckCircle2, Terminal, C
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
+import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
 
 const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6"];
 
@@ -273,7 +274,7 @@ const Frigate = () => {
                       </div>
                     </div>
 
-                    {f.last_error && (
+                    <NvrSchedulesPanel inst={f} />
                       <div className="text-xs bg-destructive/10 border border-destructive/30 rounded px-3 py-2 text-destructive font-mono break-all">{f.last_error}</div>
                     )}
 
