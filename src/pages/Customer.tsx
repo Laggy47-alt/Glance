@@ -355,13 +355,6 @@ const Customer = () => {
           ))}
 
 
-          <CustomerInstructionsCard
-            instances={myInstances}
-            camerasByInstance={
-              new Map(views.map((v) => [v.inst.id, v.cameras.map((c) => c.name)]))
-            }
-          />
-
           {recentCallouts.length > 0 && (
             <div className="rounded-lg border border-border bg-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-card/60">
