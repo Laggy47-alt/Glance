@@ -192,11 +192,70 @@ export function CameraScheduleDialog({
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={copyMonToFri}>
                   Copy Mon → Tue–Fri
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs gap-1"
+                      disabled={availableCameras.filter((c) => c !== camera).length === 0}
+                    >
+                      <Copy className="h-3 w-3" /> Copy to cameras…
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 p-2">
+                    <div className="text-xs font-medium px-1 py-1.5">
+                      Copy this schedule to:
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-0.5">
+                      {availableCameras.filter((c) => c !== camera).map((cam) => {
+                        const checked = copyTargets.has(cam);
+                        return (
+                          <label
+                            key={cam}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-xs"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                setCopyTargets((p) => {
+                                  const n = new Set(p);
+                                  if (v) n.add(cam); else n.delete(cam);
+                                  return n;
+                                });
+                              }}
+                            />
+                            <span className="capitalize truncate">{cam}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-border mt-1">
+                      <span className="text-[10px] text-muted-foreground">
+                        {copyTargets.size} selected
+                      </span>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        disabled={copyTargets.size === 0 || copying}
+                        onClick={copyToCameras}
+                      >
+                        {copying && <Loader2 className="h-3 w-3 animate-spin" />}
+                        Apply
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground px-1 pt-1.5">
+                      Overwrites existing schedules on selected cameras.
+                    </p>
+                  </PopoverContent>
+                </Popover>
                 <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={clearAll}>
                   <Trash2 className="h-3 w-3" /> Clear all
                 </Button>
               </div>
             </div>
+
+            <ul className="divide-y divide-border rounded-md border border-border">
 
             <ul className="divide-y divide-border rounded-md border border-border">
               {rows.map((r) => (
