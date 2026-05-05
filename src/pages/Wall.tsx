@@ -273,6 +273,16 @@ const Wall = () => {
     void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "dismiss" });
   };
 
+  // Sync ACKs across users: if an event becomes archived in the store
+  // (e.g. another user pressed ACK), remove it from this user's wall too.
+  useEffect(() => {
+    const archivedIds = new Set(
+      store.events.filter((e) => e.archived).map((e) => e.id)
+    );
+    if (!archivedIds.size) return;
+    setAlerts((prev) => prev.filter((a) => !(a.event && archivedIds.has(a.event.id))));
+  }, [store.events]);
+
   // Auto-archive low-signal alerts (label is "event" or "unknown" / no useful label).
   useEffect(() => {
     const trash = alerts.filter((a) => {
