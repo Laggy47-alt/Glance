@@ -86,6 +86,9 @@ const Customer = () => {
   const { user, profile } = useAuth();
   const store = useWebhookStore();
   const [assignedIds, setAssignedIds] = useState<string[]>([]);
+  // Map<instance_id, Set<camera>> — only present for NVRs with per-camera filter.
+  // Missing key = "all cameras allowed".
+  const [camFilter, setCamFilter] = useState<Map<string, Set<string>>>(new Map());
   const [armedMap, setArmedMap] = useState<Map<string, boolean>>(new Map()); // key = `${instance_id}::${camera}`
   const [views, setViews] = useState<NvrView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,16 +97,21 @@ const Customer = () => {
 
   const armedKey = (instId: string, cam: string) => `${instId}::${cam}`;
 
-  // Load assignments
+  // Load assignments (NVR + per-camera)
   useEffect(() => {
     if (!user) return;
-    void supabase
-      .from("customer_nvr_assignments")
-      .select("instance_id")
-      .eq("user_id", user.id)
-      .then(({ data }) => {
-        setAssignedIds((data ?? []).map((d) => d.instance_id));
-      });
+    void Promise.all([
+      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", user.id),
+      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", user.id),
+    ]).then(([{ data: nvrRows }, { data: camRows }]) => {
+      setAssignedIds((nvrRows ?? []).map((d) => d.instance_id));
+      const m = new Map<string, Set<string>>();
+      for (const r of camRows ?? []) {
+        if (!m.has(r.instance_id)) m.set(r.instance_id, new Set());
+        m.get(r.instance_id)!.add(r.camera);
+      }
+      setCamFilter(m);
+    });
   }, [user]);
 
   // Load armed states
