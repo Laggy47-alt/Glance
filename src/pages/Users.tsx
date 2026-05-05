@@ -11,7 +11,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
-import { Loader2, Plus, KeyRound, Trash2, ShieldCheck, User as UserIcon, Building2, Server, Mail } from "lucide-react";
+import { Loader2, Plus, KeyRound, Trash2, ShieldCheck, User as UserIcon, Building2, Server, Mail, ChevronDown } from "lucide-react";
+import { frigateUrl } from "@/lib/webhookStore";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 type UserRole = "admin" | "user" | "customer";
