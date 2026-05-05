@@ -41,6 +41,50 @@ export function CameraScheduleDialog({
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
+  const [copying, setCopying] = useState(false);
+
+  const copyToCameras = async () => {
+    if (!user || copyTargets.size === 0) return;
+    setCopying(true);
+    try {
+      const targets = Array.from(copyTargets);
+      // Delete existing schedules for target cameras then insert current rows
+      const { error: delErr } = await supabase
+        .from("camera_arm_schedules")
+        .delete()
+        .eq("instance_id", instanceId)
+        .in("camera", targets);
+      if (delErr) throw delErr;
+
+      const toInsert = targets.flatMap((cam) =>
+        rows
+          .filter((r) => r.enabled && (r.arm_time || r.disarm_time))
+          .map((r) => ({
+            instance_id: instanceId,
+            camera: cam,
+            weekday: r.weekday,
+            arm_time: r.arm_time,
+            disarm_time: r.disarm_time,
+            enabled: true,
+            updated_by: user.id,
+          })),
+      );
+      if (toInsert.length) {
+        const { error } = await supabase.from("camera_arm_schedules").insert(toInsert);
+        if (error) throw error;
+      }
+      toast({
+        title: "Schedule copied",
+        description: `Applied to ${targets.length} camera${targets.length > 1 ? "s" : ""}.`,
+      });
+      setCopyTargets(new Set());
+    } catch (e: any) {
+      toast({ title: "Copy failed", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setCopying(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!user || !open) return;
