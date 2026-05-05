@@ -19,6 +19,7 @@ type Alert = {
   clip?: MediaItem;
   snapshot?: MediaItem;
   camera: string;
+  site: string;
   label: string;
   ts: string;
   receivedAt: number;
@@ -124,6 +125,8 @@ const Wall = () => {
       seenRef.current.add(key);
       const camera = e.camera ?? "unknown";
       const label = e.label ?? e.kind ?? "motion";
+      const inst = store.frigates.find((f) => f.source_id === e.source_id);
+      const site = inst?.name ?? "Unknown site";
       const evMs = new Date(e.ts).getTime();
 
       // Per-camera bundling: if this camera fired within the cooldown, suppress.
@@ -144,6 +147,7 @@ const Wall = () => {
         clip,
         snapshot,
         camera,
+        site,
         label,
         ts: e.ts,
         receivedAt: Date.now(),
@@ -198,6 +202,10 @@ const Wall = () => {
       );
       const camera = m.camera ?? "unknown";
       const label = "motion";
+      const inst = store.frigates.find((f) =>
+        (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id
+      );
+      const site = inst?.name ?? "Unknown site";
       const mMs = new Date(m.ts).getTime();
 
       // Per-camera bundling (same rule as event path)
@@ -213,6 +221,7 @@ const Wall = () => {
         clip: m,
         snapshot,
         camera,
+        site,
         label,
         ts: m.ts,
         receivedAt: Date.now(),
@@ -551,7 +560,7 @@ function AlertCard({
       <div className="p-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-xs font-semibold text-foreground capitalize truncate">
-            {alert.label} · {alert.camera}
+            {alert.site} · {alert.camera}
           </div>
           <div className="text-[10px] text-muted-foreground tabular-nums truncate">
             {new Date(alert.ts).toLocaleTimeString()}
