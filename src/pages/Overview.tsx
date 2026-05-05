@@ -66,8 +66,32 @@ const Overview = () => {
   });
 
 
-  // Total unique cameras (matches Cameras page logic)
-  const totalCameras = useMemo(() => {
+  // Total unique cameras configured across all enabled NVRs (live from Frigate stats).
+  // Falls back to media-derived count if no NVRs respond.
+  const [nvrCamCount, setNvrCamCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const enabled = store.frigates.filter((f) => f.enabled);
+      if (enabled.length === 0) { if (!cancelled) setNvrCamCount(0); return; }
+      const results = await Promise.all(enabled.map(async (f) => {
+        try {
+          const res = await fetch(frigateUrl(f, "/api/stats"));
+          if (!res.ok) return [] as string[];
+          return parseCameraNames(await res.json()).map((n) => `${f.id}::${n}`);
+        } catch { return [] as string[]; }
+      }));
+      if (cancelled) return;
+      const set = new Set<string>();
+      for (const arr of results) for (const k of arr) set.add(k);
+      setNvrCamCount(set.size);
+    };
+    void load();
+    const t = setInterval(load, 60000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [store.frigates]);
+
+  const mediaCameraCount = useMemo(() => {
     const set = new Set<string>();
     for (const m of store.media) {
       const key = `${m.instance_id ?? "_"}::${m.camera ?? "unknown"}`;
@@ -75,6 +99,8 @@ const Overview = () => {
     }
     return set.size;
   }, [store.media]);
+
+  const totalCameras = nvrCamCount ?? mediaCameraCount;
 
   // Load all viewer profiles (non-admin users with a login). They're the only ones shown in operator stats.
   useEffect(() => {
