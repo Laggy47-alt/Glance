@@ -257,7 +257,6 @@ export function CameraScheduleDialog({
 
             <ul className="divide-y divide-border rounded-md border border-border">
 
-            <ul className="divide-y divide-border rounded-md border border-border">
               {rows.map((r) => (
                 <li key={r.weekday} className="grid grid-cols-[60px_1fr_1fr_auto] items-center gap-3 px-3 py-2.5">
                   <span className="text-sm font-medium text-foreground">{DAYS[r.weekday]}</span>
