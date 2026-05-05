@@ -40,6 +40,7 @@ const Frigate = () => {
   useEffect(() => {
     if (!location.hash || !store.frigates.length) return;
     const id = location.hash.replace(/^#/, "");
+    setExpanded((e) => ({ ...e, [id]: true }));
     const tryScroll = () => {
       const el = document.getElementById(id);
       if (el) {
