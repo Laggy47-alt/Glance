@@ -61,7 +61,7 @@ const App = () => (
               <Route path="/callouts" element={protect(<Callouts />, true)} />
               <Route path="/customer" element={protect(<Customer />)} />
               <Route path="/customer/events" element={protect(<CustomerEvents />)} />
-              <Route path="*" element={<NotFound />} />
+              <Route path="*" element={protect(<NotFound />)} />
             </Routes>
             <AuthorBadge />
           </BrandingProvider>
