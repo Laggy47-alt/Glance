@@ -300,59 +300,162 @@ function ResetPasswordDialog({
 
 function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => void }) {
   const store = useWebhookStore();
+  // Set of assigned NVR ids
   const [assigned, setAssigned] = useState<Set<string>>(new Set());
+  // Map<instance_id, Set<camera>> of explicitly chosen cameras. If an NVR id is not present
+  // in this map at save time, it means "all cameras" (no per-camera filter row inserted).
+  const [camSel, setCamSel] = useState<Map<string, Set<string>>>(new Map());
+  // Available cameras discovered from each Frigate instance
+  const [camList, setCamList] = useState<Map<string, string[]>>(new Map());
+  const [camLoading, setCamLoading] = useState<Set<string>>(new Set());
+  const [openNvr, setOpenNvr] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!row) return;
     setLoading(true);
-    void supabase
-      .from("customer_nvr_assignments")
-      .select("instance_id")
-      .eq("user_id", row.user_id)
-      .then(({ data }) => {
-        setAssigned(new Set((data ?? []).map((d) => d.instance_id)));
-        setLoading(false);
-      });
+    void Promise.all([
+      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", row.user_id),
+      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", row.user_id),
+    ]).then(([{ data: nvrRows }, { data: camRows }]) => {
+      setAssigned(new Set((nvrRows ?? []).map((d) => d.instance_id)));
+      const m = new Map<string, Set<string>>();
+      for (const r of camRows ?? []) {
+        if (!m.has(r.instance_id)) m.set(r.instance_id, new Set());
+        m.get(r.instance_id)!.add(r.camera);
+      }
+      setCamSel(m);
+      setLoading(false);
+    });
   }, [row]);
+
+  const fetchCams = async (instId: string) => {
+    if (camList.has(instId) || camLoading.has(instId)) return;
+    const inst = store.frigates.find((x) => x.id === instId);
+    if (!inst) return;
+    setCamLoading((s) => new Set(s).add(instId));
+    try {
+      const res = await fetch(frigateUrl(inst, "/api/stats"));
+      const stats = await res.json();
+      const cams = parseCameraNames(stats);
+      setCamList((m) => new Map(m).set(instId, cams));
+    } catch {
+      setCamList((m) => new Map(m).set(instId, []));
+    } finally {
+      setCamLoading((s) => { const n = new Set(s); n.delete(instId); return n; });
+    }
+  };
 
   if (!row) return null;
 
-  const toggle = (id: string) => {
+  const toggleNvr = (id: string) => {
     setAssigned((prev) => {
       const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
+      if (n.has(id)) {
+        n.delete(id);
+        setCamSel((cm) => { const m = new Map(cm); m.delete(id); return m; });
+      } else {
+        n.add(id);
+      }
       return n;
+    });
+  };
+
+  const toggleNvrOpen = (id: string) => {
+    setOpenNvr((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else { n.add(id); void fetchCams(id); }
+      return n;
+    });
+  };
+
+  const toggleCam = (instId: string, cam: string) => {
+    setCamSel((prev) => {
+      const m = new Map(prev);
+      const cams = camList.get(instId) ?? [];
+      const cur = new Set(m.get(instId) ?? cams); // if not yet filtered, treat as "all selected"
+      if (cur.has(cam)) cur.delete(cam); else cur.add(cam);
+      // If user re-selected everything we still keep an explicit set so save stores it as a filter.
+      m.set(instId, cur);
+      return m;
+    });
+  };
+
+  const selectAllCams = (instId: string, all: boolean) => {
+    setCamSel((prev) => {
+      const m = new Map(prev);
+      if (all) m.delete(instId); // "all" = no filter row inserted
+      else m.set(instId, new Set());
+      return m;
     });
   };
 
   const save = async () => {
     setBusy(true);
     try {
-      const { data: existing } = await supabase
-        .from("customer_nvr_assignments")
-        .select("instance_id")
-        .eq("user_id", row.user_id);
-      const existingSet = new Set((existing ?? []).map((d) => d.instance_id));
-      const toAdd = [...assigned].filter((id) => !existingSet.has(id));
-      const toRemove = [...existingSet].filter((id) => !assigned.has(id));
+      // ----- NVR assignments diff -----
+      const { data: existingNvr } = await supabase
+        .from("customer_nvr_assignments").select("instance_id").eq("user_id", row.user_id);
+      const existingNvrSet = new Set((existingNvr ?? []).map((d) => d.instance_id));
+      const nvrAdd = [...assigned].filter((id) => !existingNvrSet.has(id));
+      const nvrRemove = [...existingNvrSet].filter((id) => !assigned.has(id));
+      if (nvrAdd.length) {
+        const { error } = await supabase.from("customer_nvr_assignments")
+          .insert(nvrAdd.map((instance_id) => ({ user_id: row.user_id, instance_id })));
+        if (error) throw error;
+      }
+      if (nvrRemove.length) {
+        const { error } = await supabase.from("customer_nvr_assignments")
+          .delete().eq("user_id", row.user_id).in("instance_id", nvrRemove);
+        if (error) throw error;
+      }
 
-      if (toAdd.length) {
-        const { error } = await supabase
-          .from("customer_nvr_assignments")
-          .insert(toAdd.map((instance_id) => ({ user_id: row.user_id, instance_id })));
+      // ----- Per-camera assignments diff -----
+      // Desired = for every assigned NVR with an entry in camSel, those cameras.
+      // If NVR has no entry in camSel ⇒ "all cameras" ⇒ delete any existing rows.
+      const desired = new Map<string, Set<string>>();
+      for (const id of assigned) {
+        if (camSel.has(id)) desired.set(id, camSel.get(id)!);
+      }
+
+      const { data: existingCam } = await supabase
+        .from("customer_camera_assignments").select("instance_id, camera").eq("user_id", row.user_id);
+      const existingCamMap = new Map<string, Set<string>>();
+      for (const r of existingCam ?? []) {
+        if (!existingCamMap.has(r.instance_id)) existingCamMap.set(r.instance_id, new Set());
+        existingCamMap.get(r.instance_id)!.add(r.camera);
+      }
+
+      // Instances to clear all per-camera rows for
+      const clearInstances: string[] = [];
+      for (const instId of existingCamMap.keys()) {
+        if (!desired.has(instId) || !assigned.has(instId)) clearInstances.push(instId);
+      }
+      if (clearInstances.length) {
+        const { error } = await supabase.from("customer_camera_assignments")
+          .delete().eq("user_id", row.user_id).in("instance_id", clearInstances);
         if (error) throw error;
       }
-      if (toRemove.length) {
-        const { error } = await supabase
-          .from("customer_nvr_assignments")
-          .delete()
-          .eq("user_id", row.user_id)
-          .in("instance_id", toRemove);
-        if (error) throw error;
+
+      // Per remaining instance, diff cameras
+      for (const [instId, wantSet] of desired.entries()) {
+        const haveSet = existingCamMap.get(instId) ?? new Set<string>();
+        const toAdd = [...wantSet].filter((c) => !haveSet.has(c));
+        const toRemove = [...haveSet].filter((c) => !wantSet.has(c));
+        if (toAdd.length) {
+          const { error } = await supabase.from("customer_camera_assignments")
+            .insert(toAdd.map((camera) => ({ user_id: row.user_id, instance_id: instId, camera })));
+          if (error) throw error;
+        }
+        if (toRemove.length) {
+          const { error } = await supabase.from("customer_camera_assignments")
+            .delete().eq("user_id", row.user_id).eq("instance_id", instId).in("camera", toRemove);
+          if (error) throw error;
+        }
       }
-      toast.success("NVR assignments updated");
+
+      toast.success("Assignments updated");
       onClose();
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to update assignments");
@@ -363,30 +466,97 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Assign NVRs — {row.username}</DialogTitle>
-          <DialogDescription>Select which NVRs this customer can view and arm/disarm.</DialogDescription>
+          <DialogTitle>Assign NVRs & Cameras — {row.username}</DialogTitle>
+          <DialogDescription>
+            Pick which NVRs the customer can access, then optionally restrict to specific cameras.
+            Leave "All cameras" selected to grant the entire NVR.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
           {loading ? (
             <p className="text-xs text-muted-foreground"><Loader2 className="inline h-3 w-3 mr-1 animate-spin" /> Loading…</p>
           ) : store.frigates.length === 0 ? (
             <p className="text-xs text-muted-foreground">No NVRs configured.</p>
           ) : (
-            store.frigates.map((f) => (
-              <label key={f.id} className="flex items-center gap-3 rounded-md border border-border bg-card/50 p-3 cursor-pointer hover:bg-accent/40">
-                <input
-                  type="checkbox"
-                  checked={assigned.has(f.id)}
-                  onChange={() => toggle(f.id)}
-                  className="h-4 w-4 rounded border-border"
-                />
-                <span className="h-3 w-3 rounded-full shrink-0" style={{ background: f.color }} />
-                <span className="text-sm font-medium flex-1">{f.name}</span>
-                <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">{f.base_url}</span>
-              </label>
-            ))
+            store.frigates.map((f) => {
+              const isAssigned = assigned.has(f.id);
+              const cams = camList.get(f.id) ?? [];
+              const sel = camSel.get(f.id);
+              const allCamsSelected = !sel; // "no filter row" = all
+              const isOpen = openNvr.has(f.id);
+              const visibleCount = allCamsSelected ? cams.length : (sel?.size ?? 0);
+              return (
+                <div key={f.id} className="rounded-md border border-border bg-card/50">
+                  <div className="flex items-center gap-3 p-3">
+                    <input
+                      type="checkbox"
+                      checked={isAssigned}
+                      onChange={() => toggleNvr(f.id)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    <span className="h-3 w-3 rounded-full shrink-0" style={{ background: f.color }} />
+                    <span className="text-sm font-medium flex-1 truncate">{f.name}</span>
+                    {isAssigned && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {allCamsSelected ? "All cameras" : `${visibleCount} camera${visibleCount === 1 ? "" : "s"}`}
+                      </Badge>
+                    )}
+                    <button
+                      type="button"
+                      disabled={!isAssigned}
+                      onClick={() => toggleNvrOpen(f.id)}
+                      className="p-1 rounded hover:bg-accent/50 disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} />
+                    </button>
+                  </div>
+
+                  {isAssigned && isOpen && (
+                    <div className="border-t border-border px-3 py-2 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={allCamsSelected}
+                            onChange={(e) => selectAllCams(f.id, e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-border"
+                          />
+                          <span className="font-medium">Select all cameras on this NVR</span>
+                        </label>
+                        {camLoading.has(f.id) && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                      </div>
+
+                      {!allCamsSelected && (
+                        cams.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground italic">
+                            {camLoading.has(f.id) ? "Loading cameras…" : "No cameras detected on this NVR."}
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-1.5 pl-1">
+                            {cams.map((cam) => {
+                              const checked = sel?.has(cam) ?? false;
+                              return (
+                                <label key={cam} className="flex items-center gap-2 text-xs cursor-pointer rounded px-2 py-1 hover:bg-accent/40">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleCam(f.id, cam)}
+                                    className="h-3.5 w-3.5 rounded border-border"
+                                  />
+                                  <span className="capitalize truncate">{cam}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
         <div className="flex justify-end gap-2 pt-2">
@@ -399,6 +569,25 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
       </DialogContent>
     </Dialog>
   );
+}
+
+function parseCameraNames(stats: unknown): string[] {
+  if (!stats || typeof stats !== "object") return [];
+  const root = stats as Record<string, unknown>;
+  const cameras = (root.cameras && typeof root.cameras === "object" ? root.cameras : root) as Record<string, unknown>;
+  const reserved = new Set([
+    "cpu_usages", "gpu_usages", "service", "detectors", "detection_fps",
+    "processes", "bandwidth_usages", "version",
+  ]);
+  const out: string[] = [];
+  for (const [name, val] of Object.entries(cameras)) {
+    if (reserved.has(name)) continue;
+    if (!val || typeof val !== "object") continue;
+    const c = val as Record<string, any>;
+    const hasShape = "camera_fps" in c || "process_fps" in c || "detection_fps" in c || "pid" in c;
+    if (hasShape) out.push(name);
+  }
+  return out.sort();
 }
 
 function EditEmailDialog({ row, onClose, onDone }: { row: Row | null; onClose: () => void; onDone: () => void }) {
