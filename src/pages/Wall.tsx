@@ -130,7 +130,6 @@ const Wall = () => {
       const label = e.label ?? e.kind ?? "motion";
       const inst = store.frigates.find((f) => f.source_id === e.source_id);
       const site = inst?.name ?? "Unknown site";
-      const evMs = new Date(e.ts).getTime();
 
       // Per-camera bundling: if this camera fired within the cooldown, suppress.
       const lastShown = cameraCooldownRef.current.get(camera);
