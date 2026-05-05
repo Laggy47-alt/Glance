@@ -120,6 +120,9 @@ const Wall = () => {
       if (seenRef.current.has(key)) continue;
       // Skip alerts whose NVR is currently muted on schedule
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
+      const evMs = new Date(e.ts).getTime();
+      // Skip stale events that pre-date this Wall session (e.g. left un-archived from before)
+      if (evMs < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
