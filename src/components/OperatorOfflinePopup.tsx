@@ -130,12 +130,26 @@ export function OperatorOfflinePopup() {
   }, [enabled, loadAcks, loadInstructions]);
 
   const pickInstruction = (instId: string, camera: string | null): string | null => {
+    const notes: string[] = [];
     if (camera) {
-      const c = instructionsRef.current.perCam.get(`${instId}::${camera}`);
-      if (c && c.trim()) return c;
+      // Direct per-camera overrides for this camera
+      for (const t of instructionsRef.current.perCam.get(`${instId}::${camera}`) ?? []) {
+        if (t.trim()) notes.push(t);
+      }
+      // Site-wide notes only if THIS camera is in the customer's scope
+      for (const n of instructionsRef.current.perNvr.get(instId) ?? []) {
+        if (!n.text.trim()) continue;
+        if (n.cams === null || n.cams.has(camera)) notes.push(n.text);
+      }
+    } else {
+      // Whole NVR unreachable → every customer with a site-wide note is affected
+      for (const n of instructionsRef.current.perNvr.get(instId) ?? []) {
+        if (n.text.trim()) notes.push(n.text);
+      }
     }
-    const n = instructionsRef.current.perNvr.get(instId);
-    return n && n.trim() ? n : null;
+    if (!notes.length) return null;
+    // De-dupe identical notes from multiple customers
+    return Array.from(new Set(notes)).join("\n\n— — —\n\n");
   };
 
   const tick = useCallback(async () => {
