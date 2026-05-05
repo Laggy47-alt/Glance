@@ -36,7 +36,6 @@ function timeToMinutes(t: string | null): number | null {
 }
 
 type Schedule = {
-  user_id: string;
   instance_id: string;
   camera: string;
   weekday: number;
