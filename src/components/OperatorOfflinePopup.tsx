@@ -49,24 +49,57 @@ export function OperatorOfflinePopup() {
   const ackedRef = useRef<Set<string>>(new Set()); // local + server-acked keys
   const stateRef = useRef<Map<string, { unreachable: boolean; offline: Set<string>; sinceMap: Map<string, string> }>>(new Map());
   const initRef = useRef(true);
+  // NVR-wide notes carry the customer's camera scope so they only fire for THEIR cameras
+  // on a multi-tenant NVR. cams === null means the customer has the whole NVR.
+  type NvrNote = { text: string; cams: Set<string> | null };
   const instructionsRef = useRef<{
-    perCam: Map<string, string>; // `${inst}::${cam}` -> text
-    perNvr: Map<string, string>; // `${inst}` -> text
+    perCam: Map<string, string[]>;   // `${inst}::${cam}` -> direct override notes
+    perNvr: Map<string, NvrNote[]>;  // `${inst}` -> scoped site-wide notes
   }>({ perCam: new Map(), perNvr: new Map() });
 
   const enabled = !!user && !isCustomer;
 
   const loadInstructions = useCallback(async () => {
     if (!enabled) return;
-    const { data } = await supabase
-      .from("customer_offline_instructions")
-      .select("instance_id, camera, instructions");
-    const perCam = new Map<string, string>();
-    const perNvr = new Map<string, string>();
-    for (const r of data ?? []) {
+    const [instrRes, nvrAssignRes, camAssignRes] = await Promise.all([
+      supabase.from("customer_offline_instructions").select("user_id, instance_id, camera, instructions"),
+      supabase.from("customer_nvr_assignments").select("user_id, instance_id"),
+      supabase.from("customer_camera_assignments").select("user_id, instance_id, camera"),
+    ]);
+
+    // Build per-user camera scope per instance.
+    // If user is on the NVR but has NO camera assignments → entire NVR (cams=null wildcard).
+    // If user has camera assignments → only those cameras.
+    const userScope = new Map<string, Set<string> | null>(); // `${user}::${inst}` -> cams or null
+    for (const a of nvrAssignRes.data ?? []) {
+      userScope.set(`${a.user_id}::${a.instance_id}`, null);
+    }
+    for (const a of camAssignRes.data ?? []) {
+      const k = `${a.user_id}::${a.instance_id}`;
+      const existing = userScope.get(k);
+      const set = existing instanceof Set ? existing : new Set<string>();
+      set.add(a.camera);
+      userScope.set(k, set);
+    }
+
+    const perCam = new Map<string, string[]>();
+    const perNvr = new Map<string, NvrNote[]>();
+    for (const r of instrRes.data ?? []) {
       if (!r.instructions || !r.instructions.trim()) continue;
-      if (r.camera) perCam.set(`${r.instance_id}::${r.camera}`, r.instructions);
-      else perNvr.set(r.instance_id, r.instructions);
+      if (r.camera) {
+        const k = `${r.instance_id}::${r.camera}`;
+        const arr = perCam.get(k) ?? [];
+        arr.push(r.instructions);
+        perCam.set(k, arr);
+      } else {
+        // Scope this site-wide note to the customer's own cameras on the NVR
+        const scope = userScope.get(`${r.user_id}::${r.instance_id}`);
+        // If there's no assignment record at all, skip — note doesn't apply to anything.
+        if (scope === undefined) continue;
+        const arr = perNvr.get(r.instance_id) ?? [];
+        arr.push({ text: r.instructions, cams: scope });
+        perNvr.set(r.instance_id, arr);
+      }
     }
     instructionsRef.current = { perCam, perNvr };
   }, [enabled]);
@@ -97,12 +130,26 @@ export function OperatorOfflinePopup() {
   }, [enabled, loadAcks, loadInstructions]);
 
   const pickInstruction = (instId: string, camera: string | null): string | null => {
+    const notes: string[] = [];
     if (camera) {
-      const c = instructionsRef.current.perCam.get(`${instId}::${camera}`);
-      if (c && c.trim()) return c;
+      // Direct per-camera overrides for this camera
+      for (const t of instructionsRef.current.perCam.get(`${instId}::${camera}`) ?? []) {
+        if (t.trim()) notes.push(t);
+      }
+      // Site-wide notes only if THIS camera is in the customer's scope
+      for (const n of instructionsRef.current.perNvr.get(instId) ?? []) {
+        if (!n.text.trim()) continue;
+        if (n.cams === null || n.cams.has(camera)) notes.push(n.text);
+      }
+    } else {
+      // Whole NVR unreachable → every customer with a site-wide note is affected
+      for (const n of instructionsRef.current.perNvr.get(instId) ?? []) {
+        if (n.text.trim()) notes.push(n.text);
+      }
     }
-    const n = instructionsRef.current.perNvr.get(instId);
-    return n && n.trim() ? n : null;
+    if (!notes.length) return null;
+    // De-dupe identical notes from multiple customers
+    return Array.from(new Set(notes)).join("\n\n— — —\n\n");
   };
 
   const tick = useCallback(async () => {
