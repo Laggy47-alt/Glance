@@ -19,6 +19,7 @@ type Alert = {
   clip?: MediaItem;
   snapshot?: MediaItem;
   camera: string;
+  site: string;
   label: string;
   ts: string;
   receivedAt: number;
