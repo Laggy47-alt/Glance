@@ -9,7 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Clock, Loader2, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import { Clock, Copy, Loader2, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Row = {
   id?: string;
