@@ -114,6 +114,7 @@ export function NvrSchedulesPanel({ inst }: { inst: FrigateInstance }) {
           instanceId={inst.id}
           camera={open}
           instanceName={inst.name}
+          availableCameras={cameras ?? []}
         />
       )}
     </div>

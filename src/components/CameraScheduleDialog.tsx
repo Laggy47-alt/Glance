@@ -9,7 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Clock, Loader2, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import { Clock, Copy, Loader2, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Row = {
   id?: string;
@@ -22,13 +26,14 @@ type Row = {
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function CameraScheduleDialog({
-  open, onOpenChange, instanceId, camera, instanceName,
+  open, onOpenChange, instanceId, camera, instanceName, availableCameras = [],
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   instanceId: string;
   camera: string;
   instanceName: string;
+  availableCameras?: string[];
 }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Row[]>(
@@ -36,6 +41,50 @@ export function CameraScheduleDialog({
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
+  const [copying, setCopying] = useState(false);
+
+  const copyToCameras = async () => {
+    if (!user || copyTargets.size === 0) return;
+    setCopying(true);
+    try {
+      const targets = Array.from(copyTargets);
+      // Delete existing schedules for target cameras then insert current rows
+      const { error: delErr } = await supabase
+        .from("camera_arm_schedules")
+        .delete()
+        .eq("instance_id", instanceId)
+        .in("camera", targets);
+      if (delErr) throw delErr;
+
+      const toInsert = targets.flatMap((cam) =>
+        rows
+          .filter((r) => r.enabled && (r.arm_time || r.disarm_time))
+          .map((r) => ({
+            instance_id: instanceId,
+            camera: cam,
+            weekday: r.weekday,
+            arm_time: r.arm_time,
+            disarm_time: r.disarm_time,
+            enabled: true,
+            updated_by: user.id,
+          })),
+      );
+      if (toInsert.length) {
+        const { error } = await supabase.from("camera_arm_schedules").insert(toInsert);
+        if (error) throw error;
+      }
+      toast({
+        title: "Schedule copied",
+        description: `Applied to ${targets.length} camera${targets.length > 1 ? "s" : ""}.`,
+      });
+      setCopyTargets(new Set());
+    } catch (e: any) {
+      toast({ title: "Copy failed", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setCopying(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!user || !open) return;
@@ -143,6 +192,63 @@ export function CameraScheduleDialog({
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={copyMonToFri}>
                   Copy Mon → Tue–Fri
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs gap-1"
+                      disabled={availableCameras.filter((c) => c !== camera).length === 0}
+                    >
+                      <Copy className="h-3 w-3" /> Copy to cameras…
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 p-2">
+                    <div className="text-xs font-medium px-1 py-1.5">
+                      Copy this schedule to:
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-0.5">
+                      {availableCameras.filter((c) => c !== camera).map((cam) => {
+                        const checked = copyTargets.has(cam);
+                        return (
+                          <label
+                            key={cam}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer text-xs"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                setCopyTargets((p) => {
+                                  const n = new Set(p);
+                                  if (v) n.add(cam); else n.delete(cam);
+                                  return n;
+                                });
+                              }}
+                            />
+                            <span className="capitalize truncate">{cam}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-border mt-1">
+                      <span className="text-[10px] text-muted-foreground">
+                        {copyTargets.size} selected
+                      </span>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        disabled={copyTargets.size === 0 || copying}
+                        onClick={copyToCameras}
+                      >
+                        {copying && <Loader2 className="h-3 w-3 animate-spin" />}
+                        Apply
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground px-1 pt-1.5">
+                      Overwrites existing schedules on selected cameras.
+                    </p>
+                  </PopoverContent>
+                </Popover>
                 <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={clearAll}>
                   <Trash2 className="h-3 w-3" /> Clear all
                 </Button>
@@ -150,6 +256,7 @@ export function CameraScheduleDialog({
             </div>
 
             <ul className="divide-y divide-border rounded-md border border-border">
+
               {rows.map((r) => (
                 <li key={r.weekday} className="grid grid-cols-[60px_1fr_1fr_auto] items-center gap-3 px-3 py-2.5">
                   <span className="text-sm font-medium text-foreground">{DAYS[r.weekday]}</span>
