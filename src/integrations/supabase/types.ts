@@ -136,6 +136,69 @@ export type Database = {
         }
         Relationships: []
       }
+      camera_arm_schedule_runs: {
+        Row: {
+          camera: string
+          instance_id: string
+          last_action: string
+          last_run_at: string
+        }
+        Insert: {
+          camera: string
+          instance_id: string
+          last_action: string
+          last_run_at?: string
+        }
+        Update: {
+          camera?: string
+          instance_id?: string
+          last_action?: string
+          last_run_at?: string
+        }
+        Relationships: []
+      }
+      camera_arm_schedules: {
+        Row: {
+          arm_time: string | null
+          camera: string
+          created_at: string
+          disarm_time: string | null
+          enabled: boolean
+          id: string
+          instance_id: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+          weekday: number
+        }
+        Insert: {
+          arm_time?: string | null
+          camera: string
+          created_at?: string
+          disarm_time?: string | null
+          enabled?: boolean
+          id?: string
+          instance_id: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+          weekday: number
+        }
+        Update: {
+          arm_time?: string | null
+          camera?: string
+          created_at?: string
+          disarm_time?: string | null
+          enabled?: boolean
+          id?: string
+          instance_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+          weekday?: number
+        }
+        Relationships: []
+      }
       camera_armed_state: {
         Row: {
           armed: boolean
