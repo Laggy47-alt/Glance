@@ -137,6 +137,7 @@ const Wall = () => {
   // Alerts persist for any un-archived event so they survive navigation away from the Wall.
   useEffect(() => {
     if (!store.loaded) return;
+    if (!disarmedLoaded) return;
     const newOnes: Alert[] = [];
     const freshOnes: Alert[] = [];
     for (const e of store.events) {
