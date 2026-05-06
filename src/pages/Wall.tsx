@@ -143,6 +143,8 @@ const Wall = () => {
       if (seenRef.current.has(key)) continue;
       // Skip alerts whose NVR is currently muted on schedule
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
+      // Skip alerts for cameras that are currently disarmed
+      if (isCameraDisarmed(e.source_id, null, e.camera)) { seenRef.current.add(key); continue; }
       const evMs = new Date(e.ts).getTime();
       // Skip stale events that pre-date this Wall session (e.g. left un-archived from before)
       if (evMs < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
