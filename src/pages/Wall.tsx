@@ -101,6 +101,36 @@ const Wall = () => {
   // NVR-level mute was removed in favor of per-camera schedules.
   const isSourceMuted = (_source_id?: string | null, _instance_id?: string | null) => false;
 
+  // Track per-camera disarmed state so the wall suppresses alerts for cameras
+  // that are currently disarmed (either by schedule or manual toggle).
+  const [disarmedKeys, setDisarmedKeys] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from("camera_armed_state")
+        .select("instance_id,camera,armed")
+        .eq("armed", false);
+      if (cancelled) return;
+      setDisarmedKeys(new Set((data ?? []).map((r) => `${r.instance_id}::${r.camera}`)));
+    };
+    void load();
+    const ch = supabase
+      .channel("wall-armed-state")
+      .on("postgres_changes", { event: "*", schema: "public", table: "camera_armed_state" }, () => void load())
+      .subscribe();
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
+  }, []);
+
+  const isCameraDisarmed = (source_id?: string | null, instance_id?: string | null, camera?: string | null) => {
+    if (!camera) return false;
+    const inst = store.frigates.find((f) =>
+      (instance_id && f.id === instance_id) || (source_id && f.source_id === source_id)
+    );
+    if (!inst) return false;
+    return disarmedKeys.has(`${inst.id}::${camera}`);
+  };
+
   // Build alerts from incoming events. Pair media as it arrives.
   // Alerts persist for any un-archived event so they survive navigation away from the Wall.
   useEffect(() => {
@@ -113,6 +143,8 @@ const Wall = () => {
       if (seenRef.current.has(key)) continue;
       // Skip alerts whose NVR is currently muted on schedule
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
+      // Skip alerts for cameras that are currently disarmed
+      if (isCameraDisarmed(e.source_id, null, e.camera)) { seenRef.current.add(key); continue; }
       const evMs = new Date(e.ts).getTime();
       // Skip stale events that pre-date this Wall session (e.g. left un-archived from before)
       if (evMs < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
@@ -172,6 +204,8 @@ const Wall = () => {
       if (seenRef.current.has(key)) continue;
       // Skip muted NVR (by source or instance)
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
+      // Skip cameras that are currently disarmed
+      if (isCameraDisarmed(m.source_id, m.instance_id, m.camera)) { seenRef.current.add(key); continue; }
       // Skip stale media that pre-dates this Wall session
       if (new Date(m.ts).getTime() < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
       const alreadyCovered = [...seenRef.current].some((k) => {
