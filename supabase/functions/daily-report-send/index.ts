@@ -18,6 +18,8 @@ type Cfg = {
   subject: string;
   body_template: string;
   enabled: boolean;
+  cameras: string[];
+  label: string | null;
 };
 
 type Instance = {
