@@ -38,12 +38,11 @@ const Wall = () => {
   const autoArchivedRef = useRef<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
-  // Per-camera cooldown: timestamp (ms) of the last alert shown for each camera.
-  // Used to bundle bursts: only the first alert per camera is shown, then any
-  // additional alerts within CAMERA_COOLDOWN_MS are suppressed (auto-archived).
-  // After a quiet gap, the next incoming alert displays again and resets the timer.
-  const cameraCooldownRef = useRef<Map<string, number>>(new Map());
-  const CAMERA_COOLDOWN_MS = 15_000;
+  // Per-camera follow-up window: if new motion fires on the SAME camera
+  // within this window, the previous un-ACKed alert for that camera is
+  // auto-ACKed (archived) and replaced by the newer one. Outside the window,
+  // alerts MUST be ACKed by an operator — they are never silently dismissed.
+  const CAMERA_FOLLOWUP_MS = 5 * 60_000;
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
@@ -131,17 +130,8 @@ const Wall = () => {
       const inst = store.frigates.find((f) => f.source_id === e.source_id);
       const site = inst?.name ?? "Unknown site";
 
-      // Per-camera bundling: if this camera fired within the cooldown, suppress.
-      const lastShown = cameraCooldownRef.current.get(camera);
-      if (lastShown !== undefined && evMs - lastShown < CAMERA_COOLDOWN_MS) {
-        // Auto-archive bundled bursts so they don't pile up in the events feed
-        if (!autoArchivedRef.current.has(e.id)) {
-          autoArchivedRef.current.add(e.id);
-          void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", e.id);
-        }
-        continue;
-      }
-      cameraCooldownRef.current.set(camera, evMs);
+      // No silent suppression: every alert must be operator-ACKed.
+      // Follow-up bundling on the same camera is handled below in setAlerts.
 
       const alert: Alert = {
         key,
@@ -212,12 +202,7 @@ const Wall = () => {
       const site = inst?.name ?? "Unknown site";
       const mMs = new Date(m.ts).getTime();
 
-      // Per-camera bundling (same rule as event path)
-      const lastShown = cameraCooldownRef.current.get(camera);
-      if (lastShown !== undefined && mMs - lastShown < CAMERA_COOLDOWN_MS) {
-        continue;
-      }
-      cameraCooldownRef.current.set(camera, mMs);
+      // No silent suppression — handled by setAlerts follow-up logic below.
 
       const alert: Alert = {
         key,
@@ -281,10 +266,10 @@ const Wall = () => {
     }
   };
 
-  const dismiss = (a: Alert) => {
-    setAlerts((prev) => prev.filter((x) => x.key !== a.key));
-    void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "dismiss" });
-  };
+  // Dismiss = ACK. Operators must explicitly acknowledge alerts; there is
+  // no silent dismissal. The X on the card and the ACK button both archive
+  // the event in the database so it can never be lost on sign-out.
+  const dismiss = (a: Alert) => { void archive(a); };
 
   // Sync ACKs across users: if an event becomes archived in the store
   // (e.g. another user pressed ACK), remove it from this user's wall too.
@@ -296,21 +281,45 @@ const Wall = () => {
     setAlerts((prev) => prev.filter((a) => !(a.event && archivedIds.has(a.event.id))));
   }, [store.events]);
 
-  // Auto-archive low-signal alerts (label is "event" or "unknown" / no useful label).
+  // Per-camera follow-up: when a new alert arrives for the same camera within
+  // 5 minutes, the previous un-ACKed alert for that camera is auto-ACKed
+  // (archived in DB) and replaced by the newest one. Operators then only need
+  // to ACK the latest in the burst.
   useEffect(() => {
-    const trash = alerts.filter((a) => {
-      const l = (a.label || "").toLowerCase();
-      return l === "event" || l === "unknown" || l === "" || l === "motion" && !a.event;
-    }).filter((a) => !autoArchivedRef.current.has(a.key));
-    if (!trash.length) return;
-    trash.forEach((a) => {
-      autoArchivedRef.current.add(a.key);
-      void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "ack", note: "auto-archived (low-signal)" });
-      if (a.event) {
-        void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", a.event.id);
-      }
+    setAlerts((prev) => {
+      const byCamera = new Map<string, Alert[]>();
+      prev.forEach((a) => {
+        const arr = byCamera.get(a.camera) ?? [];
+        arr.push(a);
+        byCamera.set(a.camera, arr);
+      });
+      const drop = new Set<string>();
+      byCamera.forEach((arr) => {
+        if (arr.length < 2) return;
+        // Keep newest, archive older ones if within 5 min of any newer one.
+        const sorted = [...arr].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+        for (let i = 1; i < sorted.length; i++) {
+          const older = sorted[i];
+          const newer = sorted[i - 1];
+          if (new Date(newer.ts).getTime() - new Date(older.ts).getTime() < CAMERA_FOLLOWUP_MS) {
+            if (autoArchivedRef.current.has(older.key)) { drop.add(older.key); continue; }
+            autoArchivedRef.current.add(older.key);
+            void logAudit({
+              alert_key: older.key,
+              event_id: older.event?.id ?? null,
+              action: "ack",
+              note: `auto-acked: superseded by newer motion on ${older.camera} within 5m`,
+            });
+            if (older.event) {
+              void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", older.event.id);
+            }
+            drop.add(older.key);
+          }
+        }
+      });
+      if (!drop.size) return prev;
+      return prev.filter((a) => !drop.has(a.key));
     });
-    setAlerts((prev) => prev.filter((x) => !trash.some((t) => t.key === x.key)));
   }, [alerts]);
 
   const recentCount = useMemo(
