@@ -202,12 +202,7 @@ const Wall = () => {
       const site = inst?.name ?? "Unknown site";
       const mMs = new Date(m.ts).getTime();
 
-      // Per-camera bundling (same rule as event path)
-      const lastShown = cameraCooldownRef.current.get(camera);
-      if (lastShown !== undefined && mMs - lastShown < CAMERA_COOLDOWN_MS) {
-        continue;
-      }
-      cameraCooldownRef.current.set(camera, mMs);
+      // No silent suppression — handled by setAlerts follow-up logic below.
 
       const alert: Alert = {
         key,
