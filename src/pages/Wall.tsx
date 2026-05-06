@@ -42,7 +42,7 @@ const Wall = () => {
   // within this window, the previous un-ACKed alert for that camera is
   // auto-ACKed (archived) and replaced by the newer one. Outside the window,
   // alerts MUST be ACKed by an operator — they are never silently dismissed.
-  const CAMERA_FOLLOWUP_MS = 5 * 60_000;
+  const CAMERA_FOLLOWUP_MS = 40_000;
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
@@ -308,7 +308,7 @@ const Wall = () => {
               alert_key: older.key,
               event_id: older.event?.id ?? null,
               action: "ack",
-              note: `auto-acked: superseded by newer motion on ${older.camera} within 5m`,
+              note: `auto-acked: superseded by newer motion on ${older.camera} within 40s`,
             });
             if (older.event) {
               void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", older.event.id);
