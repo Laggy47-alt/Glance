@@ -491,7 +491,7 @@ const DailyReports = () => {
       <div className="space-y-4">
         {loading ? (
           <Card className="p-8 text-center text-sm text-muted-foreground">Loading…</Card>
-        ) : configs.length === 0 && unconfigured.length === 0 ? (
+        ) : configs.length === 0 && store.frigates.length === 0 ? (
           <Card className="p-8 text-center">
             <Server className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-foreground font-medium">No Frigate NVRs configured</p>
@@ -503,16 +503,18 @@ const DailyReports = () => {
               <ConfigCard
                 key={cfg.id}
                 cfg={cfg}
-                instanceName={instancesById.get(cfg.instance_id)?.name ?? "(deleted NVR)"}
+                instance={instancesById.get(cfg.instance_id)}
                 onChange={updateLocal}
                 onDelete={() => removeConfig(cfg.id)}
               />
             ))}
-            {unconfigured.length > 0 && (
+            {store.frigates.length > 0 && (
               <Card className="p-4 border-dashed border-border bg-secondary/30">
-                <p className="text-xs text-muted-foreground mb-2">Add daily report for:</p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Add a report (you can add multiple per NVR — one per site or customer group):
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {unconfigured.map((f) => (
+                  {store.frigates.map((f) => (
                     <Button key={f.id} variant="outline" size="sm" onClick={() => addConfig(f.id)} className="gap-1.5">
                       <Plus className="h-3.5 w-3.5" /> {f.name}
                     </Button>
