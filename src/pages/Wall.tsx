@@ -130,17 +130,8 @@ const Wall = () => {
       const inst = store.frigates.find((f) => f.source_id === e.source_id);
       const site = inst?.name ?? "Unknown site";
 
-      // Per-camera bundling: if this camera fired within the cooldown, suppress.
-      const lastShown = cameraCooldownRef.current.get(camera);
-      if (lastShown !== undefined && evMs - lastShown < CAMERA_COOLDOWN_MS) {
-        // Auto-archive bundled bursts so they don't pile up in the events feed
-        if (!autoArchivedRef.current.has(e.id)) {
-          autoArchivedRef.current.add(e.id);
-          void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", e.id);
-        }
-        continue;
-      }
-      cameraCooldownRef.current.set(camera, evMs);
+      // No silent suppression: every alert must be operator-ACKed.
+      // Follow-up bundling on the same camera is handled below in setAlerts.
 
       const alert: Alert = {
         key,
