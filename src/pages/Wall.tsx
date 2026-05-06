@@ -101,6 +101,36 @@ const Wall = () => {
   // NVR-level mute was removed in favor of per-camera schedules.
   const isSourceMuted = (_source_id?: string | null, _instance_id?: string | null) => false;
 
+  // Track per-camera disarmed state so the wall suppresses alerts for cameras
+  // that are currently disarmed (either by schedule or manual toggle).
+  const [disarmedKeys, setDisarmedKeys] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const { data } = await supabase
+        .from("camera_armed_state")
+        .select("instance_id,camera,armed")
+        .eq("armed", false);
+      if (cancelled) return;
+      setDisarmedKeys(new Set((data ?? []).map((r) => `${r.instance_id}::${r.camera}`)));
+    };
+    void load();
+    const ch = supabase
+      .channel("wall-armed-state")
+      .on("postgres_changes", { event: "*", schema: "public", table: "camera_armed_state" }, () => void load())
+      .subscribe();
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
+  }, []);
+
+  const isCameraDisarmed = (source_id?: string | null, instance_id?: string | null, camera?: string | null) => {
+    if (!camera) return false;
+    const inst = store.frigates.find((f) =>
+      (instance_id && f.id === instance_id) || (source_id && f.source_id === source_id)
+    );
+    if (!inst) return false;
+    return disarmedKeys.has(`${inst.id}::${camera}`);
+  };
+
   // Build alerts from incoming events. Pair media as it arrives.
   // Alerts persist for any un-archived event so they survive navigation away from the Wall.
   useEffect(() => {
