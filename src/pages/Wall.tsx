@@ -199,6 +199,7 @@ const Wall = () => {
   // Also pop up standalone media (e.g. polled clips with no paired event row).
   useEffect(() => {
     if (!store.loaded) return;
+    if (!disarmedLoaded) return;
     const newOnes: Alert[] = [];
     const freshOnes: Alert[] = [];
     for (const m of store.media) {
