@@ -38,12 +38,11 @@ const Wall = () => {
   const autoArchivedRef = useRef<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
-  // Per-camera cooldown: timestamp (ms) of the last alert shown for each camera.
-  // Used to bundle bursts: only the first alert per camera is shown, then any
-  // additional alerts within CAMERA_COOLDOWN_MS are suppressed (auto-archived).
-  // After a quiet gap, the next incoming alert displays again and resets the timer.
-  const cameraCooldownRef = useRef<Map<string, number>>(new Map());
-  const CAMERA_COOLDOWN_MS = 15_000;
+  // Per-camera follow-up window: if new motion fires on the SAME camera
+  // within this window, the previous un-ACKed alert for that camera is
+  // auto-ACKed (archived) and replaced by the newer one. Outside the window,
+  // alerts MUST be ACKed by an operator — they are never silently dismissed.
+  const CAMERA_FOLLOWUP_MS = 5 * 60_000;
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
