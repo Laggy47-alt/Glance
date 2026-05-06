@@ -565,6 +565,11 @@ function AlertCard({
         "animate-in zoom-in-95 fade-in duration-300"
       )}
     >
+      <div className="px-2 py-1.5 border-b border-border bg-secondary/40">
+        <div className="text-xs font-semibold text-foreground capitalize truncate" title={`${alert.site} · ${alert.camera}`}>
+          {alert.camera}
+        </div>
+      </div>
       <button
         type="button"
         onClick={hasClip ? onOpen : undefined}
