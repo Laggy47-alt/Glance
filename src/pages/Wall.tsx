@@ -98,14 +98,8 @@ const Wall = () => {
     return undefined;
   };
 
-  // Returns true if the source's paired Frigate NVR is currently in its mute window.
-  const isSourceMuted = (source_id: string | null | undefined, instance_id?: string | null) => {
-    if (!source_id && !instance_id) return false;
-    const inst = store.frigates.find((f) =>
-      (instance_id && f.id === instance_id) || (source_id && f.source_id === source_id)
-    );
-    return inst ? isFrigateMutedNow(inst) : false;
-  };
+  // NVR-level mute was removed in favor of per-camera schedules.
+  const isSourceMuted = (_source_id?: string | null, _instance_id?: string | null) => false;
 
   // Build alerts from incoming events. Pair media as it arrives.
   // Alerts persist for any un-archived event so they survive navigation away from the Wall.
