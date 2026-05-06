@@ -174,8 +174,24 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
     onChange(local);
   };
 
+  const persistIfDirty = async () => {
+    if (!dirty) return true;
+    const { error } = await supabase.from("daily_report_configs").update({
+      recipients: local.recipients,
+      subject: local.subject,
+      body_template: local.body_template,
+      enabled: local.enabled,
+      cameras: local.cameras,
+      label: local.label?.trim() || null,
+    }).eq("id", local.id);
+    if (error) { toast.error(error.message); return false; }
+    onChange(local);
+    return true;
+  };
+
   const previewEmail = async () => {
     setPreview("loading");
+    if (!(await persistIfDirty())) { setPreview(null); return; }
     const snapshots = await refreshAndUploadSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
       body: { config_id: local.id, preview: true, snapshots },
@@ -189,6 +205,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   const sendTest = async () => {
     if (!local.recipients.length) { toast.error("Add at least one recipient first"); return; }
     setSending(true);
+    if (!(await persistIfDirty())) { setSending(false); return; }
     const snapshots = await refreshAndUploadSnapshots(local.instance_id);
     const { data, error } = await supabase.functions.invoke("daily-report-send", {
       body: { config_id: local.id, recipients: local.recipients, snapshots },
