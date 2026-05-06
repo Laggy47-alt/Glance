@@ -203,11 +203,19 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   return (
     <Card className="bg-gradient-card border-border shadow-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <Server className="h-4 w-4 text-primary shrink-0" />
-          <h3 className="font-semibold text-foreground truncate">{instanceName}</h3>
+          <h3 className="font-semibold text-foreground truncate">
+            {local.label?.trim() ? local.label : instanceName}
+          </h3>
+          {local.label?.trim() && (
+            <Badge variant="outline" className="text-[10px] shrink-0">{instanceName}</Badge>
+          )}
+          {local.cameras.length > 0 && (
+            <Badge variant="outline" className="text-[10px] shrink-0">{local.cameras.length} cam{local.cameras.length === 1 ? "" : "s"}</Badge>
+          )}
           {cfg.last_sent_at && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-[10px] shrink-0">
               Last sent {new Date(cfg.last_sent_at).toLocaleString()}
             </Badge>
           )}
@@ -217,6 +225,58 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
           <span className="text-xs text-muted-foreground">{local.enabled ? "Enabled" : "Paused"}</span>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Site / group label (optional)</Label>
+          <Input
+            placeholder="e.g. ABC Office – Auto Excellence"
+            value={local.label ?? ""}
+            onChange={(e) => setLocal({ ...local, label: e.target.value })}
+            className="bg-secondary border-border"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">
+            Cameras included ({local.cameras.length === 0 ? "all" : `${local.cameras.length} of ${availableCameras.length}`})
+          </Label>
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-2 rounded bg-secondary border border-border">
+            {availableCameras.length === 0 && (
+              <span className="text-xs text-muted-foreground italic">No cameras detected</span>
+            )}
+            {availableCameras.map((cam) => {
+              const selected = local.cameras.includes(cam);
+              const allMode = local.cameras.length === 0;
+              return (
+                <button
+                  key={cam}
+                  onClick={() => toggleCamera(cam)}
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border transition",
+                    selected
+                      ? "bg-primary/20 border-primary text-foreground"
+                      : allMode
+                        ? "bg-background border-border text-muted-foreground hover:text-foreground"
+                        : "bg-background border-border text-muted-foreground/60 hover:text-foreground"
+                  )}
+                >
+                  {cam}
+                </button>
+              );
+            })}
+          </div>
+          {local.cameras.length > 0 && (
+            <button
+              onClick={() => setLocal({ ...local, cameras: [] })}
+              className="text-[10px] text-muted-foreground hover:text-foreground underline"
+            >
+              Clear (include all)
+            </button>
+          )}
+        </div>
+      </div>
+
+
 
       <div className="space-y-1.5">
         <Label className="text-xs">Recipients (one list per NVR)</Label>
