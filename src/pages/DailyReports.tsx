@@ -109,19 +109,37 @@ Cameras offline: {{cameras_offline_count}}
 Positive incidents (last 24h): {{positive_incidents_count}}
 {{positive_incidents_list}}`;
 
-function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
+function ConfigCard({ cfg, instance, onChange, onDelete }: {
   cfg: Cfg;
-  instanceName: string;
+  instance: any;
   onChange: (next: Cfg) => void;
   onDelete: () => void;
 }) {
+  const instanceName = instance?.name ?? "(deleted NVR)";
   const [local, setLocal] = useState<Cfg>(cfg);
   const [newEmail, setNewEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<string[]>([]);
 
   useEffect(() => { setLocal(cfg); }, [cfg.id]);
+
+  useEffect(() => {
+    if (!instance) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(frigateUrl(instance, "/api/stats"));
+        if (!r.ok) return;
+        const j: any = await r.json();
+        const cams = j?.cameras && typeof j.cameras === "object" ? j.cameras : j;
+        const names = Object.keys(cams || {}).filter((n) => typeof cams[n] === "object");
+        if (!cancelled) setAvailableCameras(names.sort());
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [instance?.id]);
 
   const dirty = JSON.stringify(local) !== JSON.stringify(cfg);
 
@@ -135,6 +153,11 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
 
   const removeRecipient = (e: string) => setLocal({ ...local, recipients: local.recipients.filter((x) => x !== e) });
 
+  const toggleCamera = (cam: string) => {
+    const has = local.cameras.includes(cam);
+    setLocal({ ...local, cameras: has ? local.cameras.filter((c) => c !== cam) : [...local.cameras, cam] });
+  };
+
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from("daily_report_configs").update({
@@ -142,6 +165,8 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
       subject: local.subject,
       body_template: local.body_template,
       enabled: local.enabled,
+      cameras: local.cameras,
+      label: local.label?.trim() || null,
     }).eq("id", local.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
