@@ -279,7 +279,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
 
 
       <div className="space-y-1.5">
-        <Label className="text-xs">Recipients (one list per NVR)</Label>
+        <Label className="text-xs">Recipients</Label>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {local.recipients.length === 0 && <span className="text-xs text-muted-foreground italic">No recipients yet</span>}
           {local.recipients.map((e) => (
