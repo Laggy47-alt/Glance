@@ -378,10 +378,9 @@ const DailyReports = () => {
   useEffect(() => { load(); }, []);
 
   const instancesById = useMemo(() => new Map(store.frigates.map((f) => [f.id, f])), [store.frigates]);
-  const unconfigured = useMemo(
-    () => store.frigates.filter((f) => !configs.some((c) => c.instance_id === f.id)),
-    [store.frigates, configs],
-  );
+  // Multiple configs per NVR are now allowed (for multi-site NVRs).
+  // The "Add" picker always lists every NVR.
+
 
   const addConfig = async (instance_id: string) => {
     const { data, error } = await supabase.from("daily_report_configs").insert({
