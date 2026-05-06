@@ -70,6 +70,8 @@ type Cfg = {
   body_template: string;
   enabled: boolean;
   last_sent_at: string | null;
+  cameras: string[];
+  label: string | null;
 };
 
 type Settings = {
