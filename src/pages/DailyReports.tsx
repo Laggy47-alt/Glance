@@ -89,7 +89,7 @@ type Settings = {
 };
 
 const PLACEHOLDERS = [
-  "{{nvr_name}}", "{{date}}",
+  "{{nvr_name}}", "{{site_name}}", "{{date}}",
   "{{cameras_online_count}}", "{{cameras_online_list}}",
   "{{cameras_offline_count}}", "{{cameras_offline_list}}",
   "{{positive_incidents_count}}", "{{positive_incidents_list}}",
