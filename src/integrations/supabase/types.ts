@@ -370,10 +370,12 @@ export type Database = {
       daily_report_configs: {
         Row: {
           body_template: string
+          cameras: string[]
           created_at: string
           enabled: boolean
           id: string
           instance_id: string
+          label: string | null
           last_sent_at: string | null
           recipients: string[]
           subject: string
@@ -381,10 +383,12 @@ export type Database = {
         }
         Insert: {
           body_template?: string
+          cameras?: string[]
           created_at?: string
           enabled?: boolean
           id?: string
           instance_id: string
+          label?: string | null
           last_sent_at?: string | null
           recipients?: string[]
           subject?: string
@@ -392,10 +396,12 @@ export type Database = {
         }
         Update: {
           body_template?: string
+          cameras?: string[]
           created_at?: string
           enabled?: boolean
           id?: string
           instance_id?: string
+          label?: string | null
           last_sent_at?: string | null
           recipients?: string[]
           subject?: string
@@ -405,7 +411,7 @@ export type Database = {
           {
             foreignKeyName: "daily_report_configs_instance_id_fkey"
             columns: ["instance_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "frigate_instances"
             referencedColumns: ["id"]
           },
