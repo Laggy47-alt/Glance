@@ -18,6 +18,8 @@ type Cfg = {
   subject: string;
   body_template: string;
   enabled: boolean;
+  cameras: string[];
+  label: string | null;
 };
 
 type Instance = {
@@ -148,13 +150,20 @@ function nl2br(s: string) {
 async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ name: string; url: string }>) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const [stats, incidents] = await Promise.all([
+  const [statsAll, incidentsAll] = await Promise.all([
     fetchFrigateStats(inst),
     fetchPositiveIncidents(supabase, inst.id, since),
   ]);
 
-  // Track status transitions and compute offline duration
-  const status = await reconcileStatus(supabase, inst.id, stats.online, stats.offline);
+  // Optional camera filter for multi-site NVRs
+  const filter = (cfg.cameras && cfg.cameras.length > 0) ? new Set(cfg.cameras) : null;
+  const stats = filter
+    ? { online: statsAll.online.filter((c) => filter.has(c)), offline: statsAll.offline.filter((c) => filter.has(c)) }
+    : statsAll;
+  const incidents = filter ? incidentsAll.filter((i: any) => filter.has(i.camera)) : incidentsAll;
+
+  // Track status transitions and compute offline duration (track all, but only show filtered)
+  const status = await reconcileStatus(supabase, inst.id, statsAll.online, statsAll.offline);
   const now = Date.now();
   const offlineWithDur = stats.offline.map((n) => {
     const st = status.get(n);
@@ -162,15 +171,16 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
     return { name: n, since: st?.since ?? null, duration: formatDuration(dur) };
   });
 
-  // Snapshots: prefer freshly-uploaded ones from the client; otherwise use the latest
-  // ones stored in cloud storage (uploaded by the browser hourly while the app is open).
-  const snapshots = providedSnapshots?.length
+  let snapshots = providedSnapshots?.length
     ? providedSnapshots
     : await listStoredSnapshots(supabase, inst.id);
+  if (filter) snapshots = snapshots.filter((s) => filter.has(s.name));
 
   const date = new Date().toISOString().slice(0, 10);
+  const siteName = cfg.label?.trim() || inst.name;
   const data: Record<string, string> = {
     nvr_name: inst.name,
+    site_name: siteName,
     date,
     cameras_online_count: String(stats.online.length),
     cameras_offline_count: String(stats.offline.length),

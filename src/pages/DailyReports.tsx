@@ -70,6 +70,8 @@ type Cfg = {
   body_template: string;
   enabled: boolean;
   last_sent_at: string | null;
+  cameras: string[];
+  label: string | null;
 };
 
 type Settings = {
@@ -87,7 +89,7 @@ type Settings = {
 };
 
 const PLACEHOLDERS = [
-  "{{nvr_name}}", "{{date}}",
+  "{{nvr_name}}", "{{site_name}}", "{{date}}",
   "{{cameras_online_count}}", "{{cameras_online_list}}",
   "{{cameras_offline_count}}", "{{cameras_offline_list}}",
   "{{positive_incidents_count}}", "{{positive_incidents_list}}",
@@ -107,19 +109,37 @@ Cameras offline: {{cameras_offline_count}}
 Positive incidents (last 24h): {{positive_incidents_count}}
 {{positive_incidents_list}}`;
 
-function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
+function ConfigCard({ cfg, instance, onChange, onDelete }: {
   cfg: Cfg;
-  instanceName: string;
+  instance: any;
   onChange: (next: Cfg) => void;
   onDelete: () => void;
 }) {
+  const instanceName = instance?.name ?? "(deleted NVR)";
   const [local, setLocal] = useState<Cfg>(cfg);
   const [newEmail, setNewEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<string[]>([]);
 
   useEffect(() => { setLocal(cfg); }, [cfg.id]);
+
+  useEffect(() => {
+    if (!instance) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(frigateUrl(instance, "/api/stats"));
+        if (!r.ok) return;
+        const j: any = await r.json();
+        const cams = j?.cameras && typeof j.cameras === "object" ? j.cameras : j;
+        const names = Object.keys(cams || {}).filter((n) => typeof cams[n] === "object");
+        if (!cancelled) setAvailableCameras(names.sort());
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [instance?.id]);
 
   const dirty = JSON.stringify(local) !== JSON.stringify(cfg);
 
@@ -133,6 +153,11 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
 
   const removeRecipient = (e: string) => setLocal({ ...local, recipients: local.recipients.filter((x) => x !== e) });
 
+  const toggleCamera = (cam: string) => {
+    const has = local.cameras.includes(cam);
+    setLocal({ ...local, cameras: has ? local.cameras.filter((c) => c !== cam) : [...local.cameras, cam] });
+  };
+
   const save = async () => {
     setSaving(true);
     const { error } = await supabase.from("daily_report_configs").update({
@@ -140,6 +165,8 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
       subject: local.subject,
       body_template: local.body_template,
       enabled: local.enabled,
+      cameras: local.cameras,
+      label: local.label?.trim() || null,
     }).eq("id", local.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
@@ -176,11 +203,19 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
   return (
     <Card className="bg-gradient-card border-border shadow-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <Server className="h-4 w-4 text-primary shrink-0" />
-          <h3 className="font-semibold text-foreground truncate">{instanceName}</h3>
+          <h3 className="font-semibold text-foreground truncate">
+            {local.label?.trim() ? local.label : instanceName}
+          </h3>
+          {local.label?.trim() && (
+            <Badge variant="outline" className="text-[10px] shrink-0">{instanceName}</Badge>
+          )}
+          {local.cameras.length > 0 && (
+            <Badge variant="outline" className="text-[10px] shrink-0">{local.cameras.length} cam{local.cameras.length === 1 ? "" : "s"}</Badge>
+          )}
           {cfg.last_sent_at && (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-[10px] shrink-0">
               Last sent {new Date(cfg.last_sent_at).toLocaleString()}
             </Badge>
           )}
@@ -191,8 +226,60 @@ function ConfigCard({ cfg, instanceName, onChange, onDelete }: {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Site / group label (optional)</Label>
+          <Input
+            placeholder="e.g. ABC Office – Auto Excellence"
+            value={local.label ?? ""}
+            onChange={(e) => setLocal({ ...local, label: e.target.value })}
+            className="bg-secondary border-border"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">
+            Cameras included ({local.cameras.length === 0 ? "all" : `${local.cameras.length} of ${availableCameras.length}`})
+          </Label>
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-2 rounded bg-secondary border border-border">
+            {availableCameras.length === 0 && (
+              <span className="text-xs text-muted-foreground italic">No cameras detected</span>
+            )}
+            {availableCameras.map((cam) => {
+              const selected = local.cameras.includes(cam);
+              const allMode = local.cameras.length === 0;
+              return (
+                <button
+                  key={cam}
+                  onClick={() => toggleCamera(cam)}
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border transition",
+                    selected
+                      ? "bg-primary/20 border-primary text-foreground"
+                      : allMode
+                        ? "bg-background border-border text-muted-foreground hover:text-foreground"
+                        : "bg-background border-border text-muted-foreground/60 hover:text-foreground"
+                  )}
+                >
+                  {cam}
+                </button>
+              );
+            })}
+          </div>
+          {local.cameras.length > 0 && (
+            <button
+              onClick={() => setLocal({ ...local, cameras: [] })}
+              className="text-[10px] text-muted-foreground hover:text-foreground underline"
+            >
+              Clear (include all)
+            </button>
+          )}
+        </div>
+      </div>
+
+
+
       <div className="space-y-1.5">
-        <Label className="text-xs">Recipients (one list per NVR)</Label>
+        <Label className="text-xs">Recipients</Label>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {local.recipients.length === 0 && <span className="text-xs text-muted-foreground italic">No recipients yet</span>}
           {local.recipients.map((e) => (
@@ -291,10 +378,9 @@ const DailyReports = () => {
   useEffect(() => { load(); }, []);
 
   const instancesById = useMemo(() => new Map(store.frigates.map((f) => [f.id, f])), [store.frigates]);
-  const unconfigured = useMemo(
-    () => store.frigates.filter((f) => !configs.some((c) => c.instance_id === f.id)),
-    [store.frigates, configs],
-  );
+  // Multiple configs per NVR are now allowed (for multi-site NVRs).
+  // The "Add" picker always lists every NVR.
+
 
   const addConfig = async (instance_id: string) => {
     const { data, error } = await supabase.from("daily_report_configs").insert({
@@ -405,7 +491,7 @@ const DailyReports = () => {
       <div className="space-y-4">
         {loading ? (
           <Card className="p-8 text-center text-sm text-muted-foreground">Loading…</Card>
-        ) : configs.length === 0 && unconfigured.length === 0 ? (
+        ) : configs.length === 0 && store.frigates.length === 0 ? (
           <Card className="p-8 text-center">
             <Server className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-foreground font-medium">No Frigate NVRs configured</p>
@@ -417,16 +503,18 @@ const DailyReports = () => {
               <ConfigCard
                 key={cfg.id}
                 cfg={cfg}
-                instanceName={instancesById.get(cfg.instance_id)?.name ?? "(deleted NVR)"}
+                instance={instancesById.get(cfg.instance_id)}
                 onChange={updateLocal}
                 onDelete={() => removeConfig(cfg.id)}
               />
             ))}
-            {unconfigured.length > 0 && (
+            {store.frigates.length > 0 && (
               <Card className="p-4 border-dashed border-border bg-secondary/30">
-                <p className="text-xs text-muted-foreground mb-2">Add daily report for:</p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Add a report (you can add multiple per NVR — one per site or customer group):
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {unconfigured.map((f) => (
+                  {store.frigates.map((f) => (
                     <Button key={f.id} variant="outline" size="sm" onClick={() => addConfig(f.id)} className="gap-1.5">
                       <Plus className="h-3.5 w-3.5" /> {f.name}
                     </Button>
