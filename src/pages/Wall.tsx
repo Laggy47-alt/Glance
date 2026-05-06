@@ -104,6 +104,7 @@ const Wall = () => {
   // Track per-camera disarmed state so the wall suppresses alerts for cameras
   // that are currently disarmed (either by schedule or manual toggle).
   const [disarmedKeys, setDisarmedKeys] = useState<Set<string>>(new Set());
+  const [disarmedLoaded, setDisarmedLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -113,6 +114,7 @@ const Wall = () => {
         .eq("armed", false);
       if (cancelled) return;
       setDisarmedKeys(new Set((data ?? []).map((r) => `${r.instance_id}::${r.camera}`)));
+      setDisarmedLoaded(true);
     };
     void load();
     const ch = supabase
@@ -135,6 +137,7 @@ const Wall = () => {
   // Alerts persist for any un-archived event so they survive navigation away from the Wall.
   useEffect(() => {
     if (!store.loaded) return;
+    if (!disarmedLoaded) return;
     const newOnes: Alert[] = [];
     const freshOnes: Alert[] = [];
     for (const e of store.events) {
@@ -191,11 +194,12 @@ const Wall = () => {
         } catch { /* no-op */ }
       }
     }
-  }, [store.events, store.media, store.loaded, muted]);
+  }, [store.events, store.media, store.loaded, muted, disarmedLoaded, disarmedKeys]);
 
   // Also pop up standalone media (e.g. polled clips with no paired event row).
   useEffect(() => {
     if (!store.loaded) return;
+    if (!disarmedLoaded) return;
     const newOnes: Alert[] = [];
     const freshOnes: Alert[] = [];
     for (const m of store.media) {
@@ -250,7 +254,7 @@ const Wall = () => {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
     }
-  }, [store.media, store.events, store.loaded]);
+  }, [store.media, store.events, store.loaded, disarmedLoaded, disarmedKeys]);
 
   // When media arrives after the alert is shown, attach it.
   useEffect(() => {
