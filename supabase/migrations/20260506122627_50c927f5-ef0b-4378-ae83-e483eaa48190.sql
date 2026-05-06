@@ -1,0 +1,1 @@
+UPDATE public.frigate_instances SET mute_enabled = false WHERE mute_enabled = true;
