@@ -136,6 +136,42 @@ export type Database = {
         }
         Relationships: []
       }
+      camera_arm_audit: {
+        Row: {
+          action: string
+          actor: string | null
+          actor_name: string | null
+          camera: string
+          id: string
+          instance_id: string
+          note: string | null
+          source: string
+          ts: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          actor_name?: string | null
+          camera: string
+          id?: string
+          instance_id: string
+          note?: string | null
+          source: string
+          ts?: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          actor_name?: string | null
+          camera?: string
+          id?: string
+          instance_id?: string
+          note?: string | null
+          source?: string
+          ts?: string
+        }
+        Relationships: []
+      }
       camera_arm_schedule_runs: {
         Row: {
           camera: string

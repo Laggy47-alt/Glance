@@ -175,8 +175,8 @@ export function CameraScheduleDialog({
           </DialogTitle>
           <DialogDescription>
             <span className="capitalize font-medium">{camera}</span> on {instanceName}. Times are in
-            site local time (Africa/Johannesburg). The schedule always wins — manual toggles will be
-            overridden at the next scheduled time.
+            site local time (Africa/Johannesburg). The schedule fires at each arm/disarm time —
+            between those times, manual customer toggles win until the next scheduled boundary.
           </DialogDescription>
         </DialogHeader>
 

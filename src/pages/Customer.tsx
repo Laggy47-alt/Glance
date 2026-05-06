@@ -194,6 +194,8 @@ const Customer = () => {
     return () => clearInterval(t);
   }, [fetchAll]);
 
+  const actorName = profile?.display_name || profile?.username || user?.email || "customer";
+
   const toggleArmed = async (instId: string, camera: string, armed: boolean) => {
     const key = armedKey(instId, camera);
     setArmedMap((prev) => new Map(prev).set(key, armed));
@@ -208,6 +210,11 @@ const Customer = () => {
       void loadArmed();
     } else {
       toast({ title: armed ? "Camera armed" : "Camera disarmed", description: camera });
+      void supabase.from("camera_arm_audit").insert({
+        instance_id: instId, camera,
+        action: armed ? "arm" : "disarm", source: "manual",
+        actor: user?.id ?? null, actor_name: actorName,
+      });
     }
   };
 
@@ -229,6 +236,14 @@ const Customer = () => {
       void loadArmed();
     } else {
       toast({ title: armed ? "All cameras armed" : "All cameras disarmed", description: view.inst.name });
+      void supabase.from("camera_arm_audit").insert(
+        view.cameras.map((c) => ({
+          instance_id: view.inst.id, camera: c.name,
+          action: armed ? "arm" : "disarm", source: "manual",
+          actor: user?.id ?? null, actor_name: actorName,
+          note: "Bulk toggle",
+        }))
+      );
     }
   };
 
