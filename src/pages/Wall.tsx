@@ -254,7 +254,7 @@ const Wall = () => {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
     }
-  }, [store.media, store.events, store.loaded]);
+  }, [store.media, store.events, store.loaded, disarmedLoaded, disarmedKeys]);
 
   // When media arrives after the alert is shown, attach it.
   useEffect(() => {
