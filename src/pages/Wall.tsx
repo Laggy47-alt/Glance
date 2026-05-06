@@ -104,6 +104,7 @@ const Wall = () => {
   // Track per-camera disarmed state so the wall suppresses alerts for cameras
   // that are currently disarmed (either by schedule or manual toggle).
   const [disarmedKeys, setDisarmedKeys] = useState<Set<string>>(new Set());
+  const [disarmedLoaded, setDisarmedLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -113,6 +114,7 @@ const Wall = () => {
         .eq("armed", false);
       if (cancelled) return;
       setDisarmedKeys(new Set((data ?? []).map((r) => `${r.instance_id}::${r.camera}`)));
+      setDisarmedLoaded(true);
     };
     void load();
     const ch = supabase
