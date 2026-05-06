@@ -194,7 +194,7 @@ const Wall = () => {
         } catch { /* no-op */ }
       }
     }
-  }, [store.events, store.media, store.loaded, muted]);
+  }, [store.events, store.media, store.loaded, muted, disarmedLoaded, disarmedKeys]);
 
   // Also pop up standalone media (e.g. polled clips with no paired event row).
   useEffect(() => {
