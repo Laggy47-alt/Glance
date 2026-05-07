@@ -173,7 +173,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (evMs >= mountedAtRef.current - 5_000) freshOnes.push(alert);
+      if (new Date(e.ts).getTime() >= mountedAtRef.current - 5_000) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
