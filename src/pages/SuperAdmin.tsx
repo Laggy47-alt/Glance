@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight, Palette } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlatformBranding } from "@/hooks/usePlatformBranding";
@@ -34,6 +34,7 @@ export default function SuperAdmin() {
   const [sites, setSites] = useState<Site[]>([]);
   const [callouts, setCallouts] = useState<Callout[]>([]);
   const [orgSettings, setOrgSettings] = useState<OrgSettings[]>([]);
+  const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -183,34 +184,51 @@ export default function SuperAdmin() {
             ) : (
               orgs.map((org) => {
                 const orgSites = sitesByOrg.get(org.id) ?? [];
+                const open = expandedOrgs.has(org.id);
+                const toggle = () => setExpandedOrgs((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(org.id)) next.delete(org.id); else next.add(org.id);
+                  return next;
+                });
                 return (
-                  <Card key={org.id} className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">{org.name}</div>
-                        <div className="text-[11px] text-muted-foreground font-mono">{org.slug}</div>
+                  <Card key={org.id} className="overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={toggle}
+                      className="w-full flex items-center justify-between gap-3 p-4 hover:bg-accent/40 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-foreground truncate">{org.name}</div>
+                          <div className="text-[11px] text-muted-foreground font-mono truncate">{org.slug}</div>
+                        </div>
                       </div>
                       <Badge variant="outline">{orgSites.length} site{orgSites.length === 1 ? "" : "s"}</Badge>
-                    </div>
-                    {orgSites.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">No sites configured.</p>
-                    ) : (
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {orgSites.map((s) => (
-                          <button
-                            key={s.id}
-                            onClick={() => enterSite(s)}
-                            className="text-left rounded-md border border-border bg-card hover:bg-accent/40 transition-colors p-3 flex items-center gap-3"
-                          >
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-foreground truncate">{s.name}</div>
-                              <div className="text-[11px] text-muted-foreground truncate">{s.base_url}</div>
-                            </div>
-                            {!s.enabled && <Badge variant="secondary" className="text-[9px]">OFF</Badge>}
-                            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                          </button>
-                        ))}
+                    </button>
+                    {open && (
+                      <div className="px-4 pb-4 border-t border-border pt-3">
+                        {orgSites.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No sites configured.</p>
+                        ) : (
+                          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            {orgSites.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => enterSite(s)}
+                                className="text-left rounded-md border border-border bg-card hover:bg-accent/40 transition-colors p-3 flex items-center gap-3"
+                              >
+                                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-foreground truncate">{s.name}</div>
+                                  <div className="text-[11px] text-muted-foreground truncate">{s.base_url}</div>
+                                </div>
+                                {!s.enabled && <Badge variant="secondary" className="text-[9px]">OFF</Badge>}
+                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -328,45 +346,9 @@ export default function SuperAdmin() {
               }}
             />
 
-            <div className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold">Per-organization branding</h3>
-                <p className="text-xs text-muted-foreground">Each organization sees its own logo and name across the dashboard.</p>
-              </div>
-              {orgs.length === 0 ? (
-                <Card className="p-6 text-sm text-muted-foreground">No organizations yet.</Card>
-              ) : (
-                <div className="grid gap-4">
-                  {orgs.map((o) => {
-                    const s = orgSettings.find((x) => x.organization_id === o.id);
-                    return (
-                      <SuperBrandingEditor
-                        key={o.id}
-                        title={o.name}
-                        description={`Slug: ${o.slug}`}
-                        initial={{
-                          appName: s?.app_name ?? "Glance",
-                          appSubtitle: s?.app_subtitle ?? "Event Dashboard",
-                          logoUrl: s?.logo_url ?? null,
-                        }}
-                        pathPrefix={`org/${o.id}`}
-                        onSave={async (payload) => {
-                          if (s?.id) {
-                            const { error } = await supabase.from("app_settings").update(payload).eq("id", s.id);
-                            if (error) throw error;
-                          } else {
-                            const { error } = await supabase.from("app_settings")
-                              .insert({ ...payload, organization_id: o.id });
-                            if (error) throw error;
-                          }
-                          await load();
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <Card className="p-4 text-xs text-muted-foreground">
+              Organizations manage their own logo and branding from <span className="font-medium text-foreground">Customization</span> inside their dashboard.
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
