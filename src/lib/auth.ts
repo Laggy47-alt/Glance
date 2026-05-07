@@ -1,12 +1,29 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export const usernameToEmail = (u: string) => `${u.toLowerCase().trim()}@local.app`;
-export const emailToUsername = (e: string | null | undefined) =>
-  e ? e.replace(/@local\.app$/i, "") : "";
+const SUPER_SLUG = "super";
 
-export async function signInWithUsername(username: string, password: string) {
+/** Builds the synthetic auth email used for sign-in. Org slug "super" is reserved for the platform owner. */
+export const buildAuthEmail = (username: string, orgSlug: string) =>
+  `${username.toLowerCase().trim()}@${orgSlug.toLowerCase().trim()}.local.app`;
+
+/** Back-compat helper still used by older code paths (defaults to legacy domain). */
+export const usernameToEmail = (u: string) => `${u.toLowerCase().trim()}@local.app`;
+
+export const emailToUsername = (e: string | null | undefined) =>
+  e ? e.replace(/@[^@]+$/i, "") : "";
+
+export const emailToOrgSlug = (e: string | null | undefined) => {
+  if (!e) return null;
+  const m = e.match(/@([^.]+)\.local\.app$/i);
+  return m ? m[1].toLowerCase() : null;
+};
+
+export const isSuperSlug = (slug: string | null | undefined) =>
+  (slug ?? "").toLowerCase() === SUPER_SLUG;
+
+export async function signInWithUsername(username: string, password: string, orgSlug: string) {
   return supabase.auth.signInWithPassword({
-    email: usernameToEmail(username),
+    email: buildAuthEmail(username, orgSlug),
     password,
   });
 }

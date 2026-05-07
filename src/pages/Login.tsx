@@ -12,12 +12,14 @@ const Login = () => {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as { state: { from?: string } | null };
+  const [orgSlug, setOrgSlug] = useState(() => {
+    try { return localStorage.getItem("login.orgSlug") || ""; } catch { return ""; }
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Ensure bootstrap admin exists on the very first visit to the login page too.
   useEffect(() => {
     void supabase.functions.invoke("admin-users/seed", { method: "POST" });
   }, []);
@@ -30,7 +32,9 @@ const Login = () => {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const { error } = await signInWithUsername(username, password);
+    const slug = orgSlug.trim().toLowerCase();
+    try { localStorage.setItem("login.orgSlug", slug); } catch { /* ignore */ }
+    const { error } = await signInWithUsername(username, password, slug);
     setBusy(false);
     if (error) {
       setError(error.message);
@@ -47,12 +51,24 @@ const Login = () => {
             <Webhook className="h-6 w-6 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-foreground">Webhook Console</h1>
-            <p className="text-xs text-muted-foreground">Sign in to continue</p>
+            <h1 className="text-lg font-semibold text-foreground">Glance</h1>
+            <p className="text-xs text-muted-foreground">Sign in to your organization</p>
           </div>
         </div>
 
         <form onSubmit={submit} className="space-y-4 rounded-lg border border-border bg-card/60 p-5 backdrop-blur">
+          <div className="space-y-1.5">
+            <Label htmlFor="org" className="text-xs">Organization ID</Label>
+            <Input
+              id="org"
+              value={orgSlug}
+              onChange={(e) => setOrgSlug(e.target.value)}
+              placeholder="e.g. abc-2026"
+              autoComplete="organization"
+              autoFocus
+              required
+            />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="username" className="text-xs">Username</Label>
             <Input
@@ -60,7 +76,6 @@ const Login = () => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              autoFocus
               required
             />
           </div>
@@ -85,7 +100,7 @@ const Login = () => {
             Sign in
           </Button>
           <p className="text-[11px] text-muted-foreground text-center">
-            First time? Default admin is <code className="text-foreground">admin</code> / <code className="text-foreground">admin</code>.
+            Platform owners: use organization ID <code className="text-foreground">super</code>.
           </p>
         </form>
       </div>
