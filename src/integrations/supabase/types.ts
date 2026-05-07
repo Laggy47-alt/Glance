@@ -29,7 +29,7 @@ export type Database = {
           app_subtitle?: string
           id?: string
           logo_url?: string | null
-          organization_id: string
+          organization_id?: string
           updated_at?: string
           updated_by?: string | null
         }
@@ -115,7 +115,7 @@ export type Database = {
           created_at?: string
           id?: string
           instance_id: string
-          organization_id: string
+          organization_id?: string
           reason?: string | null
           requested_by?: string | null
           requester_name?: string | null
@@ -157,7 +157,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          organization_id: string
+          organization_id?: string
           recipients?: string[]
           subject?: string
           updated_at?: string
@@ -280,7 +280,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           instance_id: string
-          organization_id: string
+          organization_id?: string
           updated_at?: string
           updated_by?: string | null
           weekday: number
@@ -323,7 +323,7 @@ export type Database = {
           camera: string
           id?: string
           instance_id: string
-          organization_id: string
+          organization_id?: string
           updated_at?: string
           updated_by?: string | null
         }
@@ -362,7 +362,7 @@ export type Database = {
           instance_id: string
           last_checked?: string
           online: boolean
-          organization_id: string
+          organization_id?: string
           since?: string
         }
         Update: {
@@ -400,7 +400,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           instance_id: string
-          organization_id: string
+          organization_id?: string
           user_id: string
         }
         Update: {
@@ -436,7 +436,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           instance_id: string
-          organization_id: string
+          organization_id?: string
           user_id: string
         }
         Update: {
@@ -473,7 +473,7 @@ export type Database = {
           id?: string
           instance_id: string
           instructions?: string
-          organization_id: string
+          organization_id?: string
           updated_at?: string
           updated_by?: string | null
           user_id: string
@@ -522,7 +522,7 @@ export type Database = {
           instance_id: string
           label?: string | null
           last_sent_at?: string | null
-          organization_id: string
+          organization_id?: string
           recipients?: string[]
           subject?: string
           updated_at?: string
@@ -629,7 +629,7 @@ export type Database = {
           from_email?: string
           from_name?: string
           id?: string
-          organization_id: string
+          organization_id?: string
           reply_to?: string | null
           send_hour_utc?: number
           send_minute_utc?: number
@@ -742,7 +742,7 @@ export type Database = {
           mute_end?: string | null
           mute_start?: string | null
           name: string
-          organization_id: string
+          organization_id?: string
           poll_enabled?: boolean
           poll_interval_seconds?: number
           source_id: string
@@ -901,7 +901,7 @@ export type Database = {
           camera: string
           id?: string
           instance_id: string
-          organization_id: string
+          organization_id?: string
           since: string
           user_id: string
         }
@@ -1120,7 +1120,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           name: string
-          organization_id: string
+          organization_id?: string
           secret: string
           slug: string
         }
@@ -1149,6 +1149,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_user_org: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
