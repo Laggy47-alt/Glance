@@ -12,13 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 type Org = { id: string; slug: string; name: string; created_at: string };
 type Site = { id: string; name: string; base_url: string; color: string; enabled: boolean; organization_id: string };
 type Callout = {
-  id: string; instance_id: string; camera: string | null; reason: string | null;
-  status: string; requester_name: string | null; created_at: string; organization_id: string;
+  id: string; subject: string; message: string | null; status: string;
+  admin_note: string | null; requester_name: string | null;
+  created_at: string; resolved_at: string | null; organization_id: string;
 };
 
 export default function SuperAdmin() {
@@ -36,6 +38,10 @@ export default function SuperAdmin() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
+  const [replyFor, setReplyFor] = useState<Callout | null>(null);
+  const [replyNote, setReplyNote] = useState("");
+  const [replyBusy, setReplyBusy] = useState(false);
+
   const orgById = useMemo(() => Object.fromEntries(orgs.map((o) => [o.id, o])), [orgs]);
 
   const load = async () => {
@@ -43,7 +49,8 @@ export default function SuperAdmin() {
     const [{ data: o }, { data: s }, { data: c }] = await Promise.all([
       supabase.from("organizations").select("id, slug, name, created_at").order("name"),
       supabase.from("frigate_instances").select("id, name, base_url, color, enabled, organization_id").order("name"),
-      supabase.from("callout_requests").select("id, instance_id, camera, reason, status, requester_name, created_at, organization_id")
+      supabase.from("super_callout_requests")
+        .select("id, subject, message, status, admin_note, requester_name, created_at, resolved_at, organization_id")
         .order("created_at", { ascending: false }).limit(200),
     ]);
     setOrgs((o ?? []) as Org[]);
@@ -56,12 +63,27 @@ export default function SuperAdmin() {
     void load();
     const ch = supabase
       .channel("super-admin")
-      .on("postgres_changes", { event: "*", schema: "public", table: "callout_requests" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "super_callout_requests" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "frigate_instances" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "organizations" }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, []);
+
+  const resolveCallout = async () => {
+    if (!replyFor) return;
+    setReplyBusy(true);
+    const { error } = await supabase.from("super_callout_requests").update({
+      status: "resolved",
+      admin_note: replyNote.trim() || null,
+      resolved_at: new Date().toISOString(),
+    }).eq("id", replyFor.id);
+    setReplyBusy(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Marked resolved");
+    setReplyFor(null); setReplyNote("");
+    void load();
+  };
 
   const handleSignOut = async () => {
     impersonateOrg(null);
@@ -239,9 +261,9 @@ export default function SuperAdmin() {
                   <TableRow>
                     <TableHead>Status</TableHead>
                     <TableHead>Organization</TableHead>
-                    <TableHead>Camera</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Requested By</TableHead>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>From</TableHead>
                     <TableHead>When</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -256,15 +278,18 @@ export default function SuperAdmin() {
                         <TableCell>
                           <Badge variant={c.status === "resolved" ? "secondary" : "default"}>{c.status}</Badge>
                         </TableCell>
-                        <TableCell>{org?.name ?? <span className="text-muted-foreground italic">unknown</span>}</TableCell>
-                        <TableCell className="text-xs">{c.camera ?? "—"}</TableCell>
-                        <TableCell className="text-xs max-w-[280px] truncate">{c.reason ?? "—"}</TableCell>
+                        <TableCell className="font-medium">{org?.name ?? <span className="text-muted-foreground italic">unknown</span>}</TableCell>
+                        <TableCell className="text-sm">{c.subject}</TableCell>
+                        <TableCell className="text-xs max-w-[320px]">
+                          <div className="line-clamp-2 text-muted-foreground">{c.message ?? "—"}</div>
+                          {c.admin_note && <div className="mt-1 text-[11px] text-primary">Reply: {c.admin_note}</div>}
+                        </TableCell>
                         <TableCell className="text-xs">{c.requester_name ?? "—"}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString()}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{new Date(c.created_at).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
-                          {org && (
-                            <Button size="sm" variant="outline" onClick={() => { impersonateOrg({ id: org.id, slug: org.slug, name: org.name }); navigate("/callouts"); }}>
-                              Open
+                          {c.status !== "resolved" && (
+                            <Button size="sm" variant="outline" onClick={() => { setReplyFor(c); setReplyNote(c.admin_note ?? ""); }}>
+                              Resolve
                             </Button>
                           )}
                         </TableCell>
@@ -277,6 +302,31 @@ export default function SuperAdmin() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <Dialog open={!!replyFor} onOpenChange={(o) => { if (!o) { setReplyFor(null); setReplyNote(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Resolve callout</DialogTitle></DialogHeader>
+          {replyFor && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-border bg-card/50 p-3 text-sm">
+                <div className="font-medium">{orgById[replyFor.organization_id]?.name} — {replyFor.subject}</div>
+                {replyFor.message && <div className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{replyFor.message}</div>}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Reply / note (optional)</Label>
+                <Textarea rows={4} value={replyNote} onChange={(e) => setReplyNote(e.target.value)} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReplyFor(null)} disabled={replyBusy}>Cancel</Button>
+            <Button onClick={resolveCallout} disabled={replyBusy}>
+              {replyBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Mark resolved
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
