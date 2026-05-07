@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsCustomer(false);
         setOrgs([]);
         setActiveOrgId(null);
+        impersonateOrg(null);
       }
     });
     supabase.auth.getSession().then(async ({ data }) => {
@@ -114,25 +115,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const activeOrg = useMemo(() => {
+    if (impersonated) return impersonated;
     if (!orgs.length) return null;
     return (orgs.find((m) => m.organization_id === activeOrgId)?.organization
       ?? orgs[0].organization) ?? null;
-  }, [orgs, activeOrgId]);
+  }, [orgs, activeOrgId, impersonated]);
 
   const value = useMemo<AuthCtx>(() => ({
     session,
     user: session?.user ?? null,
     profile,
-    isAdmin,
+    isAdmin: isAdmin || (isSuperAdmin && !!impersonated),
     isSuperAdmin,
     isCustomer,
     orgs,
     activeOrg,
     setActiveOrgId,
+    impersonateOrg,
+    isImpersonating: !!impersonated,
     loading,
     signOut: async () => { await supabase.auth.signOut(); },
     refreshProfile: async () => { if (session?.user) await loadProfile(session.user.id); },
-  }), [session, profile, isAdmin, isSuperAdmin, isCustomer, orgs, activeOrg, loading]);
+  }), [session, profile, isAdmin, isSuperAdmin, isCustomer, orgs, activeOrg, loading, impersonated]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
