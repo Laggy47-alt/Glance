@@ -25,6 +25,8 @@ type AuthCtx = {
   orgs: OrgMembership[];
   activeOrg: OrgMembership["organization"] | null;
   setActiveOrgId: (id: string | null) => void;
+  impersonateOrg: (org: { id: string; slug: string; name: string } | null) => void;
+  isImpersonating: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
