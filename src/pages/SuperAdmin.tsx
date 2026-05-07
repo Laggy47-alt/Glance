@@ -346,45 +346,9 @@ export default function SuperAdmin() {
               }}
             />
 
-            <div className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold">Per-organization branding</h3>
-                <p className="text-xs text-muted-foreground">Each organization sees its own logo and name across the dashboard.</p>
-              </div>
-              {orgs.length === 0 ? (
-                <Card className="p-6 text-sm text-muted-foreground">No organizations yet.</Card>
-              ) : (
-                <div className="grid gap-4">
-                  {orgs.map((o) => {
-                    const s = orgSettings.find((x) => x.organization_id === o.id);
-                    return (
-                      <SuperBrandingEditor
-                        key={o.id}
-                        title={o.name}
-                        description={`Slug: ${o.slug}`}
-                        initial={{
-                          appName: s?.app_name ?? "Glance",
-                          appSubtitle: s?.app_subtitle ?? "Event Dashboard",
-                          logoUrl: s?.logo_url ?? null,
-                        }}
-                        pathPrefix={`org/${o.id}`}
-                        onSave={async (payload) => {
-                          if (s?.id) {
-                            const { error } = await supabase.from("app_settings").update(payload).eq("id", s.id);
-                            if (error) throw error;
-                          } else {
-                            const { error } = await supabase.from("app_settings")
-                              .insert({ ...payload, organization_id: o.id });
-                            if (error) throw error;
-                          }
-                          await load();
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <Card className="p-4 text-xs text-muted-foreground">
+              Organizations manage their own logo and branding from <span className="font-medium text-foreground">Customization</span> inside their dashboard.
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
