@@ -57,7 +57,7 @@ function parseStats(stats: unknown): string[] {
 
 export function OfflineNotifications() {
   const store = useWebhookStore();
-  const { user, isCustomer, isAdmin } = useAuth();
+  const { user, isCustomer, isAdmin, activeOrg } = useAuth();
   const [snapshots, setSnapshots] = useState<NvrSnapshot[]>([]);
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -171,6 +171,7 @@ export function OfflineNotifications() {
           nvrs: includeList
             ? snapshots.map((s) => ({ name: s.name, reachable: s.reachable, offlineCameras: s.offlineCameras }))
             : [],
+          organization_id: activeOrg?.id ?? null,
         },
       });
       if (error) throw error;

@@ -1,11 +1,12 @@
 import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, ArrowLeft } from "lucide-react";
+import { LogOut, Webhook, ArrowLeft, Building2 } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
 import { useSnapshotRefresher } from "@/hooks/useSnapshotRefresher";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function DashboardLayout({
   children,
@@ -21,7 +22,7 @@ export function DashboardLayout({
   hideSidebar?: boolean;
 }) {
   useSnapshotRefresher();
-  const { isCustomer, isSuperAdmin, isImpersonating, impersonateOrg, signOut } = useAuth();
+  const { isCustomer, isSuperAdmin, isImpersonating, impersonateOrg, signOut, orgs, activeOrg, setActiveOrgId } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const navigate = useNavigate();
 
@@ -64,6 +65,23 @@ export function DashboardLayout({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!isImpersonating && orgs.length > 1 && activeOrg && (
+              <div className="flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <Select value={activeOrg.id} onValueChange={(v) => setActiveOrgId(v)}>
+                  <SelectTrigger className="h-8 w-[180px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orgs.map((m) => m.organization && (
+                      <SelectItem key={m.organization.id} value={m.organization.id}>
+                        {m.organization.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {actions}
             {isCustomer && (
               <Button variant="outline" size="sm" onClick={handleSignOut} className="gap-1.5">

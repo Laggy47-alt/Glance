@@ -419,7 +419,7 @@ function CalloutDialog({
   onSent: () => void;
   requesterName: string;
 }) {
-  const { user } = useAuth();
+  const { user, activeOrg } = useAuth();
   const [reason, setReason] = useState("");
   const [phone, setPhone] = useState("");
   const [acceptedFee, setAcceptedFee] = useState(false);
@@ -459,6 +459,7 @@ function CalloutDialog({
           camera: camerasCsv,
           reason: fullReason,
           requester_name: requesterName,
+          organization_id: activeOrg?.id ?? null,
         },
       });
       if (fnErr) {
