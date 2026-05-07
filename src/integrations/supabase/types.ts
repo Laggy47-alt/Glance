@@ -1013,6 +1013,56 @@ export type Database = {
         }
         Relationships: []
       }
+      super_callout_requests: {
+        Row: {
+          admin_note: string | null
+          created_at: string
+          id: string
+          message: string | null
+          organization_id: string
+          requested_by: string | null
+          requester_name: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          subject: string
+        }
+        Insert: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          organization_id?: string
+          requested_by?: string | null
+          requester_name?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          subject: string
+        }
+        Update: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          message?: string | null
+          organization_id?: string
+          requested_by?: string | null
+          requester_name?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "super_callout_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
