@@ -1,11 +1,14 @@
-// Admin users management — uses the service role key.
+// Admin users + organizations management — uses the service role key.
 // Endpoints:
-//   POST /admin-users/seed              -> idempotently creates the bootstrap admin (admin/admin)
-//   POST /admin-users/create            -> { username, password, display_name, role } (caller must be admin, except during seed)
-//   POST /admin-users/reset-password    -> { user_id, password } (caller must be admin)
-//   POST /admin-users/delete            -> { user_id } (caller must be admin)
+//   POST /admin-users/seed              -> idempotently creates the bootstrap super-admin (admin/admin under org slug "super")
+//   POST /admin-users/create            -> { username, password, display_name, role, organization_id, contact_email }
+//   POST /admin-users/reset-password    -> { user_id, password }
+//   POST /admin-users/set-contact-email -> { user_id, contact_email }
+//   POST /admin-users/delete            -> { user_id }
+//   POST /admin-users/create-org        -> { slug, name }            (super-admin only)
+//   POST /admin-users/list-orgs         -> {}                         (super-admin sees all, org-admins see their orgs)
 //
-// Username login model: synthetic email = `${username}@local.app`.
+// Login model: synthetic email = `${username}@${org_slug}.local.app`. Bootstrap admin uses slug `super`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -22,29 +25,38 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-const usernameToEmail = (u: string) => `${u.toLowerCase().trim()}@local.app`;
+const buildEmail = (username: string, orgSlug: string) =>
+  `${username.toLowerCase().trim()}@${orgSlug.toLowerCase().trim()}.local.app`;
 
 function admin() {
   return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 }
 
-async function getCallerIsAdmin(authHeader: string | null): Promise<{ ok: boolean; userId?: string }> {
-  if (!authHeader) return { ok: false };
+type CallerInfo = {
+  userId: string;
+  isSuperAdmin: boolean;
+  adminOrgIds: Set<string>;
+};
+
+async function getCaller(authHeader: string | null): Promise<CallerInfo | null> {
+  if (!authHeader) return null;
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
   });
   const { data: userData, error } = await userClient.auth.getUser();
-  if (error || !userData.user) return { ok: false };
+  if (error || !userData.user) return null;
   const a = admin();
-  const { data: roleRow } = await a
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userData.user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  return { ok: !!roleRow, userId: userData.user.id };
+  const [{ data: roles }, { data: members }] = await Promise.all([
+    a.from("user_roles").select("role").eq("user_id", userData.user.id),
+    a.from("organization_members").select("organization_id, role").eq("user_id", userData.user.id),
+  ]);
+  const roleSet = new Set((roles ?? []).map((r) => r.role as string));
+  const isSuperAdmin = roleSet.has("super_admin");
+  const adminOrgIds = new Set<string>();
+  for (const m of members ?? []) if ((m as any).role === "admin") adminOrgIds.add((m as any).organization_id);
+  return { userId: userData.user.id, isSuperAdmin, adminOrgIds };
 }
 
 Deno.serve(async (req) => {
@@ -56,46 +68,36 @@ Deno.serve(async (req) => {
     const a = admin();
 
     if (action === "seed") {
-      const email = usernameToEmail("admin");
+      const email = buildEmail("admin", "super");
 
-      // Find existing admin auth user (if any)
+      // Find existing admin auth user (look across both new and legacy emails)
       const { data: list } = await a.auth.admin.listUsers();
-      const existing = list.users.find((u) => u.email === email);
+      const existing = list.users.find(
+        (u) => u.email === email || u.email === "admin@local.app"
+      );
 
       if (existing) {
-        // Already exists — DO NOT touch the password or must_change_password flag.
-        // Just make sure the profile + admin role rows exist.
-        const { data: prof } = await a
-          .from("profiles")
-          .select("user_id")
-          .eq("user_id", existing.id)
-          .maybeSingle();
+        // Migrate legacy email if needed
+        if (existing.email !== email) {
+          await a.auth.admin.updateUserById(existing.id, { email });
+        }
+        // Ensure profile + super_admin role
+        const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", existing.id).maybeSingle();
         if (!prof) {
           await a.from("profiles").insert({
-            user_id: existing.id,
-            username: "admin",
-            display_name: "Administrator",
-            must_change_password: false,
+            user_id: existing.id, username: "admin", display_name: "Administrator", must_change_password: false,
           });
         }
-        const { data: roleRow } = await a
-          .from("user_roles")
-          .select("id")
-          .eq("user_id", existing.id)
-          .eq("role", "admin")
-          .maybeSingle();
-        if (!roleRow) {
-          await a.from("user_roles").insert({ user_id: existing.id, role: "admin" });
-        }
+        const { data: roleRow } = await a.from("user_roles").select("id")
+          .eq("user_id", existing.id).eq("role", "super_admin").maybeSingle();
+        if (!roleRow) await a.from("user_roles").insert({ user_id: existing.id, role: "super_admin" });
         return json({ ok: true, seeded: false, user_id: existing.id });
       }
 
-      // Brand-new install: create the bootstrap admin/admin account.
+      // Brand-new install
       const { data: created, error: createErr } = await a.auth.admin.createUser({
-        email,
-        password: "admin",
-        email_confirm: true,
-        user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true },
+        email, password: "admin", email_confirm: true,
+        user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true, org_slug: "super" },
       });
       if (createErr) return json({ ok: false, error: createErr.message }, 500);
       const newId = created.user!.id;
@@ -103,42 +105,82 @@ Deno.serve(async (req) => {
         { user_id: newId, username: "admin", display_name: "Administrator", must_change_password: true },
         { onConflict: "user_id" },
       );
-      await a.from("user_roles").insert({ user_id: newId, role: "admin" });
+      await a.from("user_roles").insert({ user_id: newId, role: "super_admin" });
       return json({ ok: true, seeded: true, user_id: newId });
     }
 
-
-    // All other endpoints require an admin caller
-    const caller = await getCallerIsAdmin(req.headers.get("authorization"));
-    if (!caller.ok) return json({ ok: false, error: "forbidden" }, 403);
+    // All other endpoints require an authenticated caller
+    const caller = await getCaller(req.headers.get("authorization"));
+    if (!caller) return json({ ok: false, error: "forbidden" }, 403);
+    const isAnyAdmin = caller.isSuperAdmin || caller.adminOrgIds.size > 0;
+    if (!isAnyAdmin) return json({ ok: false, error: "forbidden" }, 403);
 
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
+
+    if (action === "create-org") {
+      if (!caller.isSuperAdmin) return json({ ok: false, error: "super-admin only" }, 403);
+      const slug = String(body.slug ?? "").trim().toLowerCase();
+      const name = String(body.name ?? "").trim();
+      if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json({ ok: false, error: "invalid slug (a-z, 0-9, -)" }, 400);
+      if (slug === "super") return json({ ok: false, error: "reserved slug" }, 400);
+      if (!name) return json({ ok: false, error: "name required" }, 400);
+      const { data, error } = await a.from("organizations").insert({ slug, name, created_by: caller.userId })
+        .select("id, slug, name").single();
+      if (error) return json({ ok: false, error: error.message }, 400);
+      return json({ ok: true, organization: data });
+    }
+
+    if (action === "list-orgs") {
+      if (caller.isSuperAdmin) {
+        const { data } = await a.from("organizations").select("id, slug, name, created_at").order("name");
+        return json({ ok: true, organizations: data ?? [] });
+      }
+      const ids = Array.from(caller.adminOrgIds);
+      if (ids.length === 0) return json({ ok: true, organizations: [] });
+      const { data } = await a.from("organizations").select("id, slug, name, created_at").in("id", ids).order("name");
+      return json({ ok: true, organizations: data ?? [] });
+    }
 
     if (action === "create") {
       const username = String(body.username ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
       const display_name = String(body.display_name ?? username);
-      const requestedRole = String(body.role ?? "user");
-      const role = (["admin", "user", "customer"].includes(requestedRole) ? requestedRole : "user") as "admin" | "user" | "customer";
+      const requestedRole = String(body.role ?? "customer");
+      const role = (["admin", "customer"].includes(requestedRole) ? requestedRole : "customer") as "admin" | "customer";
+      const organization_id = String(body.organization_id ?? "");
       if (!username || !password) return json({ ok: false, error: "username and password required" }, 400);
       if (!/^[a-z0-9_.-]{2,32}$/.test(username)) return json({ ok: false, error: "invalid username" }, 400);
+      if (!organization_id) return json({ ok: false, error: "organization_id required" }, 400);
+
+      // Authorization: super-admin can target any org, org-admin only their own orgs
+      if (!caller.isSuperAdmin && !caller.adminOrgIds.has(organization_id)) {
+        return json({ ok: false, error: "forbidden for this organization" }, 403);
+      }
+
+      const { data: org, error: orgErr } = await a.from("organizations")
+        .select("id, slug, name").eq("id", organization_id).maybeSingle();
+      if (orgErr || !org) return json({ ok: false, error: "organization not found" }, 404);
 
       const contact_email_raw = String(body.contact_email ?? "").trim();
       const contact_email = contact_email_raw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact_email_raw) ? contact_email_raw : null;
 
-      const email = usernameToEmail(username);
+      const email = buildEmail(username, org.slug);
       const { data: created, error } = await a.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: { username, display_name, must_change_password: true },
+        email, password, email_confirm: true,
+        user_metadata: { username, display_name, must_change_password: true, org_slug: org.slug },
       });
       if (error) return json({ ok: false, error: error.message }, 400);
-      await a.from("user_roles").insert({ user_id: created.user!.id, role });
+      const newId = created.user!.id;
+
+      // Org membership
+      await a.from("organization_members").insert({ organization_id: org.id, user_id: newId, role });
+      // Backwards-compat: also set legacy app_role so existing UI gates keep working
+      await a.from("user_roles").insert({ user_id: newId, role: role === "admin" ? "admin" : "customer" });
+
       if (contact_email) {
-        await a.from("profiles").update({ contact_email }).eq("user_id", created.user!.id);
+        await a.from("profiles").update({ contact_email }).eq("user_id", newId);
       }
-      return json({ ok: true, user_id: created.user!.id });
+      return json({ ok: true, user_id: newId });
     }
 
     if (action === "set-contact-email") {
@@ -158,7 +200,6 @@ Deno.serve(async (req) => {
       if (!user_id || !password) return json({ ok: false, error: "user_id and password required" }, 400);
       const { error } = await a.auth.admin.updateUserById(user_id, { password });
       if (error) return json({ ok: false, error: error.message }, 400);
-      // Force change on next login
       await a.from("profiles").update({ must_change_password: true }).eq("user_id", user_id);
       return json({ ok: true });
     }
