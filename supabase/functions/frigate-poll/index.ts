@@ -140,20 +140,26 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
 
     const eventId = inserted.id as string;
     const mediaRows: Array<Record<string, unknown>> = [];
-    if (ev.has_snapshot) {
-      mediaRows.push({
-        organization_id: orgId,
-        source_id: inst.source_id,
-        event_id: eventId,
-        instance_id: inst.id,
-        kind: "snapshot",
-        url: proxyUrl(inst.id, `/api/events/${ev.id}/snapshot.jpg`),
-        camera: ev.camera,
-        topic,
-        ts: new Date(startMs).toISOString(),
-        frigate_event_id: ev.id,
-      });
-    }
+    // Always insert a snapshot row. Frigate exposes /thumbnail.jpg even when
+    // has_snapshot=false (snapshot saving disabled in NVR config), so the Wall
+    // tile still gets a still image. Prefer the full snapshot when available.
+    mediaRows.push({
+      organization_id: orgId,
+      source_id: inst.source_id,
+      event_id: eventId,
+      instance_id: inst.id,
+      kind: "snapshot",
+      url: proxyUrl(
+        inst.id,
+        ev.has_snapshot
+          ? `/api/events/${ev.id}/snapshot.jpg`
+          : `/api/events/${ev.id}/thumbnail.jpg`,
+      ),
+      camera: ev.camera,
+      topic,
+      ts: new Date(startMs).toISOString(),
+      frigate_event_id: ev.id,
+    });
     if (ev.has_clip) {
       mediaRows.push({
         organization_id: orgId,
