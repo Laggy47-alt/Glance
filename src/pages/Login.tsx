@@ -63,7 +63,7 @@ const Login = () => {
               id="org"
               value={orgSlug}
               onChange={(e) => setOrgSlug(e.target.value)}
-              placeholder="e.g. abc-2026"
+              placeholder=""
               autoComplete="organization"
               autoFocus
               required
