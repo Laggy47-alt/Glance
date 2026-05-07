@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
 
     const { data: callout, error: cErr } = await supabase
       .from("callout_requests")
-      .select("id, instance_id, camera, reason, requested_by, requester_name, admin_note, resolved_at")
+      .select("id, instance_id, camera, reason, requested_by, requester_name, admin_note, resolved_at, organization_id")
       .eq("id", callout_id)
       .maybeSingle();
     if (cErr || !callout) {
@@ -62,7 +62,8 @@ Deno.serve(async (req) => {
       .eq("id", callout.instance_id)
       .maybeSingle();
 
-    const { data: smtp } = await supabase.from("daily_report_settings").select("*").limit(1).maybeSingle();
+    const { data: smtp } = await supabase.from("daily_report_settings")
+      .select("*").eq("organization_id", callout.organization_id).limit(1).maybeSingle();
     if (!smtp?.smtp_host) {
       return new Response(JSON.stringify({ error: "SMTP not configured. Set it up in Daily Reports settings." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
