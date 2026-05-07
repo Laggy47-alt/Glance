@@ -148,9 +148,8 @@ const Wall = () => {
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
       // Skip alerts for cameras that are currently disarmed
       if (isCameraDisarmed(e.source_id, null, e.camera)) { seenRef.current.add(key); continue; }
-      const evMs = new Date(e.ts).getTime();
-      // Skip stale events that pre-date this Wall session (e.g. left un-archived from before)
-      if (evMs < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
+      // Show ALL un-archived events, even ones that pre-date this Wall session.
+      // Alerts must persist until an operator ACKs them (archives in DB).
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
