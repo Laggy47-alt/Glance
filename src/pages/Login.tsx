@@ -15,6 +15,9 @@ const Login = () => {
   const [orgSlug, setOrgSlug] = useState(() => {
     try { return localStorage.getItem("login.orgSlug") || ""; } catch { return ""; }
   });
+  const [editingOrg, setEditingOrg] = useState(() => {
+    try { return !localStorage.getItem("login.orgSlug"); } catch { return true; }
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
