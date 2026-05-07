@@ -34,6 +34,7 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 const ACTIVE_ORG_KEY = "auth.activeOrgId";
+const IMPERSONATE_KEY = "auth.impersonateOrg";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -46,12 +47,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ACTIVE_ORG_KEY); } catch { return null; }
   });
   const [loading, setLoading] = useState(true);
+  const [impersonated, setImpersonated] = useState<{ id: string; slug: string; name: string } | null>(() => {
+    try { const v = localStorage.getItem(IMPERSONATE_KEY); return v ? JSON.parse(v) : null; } catch { return null; }
+  });
 
   const setActiveOrgId = (id: string | null) => {
     setActiveOrgIdState(id);
     try {
       if (id) localStorage.setItem(ACTIVE_ORG_KEY, id);
       else localStorage.removeItem(ACTIVE_ORG_KEY);
+    } catch { /* ignore */ }
+  };
+
+  const impersonateOrg = (org: { id: string; slug: string; name: string } | null) => {
+    setImpersonated(org);
+    try {
+      if (org) localStorage.setItem(IMPERSONATE_KEY, JSON.stringify(org));
+      else localStorage.removeItem(IMPERSONATE_KEY);
     } catch { /* ignore */ }
   };
 
