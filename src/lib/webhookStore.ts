@@ -118,8 +118,19 @@ class WebhookStore {
   private emit() { this.listeners.forEach((l) => l()); }
 
   private async init() {
-    await this.refreshAll();
+    // Wait for the auth session to be restored before issuing RLS-protected queries.
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      // Defer: when auth signs in, the listener below will trigger refreshAll.
+    } else {
+      await this.refreshAll();
+    }
     this.subscribeRealtime();
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "SIGNED_OUT") {
+        void this.refreshAll();
+      }
+    });
   }
 
   async refreshAll() {
