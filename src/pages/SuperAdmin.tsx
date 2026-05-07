@@ -150,11 +150,11 @@ export default function SuperAdmin() {
       <header className="h-16 shrink-0 border-b border-border bg-card/40 backdrop-blur px-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-9 w-9 rounded-md bg-gradient-primary grid place-items-center shadow-glow overflow-hidden shrink-0">
-            {logoUrl ? <img src={logoUrl} alt={appName} className="h-full w-full object-contain" /> : <Webhook className="h-5 w-5 text-primary-foreground" />}
+            {platform.logoUrl ? <img src={platform.logoUrl} alt={platform.appName} className="h-full w-full object-contain" /> : <Webhook className="h-5 w-5 text-primary-foreground" />}
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-foreground tracking-tight truncate">Super Admin Portal</h1>
-            <p className="text-xs text-muted-foreground truncate">Platform-wide overview</p>
+            <h1 className="text-lg font-semibold text-foreground tracking-tight truncate">{platform.appName} — Super Admin</h1>
+            <p className="text-xs text-muted-foreground truncate">{platform.appSubtitle}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={handleSignOut} className="gap-1.5">
@@ -171,6 +171,7 @@ export default function SuperAdmin() {
               <Phone className="h-4 w-4" /> Callouts
               {openCallouts.length > 0 && <Badge variant="secondary" className="ml-1">{openCallouts.length}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
           </TabsList>
 
           {/* SITES */}
