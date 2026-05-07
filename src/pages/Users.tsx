@@ -28,7 +28,7 @@ type Row = {
 };
 
 const Users = () => {
-  const { user } = useAuth();
+  const { user, activeOrg } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -161,7 +161,7 @@ const Users = () => {
         </Table>
       </div>
 
-      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={load} />
+      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={load} organizationId={activeOrg?.id ?? null} />
       <ResetPasswordDialog row={resetFor} onClose={() => setResetFor(null)} onDone={load} />
       <AssignNvrsDialog row={assignFor} onClose={() => setAssignFor(null)} />
       <EditEmailDialog row={emailFor} onClose={() => setEmailFor(null)} onDone={load} />
@@ -170,8 +170,8 @@ const Users = () => {
 };
 
 function CreateUserDialog({
-  open, onOpenChange, onCreated,
-}: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+  open, onOpenChange, onCreated, organizationId,
+}: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void; organizationId: string | null }) {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -181,10 +181,15 @@ function CreateUserDialog({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!organizationId) {
+      toast.error("No active organization selected");
+      return;
+    }
     setBusy(true);
+    const apiRole = role === "admin" ? "admin" : "customer";
     const { data, error } = await supabase.functions.invoke("admin-users/create", {
       method: "POST",
-      body: { username, password, display_name: displayName || username, role, contact_email: contactEmail || null },
+      body: { username, password, display_name: displayName || username, role: apiRole, contact_email: contactEmail || null, organization_id: organizationId },
     });
     setBusy(false);
     if (error || (data as { ok?: boolean })?.ok === false) {
