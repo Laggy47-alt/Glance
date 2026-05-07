@@ -145,8 +145,9 @@ Deno.serve(async (req) => {
       const username = String(body.username ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
       const display_name = String(body.display_name ?? username);
-      const requestedRole = String(body.role ?? "customer");
-      const role = (["admin", "customer"].includes(requestedRole) ? requestedRole : "customer") as "admin" | "customer";
+      const requestedRole = String(body.role ?? "user");
+      // Accepted: admin (org admin), user (operator), customer (end-customer with NVR access)
+      const role = (["admin", "user", "customer"].includes(requestedRole) ? requestedRole : "user") as "admin" | "user" | "customer";
       const organization_id = String(body.organization_id ?? "");
       if (!username || !password) return json({ ok: false, error: "username and password required" }, 400);
       if (!/^[a-z0-9_.-]{2,32}$/.test(username)) return json({ ok: false, error: "invalid username" }, 400);
@@ -172,10 +173,12 @@ Deno.serve(async (req) => {
       if (error) return json({ ok: false, error: error.message }, 400);
       const newId = created.user!.id;
 
-      // Org membership
-      await a.from("organization_members").insert({ organization_id: org.id, user_id: newId, role });
-      // Backwards-compat: also set legacy app_role so existing UI gates keep working
-      await a.from("user_roles").insert({ user_id: newId, role: role === "admin" ? "admin" : "customer" });
+      // Org membership: enum supports admin/customer. Operators (role='user') get
+      // 'customer' membership for org-scoping while their app_role 'user' grants operator UI.
+      const memberRole = role === "admin" ? "admin" : "customer";
+      await a.from("organization_members").insert({ organization_id: org.id, user_id: newId, role: memberRole });
+      // Legacy app_role drives UI gating (admin / user / customer)
+      await a.from("user_roles").insert({ user_id: newId, role });
 
       if (contact_email) {
         await a.from("profiles").update({ contact_email }).eq("user_id", newId);
