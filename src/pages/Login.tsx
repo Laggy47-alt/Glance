@@ -60,18 +60,34 @@ const Login = () => {
         </div>
 
         <form onSubmit={submit} className="space-y-4 rounded-lg border border-border bg-card/60 p-5 backdrop-blur">
-          <div className="space-y-1.5">
-            <Label htmlFor="org" className="text-xs">Organization ID</Label>
-            <Input
-              id="org"
-              value={orgSlug}
-              onChange={(e) => setOrgSlug(e.target.value)}
-              placeholder=""
-              autoComplete="organization"
-              autoFocus
-              required
-            />
-          </div>
+          {editingOrg ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="org" className="text-xs">Organization ID</Label>
+              <Input
+                id="org"
+                value={orgSlug}
+                onChange={(e) => setOrgSlug(e.target.value)}
+                placeholder=""
+                autoComplete="organization"
+                autoFocus
+                required
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between rounded-md border border-border bg-background/50 px-3 py-2">
+              <div className="text-xs">
+                <span className="text-muted-foreground">Signing into </span>
+                <span className="font-mono font-medium text-foreground">{orgSlug}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingOrg(true)}
+                className="text-[11px] text-primary hover:underline"
+              >
+                change
+              </button>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="username" className="text-xs">Username</Label>
             <Input
