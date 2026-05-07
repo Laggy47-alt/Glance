@@ -1,5 +1,6 @@
 // Polls each enabled Frigate instance for new events and review items.
 // Runs on a schedule (pg_cron) or on demand via POST. Idempotent via frigate_event_id.
+// MULTI-TENANT: every row written carries organization_id from the source frigate_instance.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -12,6 +13,7 @@ const corsHeaders = {
 type FrigateInstance = {
   id: string;
   source_id: string;
+  organization_id: string;
   name: string;
   base_url: string;
   api_key: string | null;
@@ -38,14 +40,12 @@ type FrigateReview = {
   camera: string;
   start_time: number;
   end_time: number | null;
-  severity: string; // "alert" | "detection" | "significant_motion"
+  severity: string;
   thumb_path?: string;
   data?: { detections?: string[]; objects?: string[]; sub_labels?: string[]; zones?: string[] };
 };
 
-function trimUrl(u: string) {
-  return u.replace(/\/+$/, "");
-}
+function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
 
 async function fetchJson<T>(url: string, apiKey: string | null): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -56,25 +56,20 @@ async function fetchJson<T>(url: string, apiKey: string | null): Promise<T> {
 }
 
 function proxyUrl(instanceId: string, path: string) {
-  // Use relative path; the frontend will build the full proxy URL
   return `/${instanceId}${path.startsWith("/") ? path : "/" + path}`;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  // Optional ?instance_id= to poll just one
   const url = new URL(req.url);
   const onlyId = url.searchParams.get("instance_id");
 
   let q = supabase
     .from("frigate_instances")
-    .select("id, source_id, name, base_url, api_key, enabled, poll_enabled, last_event_ts")
+    .select("id, source_id, organization_id, name, base_url, api_key, enabled, poll_enabled, last_event_ts")
     .eq("enabled", true)
     .eq("poll_enabled", true);
   if (onlyId) q = q.eq("id", onlyId);
@@ -99,15 +94,12 @@ Deno.serve(async (req) => {
   return json({ ok: true, polled: results.length, results });
 });
 
-async function pollOne(
-  supabase: ReturnType<typeof createClient>,
-  inst: FrigateInstance,
-) {
+async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateInstance) {
   const base = trimUrl(inst.base_url);
   const sinceMs = inst.last_event_ts ? new Date(inst.last_event_ts).getTime() : Date.now() - 24 * 3600 * 1000;
   const sinceSec = Math.floor(sinceMs / 1000);
+  const orgId = inst.organization_id;
 
-  // EVENTS
   const evUrl = `${base}/api/events?after=${sinceSec}&limit=100&include_thumbnails=0`;
   const events = await fetchJson<FrigateEvent[]>(evUrl, inst.api_key);
 
@@ -124,6 +116,7 @@ async function pollOne(
     const { data: inserted, error: insErr } = await supabase
       .from("webhook_events")
       .upsert({
+        organization_id: orgId,
         source_id: inst.source_id,
         topic,
         payload: ev as unknown as Record<string, unknown>,
@@ -142,13 +135,14 @@ async function pollOne(
       .maybeSingle();
 
     if (insErr) continue;
-    if (!inserted) continue; // duplicate
+    if (!inserted) continue;
     insertedEvents++;
 
     const eventId = inserted.id as string;
     const mediaRows: Array<Record<string, unknown>> = [];
     if (ev.has_snapshot) {
       mediaRows.push({
+        organization_id: orgId,
         source_id: inst.source_id,
         event_id: eventId,
         instance_id: inst.id,
@@ -162,6 +156,7 @@ async function pollOne(
     }
     if (ev.has_clip) {
       mediaRows.push({
+        organization_id: orgId,
         source_id: inst.source_id,
         event_id: eventId,
         instance_id: inst.id,
@@ -179,7 +174,6 @@ async function pollOne(
     }
   }
 
-  // REVIEW (Frigate 0.14+) — best-effort, ignore 404s
   let insertedReviews = 0;
   try {
     const revUrl = `${base}/api/review?after=${sinceSec}&limit=100`;
@@ -194,6 +188,7 @@ async function pollOne(
       const { data: inserted } = await supabase
         .from("webhook_events")
         .upsert({
+          organization_id: orgId,
           source_id: inst.source_id,
           topic,
           payload: rv as unknown as Record<string, unknown>,
@@ -226,7 +221,6 @@ async function pollOne(
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
