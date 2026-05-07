@@ -1199,6 +1199,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_admin_org: { Args: { _org_id: string }; Returns: boolean }
+      can_read_org: { Args: { _org_id: string }; Returns: boolean }
       current_user_org: { Args: never; Returns: string }
       has_role: {
         Args: {

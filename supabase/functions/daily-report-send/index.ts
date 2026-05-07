@@ -247,44 +247,52 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   let body: any = {};
-  if (req.method === "POST") { try { body = await req.json(); } catch { /* empty body is fine */ } }
+  if (req.method === "POST") { try { body = await req.json(); } catch { /* */ } }
 
   const onlyConfigId: string | undefined = body?.config_id;
   const preview: boolean = !!body?.preview;
   const overrideRecipients: string[] | undefined = body?.recipients;
   const providedSnapshots: Array<{ name: string; url: string }> | undefined = body?.snapshots;
 
-  const { data: settings } = await supabase.from("daily_report_settings").select("*").limit(1).maybeSingle();
-  const s: Settings = (settings ?? {
-    from_name: "ABC Glance", from_email: "noreply@example.com", reply_to: null,
-    smtp_host: null, smtp_port: 587, smtp_username: null, smtp_password: null, smtp_secure: "starttls",
-  }) as Settings;
-  const fromHeader = `${s.from_name} <${s.from_email}>`;
-
   let q = supabase.from("daily_report_configs").select("*");
   if (onlyConfigId) q = q.eq("id", onlyConfigId); else q = q.eq("enabled", true);
   const { data: cfgs, error: cfgErr } = await q;
   if (cfgErr) return new Response(JSON.stringify({ error: cfgErr.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+  // Cache per-org SMTP settings
+  const settingsCache = new Map<string, Settings>();
+  async function getSettingsForOrg(orgId: string): Promise<Settings> {
+    if (settingsCache.has(orgId)) return settingsCache.get(orgId)!;
+    const { data } = await supabase.from("daily_report_settings").select("*").eq("organization_id", orgId).limit(1).maybeSingle();
+    const s = (data ?? {
+      from_name: "Glance", from_email: "noreply@example.com", reply_to: null,
+      smtp_host: null, smtp_port: 587, smtp_username: null, smtp_password: null, smtp_secure: "starttls",
+    }) as Settings;
+    settingsCache.set(orgId, s);
+    return s;
+  }
+
   const results: any[] = [];
-  for (const cfg of (cfgs ?? []) as Cfg[]) {
+  for (const cfg of (cfgs ?? []) as (Cfg & { organization_id: string })[]) {
     const { data: inst } = await supabase.from("frigate_instances").select("id, name, base_url, api_key").eq("id", cfg.instance_id).maybeSingle();
     if (!inst) { results.push({ config_id: cfg.id, status: "skipped", error: "instance missing" }); continue; }
+    const s = await getSettingsForOrg(cfg.organization_id);
+    const fromHeader = `${s.from_name} <${s.from_email}>`;
     const email = await buildEmail(cfg, inst as Instance, providedSnapshots);
     const recipients = overrideRecipients?.length ? overrideRecipients : cfg.recipients;
     if (preview) { results.push({ config_id: cfg.id, preview: email }); continue; }
     if (!recipients?.length) {
-      await supabase.from("daily_report_runs").insert({ config_id: cfg.id, instance_id: cfg.instance_id, recipients: [], status: "skipped", error: "no recipients", subject: email.subject });
+      await supabase.from("daily_report_runs").insert({ organization_id: cfg.organization_id, config_id: cfg.id, instance_id: cfg.instance_id, recipients: [], status: "skipped", error: "no recipients", subject: email.subject });
       results.push({ config_id: cfg.id, status: "skipped", error: "no recipients" });
       continue;
     }
     try {
       await sendViaSmtp(s, { from: fromHeader, to: recipients, replyTo: s.reply_to, subject: email.subject, html: email.html, text: email.text });
-      await supabase.from("daily_report_runs").insert({ config_id: cfg.id, instance_id: cfg.instance_id, recipients, status: "sent", subject: email.subject });
+      await supabase.from("daily_report_runs").insert({ organization_id: cfg.organization_id, config_id: cfg.id, instance_id: cfg.instance_id, recipients, status: "sent", subject: email.subject });
       await supabase.from("daily_report_configs").update({ last_sent_at: new Date().toISOString() }).eq("id", cfg.id);
       results.push({ config_id: cfg.id, status: "sent", recipients });
     } catch (e: any) {
-      await supabase.from("daily_report_runs").insert({ config_id: cfg.id, instance_id: cfg.instance_id, recipients, status: "failed", error: String(e?.message ?? e), subject: email.subject });
+      await supabase.from("daily_report_runs").insert({ organization_id: cfg.organization_id, config_id: cfg.id, instance_id: cfg.instance_id, recipients, status: "failed", error: String(e?.message ?? e), subject: email.subject });
       results.push({ config_id: cfg.id, status: "failed", error: String(e?.message ?? e) });
     }
   }

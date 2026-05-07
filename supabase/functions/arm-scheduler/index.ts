@@ -33,6 +33,7 @@ function timeToMinutes(t: string | null): number | null {
 }
 
 type Schedule = {
+  organization_id: string;
   instance_id: string;
   camera: string;
   weekday: number;
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
 
   const { data: scheds, error } = await supabase
     .from("camera_arm_schedules")
-    .select("instance_id,camera,weekday,arm_time,disarm_time,enabled")
+    .select("organization_id,instance_id,camera,weekday,arm_time,disarm_time,enabled")
     .eq("enabled", true)
     .eq("weekday", weekday);
 
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
 
   // For each (instance, camera) pick the most recent boundary in [now - GRACE, now].
   // If there's no boundary in that window, do nothing — manual toggles win between boundaries.
-  type Decision = { action: "arm" | "disarm"; boundaryMin: number };
+  type Decision = { action: "arm" | "disarm"; boundaryMin: number; orgId: string };
   const decisions = new Map<string, Decision>();
 
   for (const s of (scheds ?? []) as Schedule[]) {
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
     const latest = candidates[0];
     const existing = decisions.get(k);
     if (!existing || latest.min > existing.boundaryMin) {
-      decisions.set(k, { action: latest.action, boundaryMin: latest.min });
+      decisions.set(k, { action: latest.action, boundaryMin: latest.min, orgId: s.organization_id });
     }
   }
 
@@ -125,9 +126,10 @@ Deno.serve(async (req) => {
       if (ageMin < 10) continue;
     }
     const [instance_id, camera] = k.split("::");
-    armedUpserts.push({ instance_id, camera, armed: wantArmed, updated_by: null });
-    runUpserts.push({ instance_id, camera, last_action: d.action, last_run_at: new Date().toISOString() });
+    armedUpserts.push({ organization_id: d.orgId, instance_id, camera, armed: wantArmed, updated_by: null });
+    runUpserts.push({ organization_id: d.orgId, instance_id, camera, last_action: d.action, last_run_at: new Date().toISOString() });
     auditInserts.push({
+      organization_id: d.orgId,
       instance_id, camera, action: d.action, source: "schedule",
       actor: null, actor_name: "schedule",
       note: `Auto ${d.action} at scheduled boundary`,

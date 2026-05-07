@@ -21,12 +21,19 @@ Deno.serve(async (req) => {
     const camera = body?.camera ? String(body.camera) : null;
     const reason = body?.reason ? String(body.reason) : "";
     const requester = String(body?.requester_name ?? "A customer");
+    const organization_id = body?.organization_id ? String(body.organization_id) : null;
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    let settingsQ = supabase.from("callout_settings").select("*").limit(1);
+    let smtpQ = supabase.from("daily_report_settings").select("*").limit(1);
+    if (organization_id) {
+      settingsQ = settingsQ.eq("organization_id", organization_id);
+      smtpQ = smtpQ.eq("organization_id", organization_id);
+    }
     const [{ data: settings }, { data: smtp }] = await Promise.all([
-      supabase.from("callout_settings").select("*").limit(1).maybeSingle(),
-      supabase.from("daily_report_settings").select("*").limit(1).maybeSingle(),
+      settingsQ.maybeSingle(),
+      smtpQ.maybeSingle(),
     ]);
 
     const recipients: string[] = (settings?.recipients ?? []).filter((r: string) => typeof r === "string" && r.includes("@"));
