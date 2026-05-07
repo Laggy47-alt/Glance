@@ -306,6 +306,68 @@ export default function SuperAdmin() {
               </Table>
             </Card>
           </TabsContent>
+
+          {/* CUSTOMIZATION */}
+          <TabsContent value="customization" className="space-y-6 mt-4">
+            <SuperBrandingEditor
+              title="Platform branding (Super Admin Portal)"
+              description="Logo, name, and subtitle shown on the Super Admin Portal itself."
+              initial={{ appName: platform.appName, appSubtitle: platform.appSubtitle, logoUrl: platform.logoUrl }}
+              pathPrefix="platform"
+              onSave={async (payload) => {
+                const { data: existing } = await supabase
+                  .from("platform_settings").select("id").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+                if (existing?.id) {
+                  const { error } = await supabase.from("platform_settings").update(payload).eq("id", existing.id);
+                  if (error) throw error;
+                } else {
+                  const { error } = await supabase.from("platform_settings").insert(payload);
+                  if (error) throw error;
+                }
+                await platform.refresh();
+              }}
+            />
+
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold">Per-organization branding</h3>
+                <p className="text-xs text-muted-foreground">Each organization sees its own logo and name across the dashboard.</p>
+              </div>
+              {orgs.length === 0 ? (
+                <Card className="p-6 text-sm text-muted-foreground">No organizations yet.</Card>
+              ) : (
+                <div className="grid gap-4">
+                  {orgs.map((o) => {
+                    const s = orgSettings.find((x) => x.organization_id === o.id);
+                    return (
+                      <SuperBrandingEditor
+                        key={o.id}
+                        title={o.name}
+                        description={`Slug: ${o.slug}`}
+                        initial={{
+                          appName: s?.app_name ?? "Glance",
+                          appSubtitle: s?.app_subtitle ?? "Event Dashboard",
+                          logoUrl: s?.logo_url ?? null,
+                        }}
+                        pathPrefix={`org/${o.id}`}
+                        onSave={async (payload) => {
+                          if (s?.id) {
+                            const { error } = await supabase.from("app_settings").update(payload).eq("id", s.id);
+                            if (error) throw error;
+                          } else {
+                            const { error } = await supabase.from("app_settings")
+                              .insert({ ...payload, organization_id: o.id });
+                            if (error) throw error;
+                          }
+                          await load();
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
         </Tabs>
       </main>
 
