@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight, Palette } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBranding } from "@/hooks/useBranding";
+import { usePlatformBranding } from "@/hooks/usePlatformBranding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
 import { toast } from "sonner";
 
 type Org = { id: string; slug: string; name: string; created_at: string };
@@ -22,11 +23,12 @@ type Callout = {
   admin_note: string | null; requester_name: string | null;
   created_at: string; resolved_at: string | null; organization_id: string;
 };
+type OrgSettings = { id?: string; organization_id: string; app_name: string; app_subtitle: string; logo_url: string | null };
 
 export default function SuperAdmin() {
   const navigate = useNavigate();
   const { signOut, impersonateOrg } = useAuth();
-  const { appName, logoUrl } = useBranding();
+  const platform = usePlatformBranding();
 
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
