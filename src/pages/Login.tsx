@@ -118,9 +118,6 @@ const Login = () => {
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Sign in
           </Button>
-          <p className="text-[11px] text-muted-foreground text-center">
-            Platform owners: use organization ID <code className="text-foreground">super</code>.
-          </p>
         </form>
       </div>
     </div>
