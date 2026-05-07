@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
 
     const { data: source, error: srcErr } = await supabase
       .from("webhook_sources")
-      .select("id, name, slug, secret, enabled")
+      .select("id, name, slug, secret, enabled, organization_id")
       .eq("slug", slug)
       .maybeSingle();
 
@@ -202,6 +202,7 @@ Deno.serve(async (req) => {
     const payloadJson = (payload && typeof payload === "object") ? payload : { value: payload };
 
     const insertRow: Record<string, unknown> = {
+      organization_id: (source as any).organization_id,
       source_id: source.id,
       topic,
       payload: payloadJson,
@@ -249,6 +250,7 @@ Deno.serve(async (req) => {
       }
       await supabase.from("media_items").insert(
         media.map((m) => ({
+          organization_id: (source as any).organization_id,
           source_id: source.id,
           event_id: evId,
           kind: m.kind,
