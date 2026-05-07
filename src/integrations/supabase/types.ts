@@ -980,6 +980,33 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_settings: {
+        Row: {
+          app_name: string
+          app_subtitle: string
+          id: string
+          logo_url: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          app_name?: string
+          app_subtitle?: string
+          id?: string
+          logo_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          app_name?: string
+          app_subtitle?: string
+          id?: string
+          logo_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           contact_email: string | null

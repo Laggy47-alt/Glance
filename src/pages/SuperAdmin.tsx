@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight, Palette } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useBranding } from "@/hooks/useBranding";
+import { usePlatformBranding } from "@/hooks/usePlatformBranding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
 import { toast } from "sonner";
 
 type Org = { id: string; slug: string; name: string; created_at: string };
@@ -22,15 +23,17 @@ type Callout = {
   admin_note: string | null; requester_name: string | null;
   created_at: string; resolved_at: string | null; organization_id: string;
 };
+type OrgSettings = { id?: string; organization_id: string; app_name: string; app_subtitle: string; logo_url: string | null };
 
 export default function SuperAdmin() {
   const navigate = useNavigate();
   const { signOut, impersonateOrg } = useAuth();
-  const { appName, logoUrl } = useBranding();
+  const platform = usePlatformBranding();
 
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [callouts, setCallouts] = useState<Callout[]>([]);
+  const [orgSettings, setOrgSettings] = useState<OrgSettings[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -46,16 +49,18 @@ export default function SuperAdmin() {
 
   const load = async () => {
     setLoading(true);
-    const [{ data: o }, { data: s }, { data: c }] = await Promise.all([
+    const [{ data: o }, { data: s }, { data: c }, { data: as }] = await Promise.all([
       supabase.from("organizations").select("id, slug, name, created_at").order("name"),
       supabase.from("frigate_instances").select("id, name, base_url, color, enabled, organization_id").order("name"),
       supabase.from("super_callout_requests")
         .select("id, subject, message, status, admin_note, requester_name, created_at, resolved_at, organization_id")
         .order("created_at", { ascending: false }).limit(200),
+      supabase.from("app_settings").select("id, organization_id, app_name, app_subtitle, logo_url"),
     ]);
     setOrgs((o ?? []) as Org[]);
     setSites((s ?? []) as Site[]);
     setCallouts((c ?? []) as Callout[]);
+    setOrgSettings((as ?? []) as OrgSettings[]);
     setLoading(false);
   };
 
@@ -145,11 +150,11 @@ export default function SuperAdmin() {
       <header className="h-16 shrink-0 border-b border-border bg-card/40 backdrop-blur px-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-9 w-9 rounded-md bg-gradient-primary grid place-items-center shadow-glow overflow-hidden shrink-0">
-            {logoUrl ? <img src={logoUrl} alt={appName} className="h-full w-full object-contain" /> : <Webhook className="h-5 w-5 text-primary-foreground" />}
+            {platform.logoUrl ? <img src={platform.logoUrl} alt={platform.appName} className="h-full w-full object-contain" /> : <Webhook className="h-5 w-5 text-primary-foreground" />}
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-foreground tracking-tight truncate">Super Admin Portal</h1>
-            <p className="text-xs text-muted-foreground truncate">Platform-wide overview</p>
+            <h1 className="text-lg font-semibold text-foreground tracking-tight truncate">{platform.appName} — Super Admin</h1>
+            <p className="text-xs text-muted-foreground truncate">{platform.appSubtitle}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={handleSignOut} className="gap-1.5">
@@ -166,6 +171,7 @@ export default function SuperAdmin() {
               <Phone className="h-4 w-4" /> Callouts
               {openCallouts.length > 0 && <Badge variant="secondary" className="ml-1">{openCallouts.length}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
           </TabsList>
 
           {/* SITES */}
@@ -299,6 +305,68 @@ export default function SuperAdmin() {
                 </TableBody>
               </Table>
             </Card>
+          </TabsContent>
+
+          {/* CUSTOMIZATION */}
+          <TabsContent value="customization" className="space-y-6 mt-4">
+            <SuperBrandingEditor
+              title="Platform branding (Super Admin Portal)"
+              description="Logo, name, and subtitle shown on the Super Admin Portal itself."
+              initial={{ appName: platform.appName, appSubtitle: platform.appSubtitle, logoUrl: platform.logoUrl }}
+              pathPrefix="platform"
+              onSave={async (payload) => {
+                const { data: existing } = await supabase
+                  .from("platform_settings").select("id").order("updated_at", { ascending: false }).limit(1).maybeSingle();
+                if (existing?.id) {
+                  const { error } = await supabase.from("platform_settings").update(payload).eq("id", existing.id);
+                  if (error) throw error;
+                } else {
+                  const { error } = await supabase.from("platform_settings").insert(payload);
+                  if (error) throw error;
+                }
+                await platform.refresh();
+              }}
+            />
+
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold">Per-organization branding</h3>
+                <p className="text-xs text-muted-foreground">Each organization sees its own logo and name across the dashboard.</p>
+              </div>
+              {orgs.length === 0 ? (
+                <Card className="p-6 text-sm text-muted-foreground">No organizations yet.</Card>
+              ) : (
+                <div className="grid gap-4">
+                  {orgs.map((o) => {
+                    const s = orgSettings.find((x) => x.organization_id === o.id);
+                    return (
+                      <SuperBrandingEditor
+                        key={o.id}
+                        title={o.name}
+                        description={`Slug: ${o.slug}`}
+                        initial={{
+                          appName: s?.app_name ?? "Glance",
+                          appSubtitle: s?.app_subtitle ?? "Event Dashboard",
+                          logoUrl: s?.logo_url ?? null,
+                        }}
+                        pathPrefix={`org/${o.id}`}
+                        onSave={async (payload) => {
+                          if (s?.id) {
+                            const { error } = await supabase.from("app_settings").update(payload).eq("id", s.id);
+                            if (error) throw error;
+                          } else {
+                            const { error } = await supabase.from("app_settings")
+                              .insert({ ...payload, organization_id: o.id });
+                            if (error) throw error;
+                          }
+                          await load();
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </main>
