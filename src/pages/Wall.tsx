@@ -311,46 +311,7 @@ const Wall = () => {
     setAlerts((prev) => prev.filter((a) => !(a.event && archivedIds.has(a.event.id))));
   }, [store.events]);
 
-  // Per-camera follow-up: when a new alert arrives for the same camera within
-  // 5 minutes, the previous un-ACKed alert for that camera is auto-ACKed
-  // (archived in DB) and replaced by the newest one. Operators then only need
-  // to ACK the latest in the burst.
-  useEffect(() => {
-    setAlerts((prev) => {
-      const byCamera = new Map<string, Alert[]>();
-      prev.forEach((a) => {
-        const arr = byCamera.get(a.camera) ?? [];
-        arr.push(a);
-        byCamera.set(a.camera, arr);
-      });
-      const drop = new Set<string>();
-      byCamera.forEach((arr) => {
-        if (arr.length < 2) return;
-        // Keep newest, archive older ones if within 5 min of any newer one.
-        const sorted = [...arr].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-        for (let i = 1; i < sorted.length; i++) {
-          const older = sorted[i];
-          const newer = sorted[i - 1];
-          if (new Date(newer.ts).getTime() - new Date(older.ts).getTime() < CAMERA_FOLLOWUP_MS) {
-            if (autoArchivedRef.current.has(older.key)) { drop.add(older.key); continue; }
-            autoArchivedRef.current.add(older.key);
-            void logAudit({
-              alert_key: older.key,
-              event_id: older.event?.id ?? null,
-              action: "ack",
-              note: `auto-acked: superseded by newer motion on ${older.camera} within 40s`,
-            });
-            if (older.event) {
-              void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", older.event.id);
-            }
-            drop.add(older.key);
-          }
-        }
-      });
-      if (!drop.size) return prev;
-      return prev.filter((a) => !drop.has(a.key));
-    });
-  }, [alerts]);
+  // Alerts are NEVER auto-dismissed — operators must explicitly ACK each one.
 
   const recentCount = useMemo(
     () => store.events.filter((e) => !e.archived && Date.now() - new Date(e.ts).getTime() < 5 * 60_000).length,
