@@ -161,7 +161,7 @@ const Users = () => {
         </Table>
       </div>
 
-      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={load} />
+      <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={load} organizationId={activeOrg?.id ?? null} />
       <ResetPasswordDialog row={resetFor} onClose={() => setResetFor(null)} onDone={load} />
       <AssignNvrsDialog row={assignFor} onClose={() => setAssignFor(null)} />
       <EditEmailDialog row={emailFor} onClose={() => setEmailFor(null)} onDone={load} />
