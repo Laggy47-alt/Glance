@@ -25,6 +25,8 @@ type AuthCtx = {
   orgs: OrgMembership[];
   activeOrg: OrgMembership["organization"] | null;
   setActiveOrgId: (id: string | null) => void;
+  impersonateOrg: (org: { id: string; slug: string; name: string } | null) => void;
+  isImpersonating: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -32,6 +34,7 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 const ACTIVE_ORG_KEY = "auth.activeOrgId";
+const IMPERSONATE_KEY = "auth.impersonateOrg";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -44,12 +47,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { return localStorage.getItem(ACTIVE_ORG_KEY); } catch { return null; }
   });
   const [loading, setLoading] = useState(true);
+  const [impersonated, setImpersonated] = useState<{ id: string; slug: string; name: string } | null>(() => {
+    try { const v = localStorage.getItem(IMPERSONATE_KEY); return v ? JSON.parse(v) : null; } catch { return null; }
+  });
 
   const setActiveOrgId = (id: string | null) => {
     setActiveOrgIdState(id);
     try {
       if (id) localStorage.setItem(ACTIVE_ORG_KEY, id);
       else localStorage.removeItem(ACTIVE_ORG_KEY);
+    } catch { /* ignore */ }
+  };
+
+  const impersonateOrg = (org: { id: string; slug: string; name: string } | null) => {
+    setImpersonated(org);
+    try {
+      if (org) localStorage.setItem(IMPERSONATE_KEY, JSON.stringify(org));
+      else localStorage.removeItem(IMPERSONATE_KEY);
     } catch { /* ignore */ }
   };
 
@@ -88,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsCustomer(false);
         setOrgs([]);
         setActiveOrgId(null);
+        impersonateOrg(null);
       }
     });
     supabase.auth.getSession().then(async ({ data }) => {
@@ -100,25 +115,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const activeOrg = useMemo(() => {
+    if (impersonated) return impersonated;
     if (!orgs.length) return null;
     return (orgs.find((m) => m.organization_id === activeOrgId)?.organization
       ?? orgs[0].organization) ?? null;
-  }, [orgs, activeOrgId]);
+  }, [orgs, activeOrgId, impersonated]);
 
   const value = useMemo<AuthCtx>(() => ({
     session,
     user: session?.user ?? null,
     profile,
-    isAdmin,
+    isAdmin: isAdmin || (isSuperAdmin && !!impersonated),
     isSuperAdmin,
     isCustomer,
     orgs,
     activeOrg,
     setActiveOrgId,
+    impersonateOrg,
+    isImpersonating: !!impersonated,
     loading,
     signOut: async () => { await supabase.auth.signOut(); },
     refreshProfile: async () => { if (session?.user) await loadProfile(session.user.id); },
-  }), [session, profile, isAdmin, isSuperAdmin, isCustomer, orgs, activeOrg, loading]);
+  }), [session, profile, isAdmin, isSuperAdmin, isCustomer, orgs, activeOrg, loading, impersonated]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
