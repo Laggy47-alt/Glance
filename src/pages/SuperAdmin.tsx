@@ -33,6 +33,7 @@ export default function SuperAdmin() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [callouts, setCallouts] = useState<Callout[]>([]);
+  const [orgSettings, setOrgSettings] = useState<OrgSettings[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -48,16 +49,18 @@ export default function SuperAdmin() {
 
   const load = async () => {
     setLoading(true);
-    const [{ data: o }, { data: s }, { data: c }] = await Promise.all([
+    const [{ data: o }, { data: s }, { data: c }, { data: as }] = await Promise.all([
       supabase.from("organizations").select("id, slug, name, created_at").order("name"),
       supabase.from("frigate_instances").select("id, name, base_url, color, enabled, organization_id").order("name"),
       supabase.from("super_callout_requests")
         .select("id, subject, message, status, admin_note, requester_name, created_at, resolved_at, organization_id")
         .order("created_at", { ascending: false }).limit(200),
+      supabase.from("app_settings").select("id, organization_id, app_name, app_subtitle, logo_url"),
     ]);
     setOrgs((o ?? []) as Org[]);
     setSites((s ?? []) as Site[]);
     setCallouts((c ?? []) as Callout[]);
+    setOrgSettings((as ?? []) as OrgSettings[]);
     setLoading(false);
   };
 
