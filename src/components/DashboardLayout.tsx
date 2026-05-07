@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook } from "lucide-react";
+import { LogOut, Webhook, ArrowLeft } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
 import { useSnapshotRefresher } from "@/hooks/useSnapshotRefresher";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,7 +21,7 @@ export function DashboardLayout({
   hideSidebar?: boolean;
 }) {
   useSnapshotRefresher();
-  const { isCustomer, signOut } = useAuth();
+  const { isCustomer, isSuperAdmin, isImpersonating, impersonateOrg, signOut } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const navigate = useNavigate();
 
@@ -30,10 +30,25 @@ export function DashboardLayout({
     navigate("/login", { replace: true });
   };
 
+  const returnToPortal = () => {
+    impersonateOrg(null);
+    navigate("/super", { replace: true });
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       {!hideSidebar && <AppSidebar />}
       <div className="flex-1 flex flex-col min-w-0">
+        {isSuperAdmin && isImpersonating && (
+          <div className="bg-primary/15 border-b border-primary/30 px-6 py-2 flex items-center justify-between gap-3">
+            <div className="text-xs text-foreground">
+              <span className="font-semibold">Super Admin view</span> — impersonating organization
+            </div>
+            <Button size="sm" variant="outline" onClick={returnToPortal} className="gap-1.5 h-7">
+              <ArrowLeft className="h-3.5 w-3.5" /> Return to Super Portal
+            </Button>
+          </div>
+        )}
         <header className="h-16 shrink-0 border-b border-border bg-card/40 backdrop-blur px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-9 w-9 rounded-md bg-gradient-primary grid place-items-center shadow-glow overflow-hidden shrink-0">
