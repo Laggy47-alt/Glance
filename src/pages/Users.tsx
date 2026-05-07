@@ -186,10 +186,9 @@ function CreateUserDialog({
       return;
     }
     setBusy(true);
-    const apiRole = role === "admin" ? "admin" : "customer";
     const { data, error } = await supabase.functions.invoke("admin-users/create", {
       method: "POST",
-      body: { username, password, display_name: displayName || username, role: apiRole, contact_email: contactEmail || null, organization_id: organizationId },
+      body: { username, password, display_name: displayName || username, role, contact_email: contactEmail || null, organization_id: organizationId },
     });
     setBusy(false);
     if (error || (data as { ok?: boolean })?.ok === false) {
