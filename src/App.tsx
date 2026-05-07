@@ -30,6 +30,7 @@ import CustomerEvents from "./pages/CustomerEvents.tsx";
 import CustomerInstructions from "./pages/CustomerInstructions.tsx";
 import Callouts from "./pages/Callouts.tsx";
 import SuperAdmin from "./pages/SuperAdmin.tsx";
+import RequestSupportCallout from "./pages/RequestSupportCallout.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/customization" element={protect(<Customization />, true)} />
               <Route path="/daily-reports" element={protect(<DailyReports />, true)} />
               <Route path="/callouts" element={protect(<Callouts />, true)} />
+              <Route path="/request-support" element={protect(<RequestSupportCallout />, true)} />
               <Route path="/customer" element={protect(<Customer />)} />
               <Route path="/customer/events" element={protect(<CustomerEvents />)} />
               <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />
