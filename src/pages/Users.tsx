@@ -28,7 +28,7 @@ type Row = {
 };
 
 const Users = () => {
-  const { user } = useAuth();
+  const { user, activeOrg } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
