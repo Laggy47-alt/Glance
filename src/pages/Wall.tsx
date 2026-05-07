@@ -209,8 +209,7 @@ const Wall = () => {
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
       // Skip cameras that are currently disarmed
       if (isCameraDisarmed(m.source_id, m.instance_id, m.camera)) { seenRef.current.add(key); continue; }
-      // Skip stale media that pre-dates this Wall session
-      if (new Date(m.ts).getTime() < mountedAtRef.current - 60_000) { seenRef.current.add(key); continue; }
+      // Persist standalone clip alerts until ACKed (no staleness drop).
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
