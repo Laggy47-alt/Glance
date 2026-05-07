@@ -38,7 +38,7 @@ const customerItems = [
 
 export function AppSidebar() {
   const store = useWebhookStore();
-  const { profile, isAdmin, isCustomer, signOut } = useAuth();
+  const { profile, isAdmin, isCustomer, signOut, activeOrg } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const location = useLocation();
   const navigate = useNavigate();
@@ -105,7 +105,7 @@ export function AppSidebar() {
             className="w-full group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors"
           >
             <Building2 className="h-4 w-4 text-muted-foreground group-hover:text-sidebar-accent-foreground" />
-            <span className="flex-1 text-left">ABC Sites</span>
+            <span className="flex-1 text-left truncate">{activeOrg?.name ? `${activeOrg.name} Sites` : "Sites"}</span>
             <span className="text-[10px] text-muted-foreground tabular-nums">{sites.length}</span>
             <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", sitesOpen && "rotate-180")} />
           </button>
