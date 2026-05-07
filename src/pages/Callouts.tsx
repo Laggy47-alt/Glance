@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Loader2, Phone, Settings, CheckCircle2, Clock, Trash2 } from "lucide-react";
 
@@ -25,6 +26,7 @@ type Callout = {
 
 const Callouts = () => {
   const store = useWebhookStore();
+  const { activeOrg } = useAuth();
   const [rows, setRows] = useState<Callout[]>([]);
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -58,7 +60,7 @@ const Callouts = () => {
     if (error) { toast.error(error.message); return; }
     toast.success("Updated");
     if (status === "resolved") {
-      const { data, error: emailErr } = await supabase.functions.invoke("callout-resolved", { body: { callout_id: id } });
+      const { data, error: emailErr } = await supabase.functions.invoke("callout-resolved", { body: { callout_id: id, organization_id: activeOrg?.id ?? null } });
       if (emailErr || (data as { error?: string })?.error) {
         toast.error(`Email not sent: ${(data as { error?: string })?.error ?? emailErr?.message}`);
       } else {
