@@ -17,8 +17,9 @@ import { toast } from "sonner";
 type Org = { id: string; slug: string; name: string; created_at: string };
 type Site = { id: string; name: string; base_url: string; color: string; enabled: boolean; organization_id: string };
 type Callout = {
-  id: string; instance_id: string; camera: string | null; reason: string | null;
-  status: string; requester_name: string | null; created_at: string; organization_id: string;
+  id: string; subject: string; message: string | null; status: string;
+  admin_note: string | null; requester_name: string | null;
+  created_at: string; resolved_at: string | null; organization_id: string;
 };
 
 export default function SuperAdmin() {
@@ -36,6 +37,10 @@ export default function SuperAdmin() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
+  const [replyFor, setReplyFor] = useState<Callout | null>(null);
+  const [replyNote, setReplyNote] = useState("");
+  const [replyBusy, setReplyBusy] = useState(false);
+
   const orgById = useMemo(() => Object.fromEntries(orgs.map((o) => [o.id, o])), [orgs]);
 
   const load = async () => {
@@ -43,7 +48,8 @@ export default function SuperAdmin() {
     const [{ data: o }, { data: s }, { data: c }] = await Promise.all([
       supabase.from("organizations").select("id, slug, name, created_at").order("name"),
       supabase.from("frigate_instances").select("id, name, base_url, color, enabled, organization_id").order("name"),
-      supabase.from("callout_requests").select("id, instance_id, camera, reason, status, requester_name, created_at, organization_id")
+      supabase.from("super_callout_requests")
+        .select("id, subject, message, status, admin_note, requester_name, created_at, resolved_at, organization_id")
         .order("created_at", { ascending: false }).limit(200),
     ]);
     setOrgs((o ?? []) as Org[]);
@@ -56,12 +62,27 @@ export default function SuperAdmin() {
     void load();
     const ch = supabase
       .channel("super-admin")
-      .on("postgres_changes", { event: "*", schema: "public", table: "callout_requests" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "super_callout_requests" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "frigate_instances" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "organizations" }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, []);
+
+  const resolveCallout = async () => {
+    if (!replyFor) return;
+    setReplyBusy(true);
+    const { error } = await supabase.from("super_callout_requests").update({
+      status: "resolved",
+      admin_note: replyNote.trim() || null,
+      resolved_at: new Date().toISOString(),
+    }).eq("id", replyFor.id);
+    setReplyBusy(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Marked resolved");
+    setReplyFor(null); setReplyNote("");
+    void load();
+  };
 
   const handleSignOut = async () => {
     impersonateOrg(null);
