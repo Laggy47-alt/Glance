@@ -39,9 +39,28 @@ const Users = () => {
 
   const load = async () => {
     setLoading(true);
+    if (!activeOrg?.id) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+    // Only show users that belong to the currently active org.
+    const { data: members } = await supabase
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", activeOrg.id);
+    const memberIds = (members ?? []).map((m) => m.user_id);
+    if (memberIds.length === 0) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
     const [{ data: profs }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("user_id, username, display_name, must_change_password, contact_email").order("username"),
-      supabase.from("user_roles").select("user_id, role"),
+      supabase.from("profiles")
+        .select("user_id, username, display_name, must_change_password, contact_email")
+        .in("user_id", memberIds)
+        .order("username"),
+      supabase.from("user_roles").select("user_id, role").in("user_id", memberIds),
     ]);
     const roleMap = new Map<string, UserRole>();
     (roles ?? []).forEach((r) => {
@@ -63,7 +82,7 @@ const Users = () => {
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [activeOrg?.id]);
 
   const deleteUser = async (r: Row) => {
     if (!confirm(`Delete user "${r.username}"? This cannot be undone.`)) return;
