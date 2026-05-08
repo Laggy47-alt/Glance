@@ -388,6 +388,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
         </Button>
         <Button variant="ghost" size="sm" onClick={onDelete} className="ml-auto text-destructive hover:text-destructive">Remove</Button>
       </div>
+      </>)}
     </Card>
   );
 }
