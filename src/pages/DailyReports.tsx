@@ -95,7 +95,7 @@ const PLACEHOLDERS = [
   "{{positive_incidents_count}}", "{{positive_incidents_list}}",
 ];
 
-const DEFAULT_SUBJECT = "Daily Report — {{nvr_name}} — {{date}}";
+const DEFAULT_SUBJECT = "ABC Glance Status report— {{site_name}}";
 const DEFAULT_BODY = `Dear client,
 
 Please find below the daily system status report for our ABC Glance surveillance system.
