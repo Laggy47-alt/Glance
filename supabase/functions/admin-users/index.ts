@@ -193,6 +193,56 @@ Deno.serve(async (req) => {
       return json({ ok: true, organizations: data ?? [] });
     }
 
+    if (action === "delete-org") {
+      if (!caller.isSuperAdmin) return json({ ok: false, error: "super-admin only" }, 403);
+      const organization_id = String(body.organization_id ?? "").trim();
+      if (!organization_id) return json({ ok: false, error: "organization_id required" }, 400);
+
+      const { data: org } = await a.from("organizations")
+        .select("id, slug").eq("id", organization_id).maybeSingle();
+      if (!org) return json({ ok: false, error: "organization not found" }, 404);
+      if ((org as any).slug === "super") return json({ ok: false, error: "cannot delete the super organization" }, 400);
+
+      const orgScopedTables = [
+        "media_tags", "media_items", "event_audit_log",
+        "webhook_events", "webhook_sources", "frigate_instances",
+        "auto_read_rules", "camera_arm_audit", "camera_arm_schedule_runs",
+        "camera_arm_schedules", "camera_armed_state", "camera_status",
+        "offline_instruction_acks", "customer_offline_instructions",
+        "customer_camera_assignments", "customer_nvr_assignments",
+        "callout_requests", "callout_settings", "super_callout_requests",
+        "daily_report_runs", "daily_report_configs", "daily_report_settings",
+        "app_settings",
+      ];
+      for (const t of orgScopedTables) {
+        const { error: delErr } = await a.from(t).delete().eq("organization_id", organization_id);
+        if (delErr) console.error(`delete-org: failed clearing ${t}`, delErr.message);
+      }
+
+      const { data: members } = await a.from("organization_members")
+        .select("user_id").eq("organization_id", organization_id);
+      const memberIds = Array.from(new Set((members ?? []).map((m: any) => m.user_id as string)));
+
+      await a.from("organization_members").delete().eq("organization_id", organization_id);
+
+      for (const uid of memberIds) {
+        if (uid === caller.userId) continue;
+        const { count } = await a.from("organization_members")
+          .select("user_id", { count: "exact", head: true }).eq("user_id", uid);
+        if ((count ?? 0) === 0) {
+          await a.from("user_roles").delete().eq("user_id", uid);
+          await a.from("profiles").delete().eq("user_id", uid);
+          const { error: authErr } = await a.auth.admin.deleteUser(uid);
+          if (authErr) console.error(`delete-org: failed deleting auth user ${uid}`, authErr.message);
+        }
+      }
+
+      const { error: orgErr } = await a.from("organizations").delete().eq("id", organization_id);
+      if (orgErr) return json({ ok: false, error: orgErr.message }, 400);
+
+      return json({ ok: true });
+    }
+
     if (action === "create") {
       const username = String(body.username ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
