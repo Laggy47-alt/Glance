@@ -417,11 +417,11 @@ Positive incidents (last 24h): {{positive_incidents_count}}`);
   const reset = () => setReports(REPORT_SEED);
 
   const renderTemplate = (tpl: string, r: DemoReport) =>
-    tpl.replaceAll("{{nvr_name}}", r.nvr)
-       .replaceAll("{{date}}", new Date().toLocaleDateString())
-       .replaceAll("{{cameras_online_count}}", String(Math.max(0, parseInt(r.cameras) || 6)))
-       .replaceAll("{{cameras_offline_count}}", "0")
-       .replaceAll("{{positive_incidents_count}}", String(Math.floor(Math.random()*5)));
+    tpl.replace(/\{\{nvr_name\}\}/g, r.nvr)
+       .replace(/\{\{date\}\}/g, new Date().toLocaleDateString())
+       .replace(/\{\{cameras_online_count\}\}/g, String(Math.max(0, parseInt(r.cameras) || 6)))
+       .replace(/\{\{cameras_offline_count\}\}/g, "0")
+       .replace(/\{\{positive_incidents_count\}\}/g, String(Math.floor(Math.random()*5)));
 
   return (
     <div className="space-y-4 max-w-5xl">
