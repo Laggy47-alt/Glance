@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlatformBranding } from "@/hooks/usePlatformBranding";
@@ -45,6 +45,10 @@ export default function SuperAdmin() {
   const [replyFor, setReplyFor] = useState<Callout | null>(null);
   const [replyNote, setReplyNote] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
+
+  const [deleteOrg, setDeleteOrg] = useState<Org | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const orgById = useMemo(() => Object.fromEntries(orgs.map((o) => [o.id, o])), [orgs]);
 
@@ -132,6 +136,27 @@ export default function SuperAdmin() {
     toast.success(`Created ${name}`);
     setCreateOpen(false);
     setNewSlug(""); setNewName("");
+    void load();
+  };
+
+  const performDeleteOrg = async () => {
+    if (!deleteOrg) return;
+    if (deleteConfirm.trim().toLowerCase() !== deleteOrg.slug.toLowerCase()) {
+      toast.error("Type the org slug to confirm");
+      return;
+    }
+    setDeleting(true);
+    const { data, error } = await supabase.functions.invoke("admin-users/delete-org", {
+      method: "POST",
+      body: { organization_id: deleteOrg.id },
+    });
+    setDeleting(false);
+    if (error || !(data as any)?.ok) {
+      toast.error((data as any)?.error || error?.message || "Failed to delete organization");
+      return;
+    }
+    toast.success(`Deleted ${deleteOrg.name}`);
+    setDeleteOrg(null); setDeleteConfirm("");
     void load();
   };
 
@@ -266,9 +291,16 @@ export default function SuperAdmin() {
                       <TableCell>{(sitesByOrg.get(o.id) ?? []).length}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
-                          Enter <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex justify-end gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
+                            Enter <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
+                          {o.slug !== "super" && (
+                            <Button size="sm" variant="outline" onClick={() => { setDeleteOrg(o); setDeleteConfirm(""); }} className="gap-1.5 text-destructive hover:text-destructive">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -397,6 +429,38 @@ export default function SuperAdmin() {
             <Button onClick={createOrg} disabled={creating}>
               {creating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteOrg} onOpenChange={(o) => { if (!o) { setDeleteOrg(null); setDeleteConfirm(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="text-destructive">Delete organization</DialogTitle></DialogHeader>
+          {deleteOrg && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                <p className="font-medium text-destructive">This action cannot be undone.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  All sites, cameras, events, callouts, schedules, daily reports, settings,
+                  and users belonging only to <span className="font-semibold text-foreground">{deleteOrg.name}</span> will be permanently deleted.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Type <span className="font-mono font-semibold">{deleteOrg.slug}</span> to confirm</Label>
+                <Input value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder={deleteOrg.slug} autoFocus />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteOrg(null); setDeleteConfirm(""); }} disabled={deleting}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={performDeleteOrg}
+              disabled={deleting || !deleteOrg || deleteConfirm.trim().toLowerCase() !== deleteOrg.slug.toLowerCase()}
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete permanently
             </Button>
           </DialogFooter>
         </DialogContent>
