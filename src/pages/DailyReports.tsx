@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Send, Save, Plus, X, Eye, Server, Clock, AlertCircle } from "lucide-react";
+import { Mail, Send, Save, Plus, X, Eye, Server, Clock, AlertCircle, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -131,6 +131,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [availableCameras, setAvailableCameras] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => { setLocal(cfg); }, [cfg.id]);
 
@@ -229,7 +230,13 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   return (
     <Card className="bg-gradient-card border-border shadow-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition"
+          aria-expanded={expanded}
+        >
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground shrink-0 transition-transform", expanded ? "rotate-0" : "-rotate-90")} />
           <Server className="h-4 w-4 text-primary shrink-0" />
           <h3 className="font-semibold text-foreground truncate">
             {local.label?.trim() ? local.label : instanceName}
@@ -245,12 +252,13 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
               Last sent {new Date(cfg.last_sent_at).toLocaleString()}
             </Badge>
           )}
-        </div>
+        </button>
         <div className="flex items-center gap-2">
           <Switch checked={local.enabled} onCheckedChange={(v) => setLocal({ ...local, enabled: v })} />
           <span className="text-xs text-muted-foreground">{local.enabled ? "Enabled" : "Paused"}</span>
         </div>
       </div>
+      {expanded && (<>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-1.5">
@@ -380,6 +388,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
         </Button>
         <Button variant="ghost" size="sm" onClick={onDelete} className="ml-auto text-destructive hover:text-destructive">Remove</Button>
       </div>
+      </>)}
     </Card>
   );
 }
