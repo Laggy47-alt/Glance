@@ -433,6 +433,38 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!deleteOrg} onOpenChange={(o) => { if (!o) { setDeleteOrg(null); setDeleteConfirm(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="text-destructive">Delete organization</DialogTitle></DialogHeader>
+          {deleteOrg && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                <p className="font-medium text-destructive">This action cannot be undone.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  All sites, cameras, events, callouts, schedules, daily reports, settings,
+                  and users belonging only to <span className="font-semibold text-foreground">{deleteOrg.name}</span> will be permanently deleted.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Type <span className="font-mono font-semibold">{deleteOrg.slug}</span> to confirm</Label>
+                <Input value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder={deleteOrg.slug} autoFocus />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteOrg(null); setDeleteConfirm(""); }} disabled={deleting}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={performDeleteOrg}
+              disabled={deleting || !deleteOrg || deleteConfirm.trim().toLowerCase() !== deleteOrg.slug.toLowerCase()}
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
