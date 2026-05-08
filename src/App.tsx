@@ -32,6 +32,7 @@ import Callouts from "./pages/Callouts.tsx";
 import SuperAdmin from "./pages/SuperAdmin.tsx";
 import RequestSupportCallout from "./pages/RequestSupportCallout.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import Demo from "./pages/Demo.tsx";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
           <BrandingProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/demo" element={<Demo />} />
               <Route path="/super" element={protect(<SuperAdmin />)} />
               <Route path="/change-password" element={protect(<ChangePassword />)} />
               <Route path="/" element={protect(<Index />, true)} />
