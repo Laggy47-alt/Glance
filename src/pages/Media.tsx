@@ -9,12 +9,14 @@ import { Camera, Film, ImageOff, Play, Tag as TagIcon, Check } from "lucide-reac
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
 import { resolveMediaUrl } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "snapshot" | "clip";
 
 const Media = () => {
   const store = useWebhookStore();
+  const { activeOrg } = useAuth();
   const [selected, setSelected] = useState<LightboxItem | null>(null);
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState("");
