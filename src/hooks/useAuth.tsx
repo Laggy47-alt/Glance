@@ -126,6 +126,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ?? orgs[0].organization) ?? null;
   }, [orgs, activeOrgId, impersonated]);
 
+  // Scope all webhook/frigate data to the active org so switching orgs (or
+  // super-admin impersonation) never leaks rows from another org.
+  useEffect(() => {
+    webhookStore.setActiveOrg(activeOrg?.id ?? null);
+  }, [activeOrg?.id]);
+
   const value = useMemo<AuthCtx>(() => ({
     session,
     user: session?.user ?? null,
