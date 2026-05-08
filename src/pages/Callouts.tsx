@@ -152,7 +152,7 @@ const Callouts = () => {
         </Table>
       </div>
 
-      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} orgId={activeOrg?.id ?? null} />
       <ResolveDialog
         callout={noteFor}
         onClose={() => setNoteFor(null)}
@@ -165,30 +165,32 @@ const Callouts = () => {
   );
 };
 
-function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function SettingsDialog({ open, onClose, orgId }: { open: boolean; onClose: () => void; orgId: string | null }) {
   const [recipients, setRecipients] = useState("");
   const [subject, setSubject] = useState("");
   const [busy, setBusy] = useState(false);
   const [id, setId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    void supabase.from("callout_settings").select("*").limit(1).maybeSingle().then(({ data }) => {
+    if (!open || !orgId) return;
+    setId(null); setRecipients(""); setSubject("");
+    void supabase.from("callout_settings").select("*").eq("organization_id", orgId).limit(1).maybeSingle().then(({ data }) => {
       if (data) {
         setId(data.id);
         setRecipients((data.recipients ?? []).join(", "));
         setSubject(data.subject ?? "");
       }
     });
-  }, [open]);
+  }, [open, orgId]);
 
   const save = async () => {
+    if (!orgId) { toast.error("No active organization"); return; }
     setBusy(true);
     const list = recipients.split(/[\s,;]+/).map((s) => s.trim()).filter((s) => s.includes("@"));
     const payload = { recipients: list, subject, updated_at: new Date().toISOString() };
     const { error } = id
       ? await supabase.from("callout_settings").update(payload).eq("id", id)
-      : await supabase.from("callout_settings").insert(payload);
+      : await supabase.from("callout_settings").insert({ ...payload, organization_id: orgId });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     toast.success("Settings saved");
