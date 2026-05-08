@@ -125,8 +125,60 @@ Deno.serve(async (req) => {
       if (slug === "super") return json({ ok: false, error: "reserved slug" }, 400);
       if (!name) return json({ ok: false, error: "name required" }, 400);
       const { data, error } = await a.from("organizations").insert({ slug, name, created_by: caller.userId })
-        .select("id, slug, name").single();
+        .select("id, slug, name, created_at").single();
       if (error) return json({ ok: false, error: error.message }, 400);
+
+      // Seed the new org by duplicating settings (NOT data) from the most recently
+      // created prior org. This gives the new tenant the same structural setup
+      // (branding, callout settings, daily report email/SMTP settings, default
+      // daily-report email template) without copying any operational data
+      // (sites, events, users, configs, callouts, media, etc.).
+      try {
+        const newOrgId = (data as any).id as string;
+        const sourceOrgId = String(body.copy_from ?? "").trim() || null;
+
+        let templateOrgId: string | null = sourceOrgId;
+        if (!templateOrgId) {
+          const { data: prev } = await a
+            .from("organizations")
+            .select("id")
+            .neq("id", newOrgId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          templateOrgId = (prev as any)?.id ?? null;
+        }
+
+        const stripIds = <T extends Record<string, unknown>>(row: T): Omit<T, "id" | "created_at" | "updated_at"> => {
+          const { id: _i, created_at: _c, updated_at: _u, ...rest } = row as any;
+          return rest;
+        };
+
+        if (templateOrgId) {
+          // app_settings (branding)
+          const { data: appS } = await a.from("app_settings")
+            .select("*").eq("organization_id", templateOrgId).maybeSingle();
+          if (appS) {
+            await a.from("app_settings").insert({ ...stripIds(appS as any), organization_id: newOrgId, updated_by: caller.userId });
+          }
+          // callout_settings
+          const { data: callS } = await a.from("callout_settings")
+            .select("*").eq("organization_id", templateOrgId).maybeSingle();
+          if (callS) {
+            await a.from("callout_settings").insert({ ...stripIds(callS as any), organization_id: newOrgId });
+          }
+          // daily_report_settings (SMTP/from address etc.)
+          const { data: drs } = await a.from("daily_report_settings")
+            .select("*").eq("organization_id", templateOrgId).maybeSingle();
+          if (drs) {
+            await a.from("daily_report_settings").insert({ ...stripIds(drs as any), organization_id: newOrgId });
+          }
+        }
+      } catch (e) {
+        console.error("create-org seeding failed", e);
+        // Non-fatal — the org still exists; admins can configure manually.
+      }
+
       return json({ ok: true, organization: data });
     }
 
