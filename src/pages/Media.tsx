@@ -27,7 +27,11 @@ const Media = () => {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const { data } = await supabase.from("media_tags").select("id, media_id, tag, note").order("created_at", { ascending: false });
+      if (!activeOrg?.id) { setTagsByMedia({}); return; }
+      const { data } = await supabase.from("media_tags")
+        .select("id, media_id, tag, note")
+        .eq("organization_id", activeOrg.id)
+        .order("created_at", { ascending: false });
       if (!active) return;
       const grouped: Record<string, { id: string; tag: string; note: string | null }[]> = {};
       (data ?? []).forEach((t: { id: string; media_id: string; tag: string; note: string | null }) => {
@@ -41,7 +45,7 @@ const Media = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "media_tags" }, () => load())
       .subscribe();
     return () => { active = false; supabase.removeChannel(ch); };
-  }, []);
+  }, [activeOrg?.id]);
 
   // Load ack audit entries (latest per event_id)
   useEffect(() => {
