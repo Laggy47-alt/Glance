@@ -58,12 +58,14 @@ export default function Customization() {
   };
 
   const handleSave = async () => {
+    if (!activeOrg?.id) { toast({ title: "No active organization", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      // Get the singleton row id (most recent)
+      // Branding row for THIS org only — never touch another org's record.
       const { data: existing } = await supabase
         .from("app_settings")
         .select("id")
+        .eq("organization_id", activeOrg.id)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -78,7 +80,7 @@ export default function Customization() {
         const { error } = await supabase.from("app_settings").update(payload).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("app_settings").insert(payload);
+        const { error } = await supabase.from("app_settings").insert({ ...payload, organization_id: activeOrg.id });
         if (error) throw error;
       }
       await branding.refresh();
