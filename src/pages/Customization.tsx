@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { useBranding } from "@/hooks/useBranding";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Trash2, Palette, Image as ImageIcon, Save } from "lucide-react";
 
 export default function Customization() {
   const branding = useBranding();
+  const { activeOrg } = useAuth();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -56,12 +58,14 @@ export default function Customization() {
   };
 
   const handleSave = async () => {
+    if (!activeOrg?.id) { toast({ title: "No active organization", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      // Get the singleton row id (most recent)
+      // Branding row for THIS org only — never touch another org's record.
       const { data: existing } = await supabase
         .from("app_settings")
         .select("id")
+        .eq("organization_id", activeOrg.id)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -76,7 +80,7 @@ export default function Customization() {
         const { error } = await supabase.from("app_settings").update(payload).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("app_settings").insert(payload);
+        const { error } = await supabase.from("app_settings").insert({ ...payload, organization_id: activeOrg.id });
         if (error) throw error;
       }
       await branding.refresh();

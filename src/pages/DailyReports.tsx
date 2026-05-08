@@ -2,6 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { useAuth } from "@/hooks/useAuth";
 import { frigateUrl } from "@/lib/webhookStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -395,22 +396,24 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
 
 const DailyReports = () => {
   const store = useWebhookStore();
+  const { activeOrg } = useAuth();
   const [configs, setConfigs] = useState<Cfg[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
+    if (!activeOrg?.id) { setConfigs([]); setSettings(null); setLoading(false); return; }
     const [{ data: cfgs }, { data: sett }] = await Promise.all([
-      supabase.from("daily_report_configs").select("*").order("created_at", { ascending: true }),
-      supabase.from("daily_report_settings").select("*").limit(1).maybeSingle(),
+      supabase.from("daily_report_configs").select("*").eq("organization_id", activeOrg.id).order("created_at", { ascending: true }),
+      supabase.from("daily_report_settings").select("*").eq("organization_id", activeOrg.id).limit(1).maybeSingle(),
     ]);
     setConfigs((cfgs ?? []) as Cfg[]);
     setSettings(sett as Settings);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [activeOrg?.id]);
 
   const instancesById = useMemo(() => new Map(store.frigates.map((f) => [f.id, f])), [store.frigates]);
   // Multiple configs per NVR are now allowed (for multi-site NVRs).
@@ -418,8 +421,10 @@ const DailyReports = () => {
 
 
   const addConfig = async (instance_id: string) => {
+    if (!activeOrg?.id) { toast.error("No active organization"); return; }
     const { data, error } = await supabase.from("daily_report_configs").insert({
       instance_id, subject: DEFAULT_SUBJECT, body_template: DEFAULT_BODY,
+      organization_id: activeOrg.id,
     }).select("*").single();
     if (error) { toast.error(error.message); return; }
     setConfigs((prev) => [...prev, data as Cfg]);
