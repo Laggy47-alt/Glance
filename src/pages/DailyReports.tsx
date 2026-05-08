@@ -131,6 +131,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [availableCameras, setAvailableCameras] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => { setLocal(cfg); }, [cfg.id]);
 
