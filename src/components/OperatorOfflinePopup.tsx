@@ -43,7 +43,7 @@ function parseStats(stats: unknown): string[] {
 }
 
 export function OperatorOfflinePopup() {
-  const { user, isCustomer } = useAuth();
+  const { user, isCustomer, activeOrg } = useAuth();
   const store = useWebhookStore();
   const [queue, setQueue] = useState<OfflineEvent[]>([]);
   const ackedRef = useRef<Set<string>>(new Set()); // local + server-acked keys
@@ -60,11 +60,11 @@ export function OperatorOfflinePopup() {
   const enabled = !!user && !isCustomer;
 
   const loadInstructions = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || !activeOrg?.id) return;
     const [instrRes, nvrAssignRes, camAssignRes] = await Promise.all([
-      supabase.from("customer_offline_instructions").select("user_id, instance_id, camera, instructions"),
-      supabase.from("customer_nvr_assignments").select("user_id, instance_id"),
-      supabase.from("customer_camera_assignments").select("user_id, instance_id, camera"),
+      supabase.from("customer_offline_instructions").select("user_id, instance_id, camera, instructions").eq("organization_id", activeOrg.id),
+      supabase.from("customer_nvr_assignments").select("user_id, instance_id").eq("organization_id", activeOrg.id),
+      supabase.from("customer_camera_assignments").select("user_id, instance_id, camera").eq("organization_id", activeOrg.id),
     ]);
 
     // Build per-user camera scope per instance.
