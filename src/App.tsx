@@ -48,7 +48,7 @@ const App = () => (
           <BrandingProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/demo" element={<Demo />} />
+              <Route path="/demo" element={protect(<Demo />)} />
               <Route path="/super" element={protect(<SuperAdmin />)} />
               <Route path="/change-password" element={protect(<ChangePassword />)} />
               <Route path="/" element={protect(<Index />, true)} />
