@@ -121,9 +121,9 @@ class WebhookStore {
     if (this.initialized) void this.refreshAll();
   }
 
-  private matchesOrg(row: { organization_id?: string | null }) {
+  private matchesOrg(row: any) {
     if (!this.activeOrgId) return true;
-    return row.organization_id === this.activeOrgId;
+    return row?.organization_id === this.activeOrgId;
   }
 
   subscribe(l: Listener) {
