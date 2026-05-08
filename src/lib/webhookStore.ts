@@ -101,10 +101,30 @@ class WebhookStore {
   frigates: FrigateInstance[] = [];
   loaded = false;
   error: string | null = null;
+  activeOrgId: string | null = null;
 
   private listeners = new Set<Listener>();
   private channels: RealtimeChannel[] = [];
   private initialized = false;
+
+  setActiveOrg(orgId: string | null) {
+    if (this.activeOrgId === orgId) return;
+    this.activeOrgId = orgId;
+    // Drop any cached cross-org rows immediately so the UI doesn't flash stale data.
+    this.sources = [];
+    this.events = [];
+    this.rules = [];
+    this.media = [];
+    this.frigates = [];
+    this.loaded = false;
+    this.emit();
+    if (this.initialized) void this.refreshAll();
+  }
+
+  private matchesOrg(row: { organization_id?: string | null }) {
+    if (!this.activeOrgId) return true;
+    return row.organization_id === this.activeOrgId;
+  }
 
   subscribe(l: Listener) {
     this.listeners.add(l);
