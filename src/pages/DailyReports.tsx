@@ -2,6 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { useAuth } from "@/hooks/useAuth";
 import { frigateUrl } from "@/lib/webhookStore";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
