@@ -102,7 +102,7 @@ export function OperatorOfflinePopup() {
       }
     }
     instructionsRef.current = { perCam, perNvr };
-  }, [enabled]);
+  }, [enabled, activeOrg?.id]);
 
   // Load existing acks for this user so popups don't re-trigger across reloads
   const loadAcks = useCallback(async () => {
