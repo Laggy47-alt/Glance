@@ -22,6 +22,7 @@ const ACTION_STYLES: Record<string, string> = {
 };
 
 const Audit = () => {
+  const { activeOrg } = useAuth();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
@@ -30,12 +31,12 @@ const Audit = () => {
 
   const load = async () => {
     setLoading(true);
-    // Always show the last 30 days of audit history, regardless of whether
-    // the operator who performed the action still has an active profile.
+    if (!activeOrg?.id) { setEntries([]); setLoading(false); return; }
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { data: auditData } = await supabase
       .from("event_audit_log")
       .select("*")
+      .eq("organization_id", activeOrg.id)
       .gte("ts", since)
       .order("ts", { ascending: false })
       .limit(5000);
@@ -48,11 +49,13 @@ const Audit = () => {
     const ch = supabase
       .channel("audit-log")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "event_audit_log" }, (p) => {
-        setEntries((prev) => [p.new as AuditEntry, ...prev].slice(0, 5000));
+        const row = p.new as AuditEntry & { organization_id?: string };
+        if (activeOrg?.id && row.organization_id !== activeOrg.id) return;
+        setEntries((prev) => [row as AuditEntry, ...prev].slice(0, 5000));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [activeOrg?.id]);
 
   useEffect(() => {
     const eventIds = Array.from(new Set(entries.map((e) => e.event_id).filter(Boolean) as string[]));
