@@ -139,6 +139,27 @@ export default function SuperAdmin() {
     void load();
   };
 
+  const performDeleteOrg = async () => {
+    if (!deleteOrg) return;
+    if (deleteConfirm.trim().toLowerCase() !== deleteOrg.slug.toLowerCase()) {
+      toast.error("Type the org slug to confirm");
+      return;
+    }
+    setDeleting(true);
+    const { data, error } = await supabase.functions.invoke("admin-users/delete-org", {
+      method: "POST",
+      body: { organization_id: deleteOrg.id },
+    });
+    setDeleting(false);
+    if (error || !(data as any)?.ok) {
+      toast.error((data as any)?.error || error?.message || "Failed to delete organization");
+      return;
+    }
+    toast.success(`Deleted ${deleteOrg.name}`);
+    setDeleteOrg(null); setDeleteConfirm("");
+    void load();
+  };
+
   const sitesByOrg = useMemo(() => {
     const map = new Map<string, Site[]>();
     for (const s of sites) {
