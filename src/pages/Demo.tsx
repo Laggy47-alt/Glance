@@ -15,11 +15,11 @@ type DemoAlert = {
 
 const STORAGE = "https://bgczubehzofjvjenozof.supabase.co/storage/v1/object/public/camera-snapshots/demo";
 const SEED: DemoAlert[] = [
-  { key: "demo-1", camera: "maritha_hof_6", site: "ABC · Hagerhof", label: "person", ts: "2026-05-08T09:11:35.121Z", score: 0.87, snapshotUrl: `${STORAGE}/snap-1.jpg`, clipUrl: `${STORAGE}/clip-1.mp4` },
-  { key: "demo-2", camera: "eden_1", site: "ABC · Hagerhof", label: "person", ts: "2026-05-08T09:08:55.116Z", score: 0.79, snapshotUrl: `${STORAGE}/snap-2.jpg`, clipUrl: `${STORAGE}/clip-2.mp4` },
-  { key: "demo-3", camera: "perimeter_5", site: "ABC · Eikenwater", label: "person", ts: "2026-05-08T09:07:24.216Z", score: 0.82, snapshotUrl: `${STORAGE}/snap-3.jpg`, clipUrl: `${STORAGE}/clip-3.mp4` },
-  { key: "demo-4", camera: "3_peeka_front", site: "ABC · Peeka", label: "person", ts: "2026-05-08T09:03:32.611Z", score: 0.91, snapshotUrl: `${STORAGE}/snap-4.jpg`, clipUrl: `${STORAGE}/clip-4.mp4` },
-  { key: "demo-5", camera: "3_peeka_front", site: "ABC · Peeka", label: "person", ts: "2026-05-08T09:02:15.882Z", score: 0.76, snapshotUrl: `${STORAGE}/snap-5.jpg`, clipUrl: `${STORAGE}/clip-5.mp4` },
+  { key: "demo-1", camera: "camera_01", site: "Demo NVR · Site A", label: "person", ts: "2026-05-08T09:11:35.121Z", score: 0.87, snapshotUrl: `${STORAGE}/snap-1.jpg`, clipUrl: `${STORAGE}/clip-1.mp4` },
+  { key: "demo-2", camera: "camera_02", site: "Demo NVR · Site A", label: "person", ts: "2026-05-08T09:08:55.116Z", score: 0.79, snapshotUrl: `${STORAGE}/snap-2.jpg`, clipUrl: `${STORAGE}/clip-2.mp4` },
+  { key: "demo-3", camera: "camera_03", site: "Demo NVR · Site B", label: "person", ts: "2026-05-08T09:07:24.216Z", score: 0.82, snapshotUrl: `${STORAGE}/snap-3.jpg`, clipUrl: `${STORAGE}/clip-3.mp4` },
+  { key: "demo-4", camera: "camera_04", site: "Demo NVR · Site C", label: "person", ts: "2026-05-08T09:03:32.611Z", score: 0.91, snapshotUrl: `${STORAGE}/snap-4.jpg`, clipUrl: `${STORAGE}/clip-4.mp4` },
+  { key: "demo-5", camera: "camera_05", site: "Demo NVR · Site C", label: "person", ts: "2026-05-08T09:02:15.882Z", score: 0.76, snapshotUrl: `${STORAGE}/snap-5.jpg`, clipUrl: `${STORAGE}/clip-5.mp4` },
 ];
 
 type LB = { snapshotUrl: string; clipUrl: string; camera: string; site: string; ts: string; label: string };
