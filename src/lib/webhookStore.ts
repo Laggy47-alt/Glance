@@ -155,12 +155,14 @@ class WebhookStore {
 
   async refreshAll() {
     try {
+      const org = this.activeOrgId;
+      const scope = <T>(q: any): any => org ? q.eq("organization_id", org) : q;
       const [s, e, r, m, f] = await Promise.all([
-        supabase.from("webhook_sources").select("*").order("created_at", { ascending: true }),
-        supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500),
-        supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true }),
-        supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200),
-        supabase.from("frigate_instances").select("*").order("created_at", { ascending: true }),
+        scope(supabase.from("webhook_sources").select("*").order("created_at", { ascending: true })),
+        scope(supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500)),
+        scope(supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true })),
+        scope(supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200)),
+        scope(supabase.from("frigate_instances").select("*").order("created_at", { ascending: true })),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = (e.data ?? []) as WebhookEvent[];
