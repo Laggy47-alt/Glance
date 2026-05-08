@@ -51,9 +51,11 @@ const Media = () => {
   useEffect(() => {
     let active = true;
     const load = async () => {
+      if (!activeOrg?.id) { setAcksByEvent({}); return; }
       const { data } = await supabase
         .from("event_audit_log")
         .select("event_id, actor, ts, action")
+        .eq("organization_id", activeOrg.id)
         .eq("action", "ack")
         .order("ts", { ascending: false })
         .limit(2000);
@@ -72,7 +74,7 @@ const Media = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "event_audit_log", filter: "action=eq.ack" }, () => load())
       .subscribe();
     return () => { active = false; supabase.removeChannel(ch); };
-  }, []);
+  }, [activeOrg?.id]);
 
   const items = useMemo(() => {
     return store.media
