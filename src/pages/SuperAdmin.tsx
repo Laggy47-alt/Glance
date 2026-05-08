@@ -46,6 +46,10 @@ export default function SuperAdmin() {
   const [replyNote, setReplyNote] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
 
+  const [deleteOrg, setDeleteOrg] = useState<Org | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   const orgById = useMemo(() => Object.fromEntries(orgs.map((o) => [o.id, o])), [orgs]);
 
   const load = async () => {
