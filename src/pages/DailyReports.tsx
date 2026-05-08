@@ -96,17 +96,26 @@ const PLACEHOLDERS = [
 ];
 
 const DEFAULT_SUBJECT = "Daily Report — {{nvr_name}} — {{date}}";
-const DEFAULT_BODY = `Daily report for {{nvr_name}}
+const DEFAULT_BODY = `Dear client,
+
+Please find below the daily system status report for our ABC Glance surveillance system.
 
 Date: {{date}}
 
-Cameras online: {{cameras_online_count}}
+System Status:
+
+Cameras Online: {{cameras_online_count}}
+
 {{cameras_online_list}}
 
-Cameras offline: {{cameras_offline_count}}
+Cameras Offline: {{cameras_offline_count}}
+
 {{cameras_offline_list}}
 
-Positive incidents (last 24h): {{positive_incidents_count}}
+Security Summary (Last 24 Hours):
+
+Positive Incidents Detected: {{positive_incidents_count}}
+
 {{positive_incidents_list}}`;
 
 function ConfigCard({ cfg, instance, onChange, onDelete }: {
