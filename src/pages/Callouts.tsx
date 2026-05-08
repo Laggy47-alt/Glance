@@ -34,9 +34,11 @@ const Callouts = () => {
 
   const load = async () => {
     setLoading(true);
+    if (!activeOrg?.id) { setRows([]); setLoading(false); return; }
     const { data } = await supabase
       .from("callout_requests")
       .select("*")
+      .eq("organization_id", activeOrg.id)
       .order("created_at", { ascending: false })
       .limit(200);
     setRows((data ?? []) as Callout[]);
@@ -50,7 +52,7 @@ const Callouts = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "callout_requests" }, () => void load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [activeOrg?.id]);
 
   const updateStatus = async (id: string, status: string, admin_note?: string) => {
     const patch: { status: string; resolved_at?: string; admin_note?: string } = { status };
