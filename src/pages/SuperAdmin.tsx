@@ -291,9 +291,16 @@ export default function SuperAdmin() {
                       <TableCell>{(sitesByOrg.get(o.id) ?? []).length}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
-                          Enter <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex justify-end gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
+                            Enter <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
+                          {o.slug !== "super" && (
+                            <Button size="sm" variant="outline" onClick={() => { setDeleteOrg(o); setDeleteConfirm(""); }} className="gap-1.5 text-destructive hover:text-destructive">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
