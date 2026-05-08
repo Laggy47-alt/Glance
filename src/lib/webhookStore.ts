@@ -181,29 +181,39 @@ class WebhookStore {
     const ch = supabase
       .channel("webhook-store")
       .on("postgres_changes", { event: "*", schema: "public", table: "webhook_sources" }, (p) => {
+        const row = (p.new ?? p.old) as WebhookSource;
+        if (!this.matchesOrg(row)) return;
         if (p.eventType === "INSERT") this.sources = [...this.sources, p.new as WebhookSource];
         else if (p.eventType === "UPDATE") this.sources = this.sources.map((x) => x.id === (p.new as WebhookSource).id ? (p.new as WebhookSource) : x);
         else if (p.eventType === "DELETE") this.sources = this.sources.filter((x) => x.id !== (p.old as WebhookSource).id);
         this.emit();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "webhook_events" }, (p) => {
+        const row = (p.new ?? p.old) as WebhookEvent;
+        if (!this.matchesOrg(row)) return;
         if (p.eventType === "INSERT") this.events = [p.new as WebhookEvent, ...this.events].slice(0, 500);
         else if (p.eventType === "UPDATE") this.events = this.events.map((x) => x.id === (p.new as WebhookEvent).id ? (p.new as WebhookEvent) : x);
         else if (p.eventType === "DELETE") this.events = this.events.filter((x) => x.id !== (p.old as WebhookEvent).id);
         this.emit();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "auto_read_rules" }, (p) => {
+        const row = (p.new ?? p.old) as AutoReadRule;
+        if (!this.matchesOrg(row)) return;
         if (p.eventType === "INSERT") this.rules = [...this.rules, p.new as AutoReadRule];
         else if (p.eventType === "UPDATE") this.rules = this.rules.map((x) => x.id === (p.new as AutoReadRule).id ? (p.new as AutoReadRule) : x);
         else if (p.eventType === "DELETE") this.rules = this.rules.filter((x) => x.id !== (p.old as AutoReadRule).id);
         this.emit();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, (p) => {
+        const row = (p.new ?? p.old) as MediaItem;
+        if (!this.matchesOrg(row)) return;
         if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 200);
         else if (p.eventType === "DELETE") this.media = this.media.filter((x) => x.id !== (p.old as MediaItem).id);
         this.emit();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "frigate_instances" }, (p) => {
+        const row = (p.new ?? p.old) as FrigateInstance;
+        if (!this.matchesOrg(row)) return;
         if (p.eventType === "INSERT") this.frigates = [...this.frigates, p.new as FrigateInstance];
         else if (p.eventType === "UPDATE") this.frigates = this.frigates.map((x) => x.id === (p.new as FrigateInstance).id ? (p.new as FrigateInstance) : x);
         else if (p.eventType === "DELETE") this.frigates = this.frigates.filter((x) => x.id !== (p.old as FrigateInstance).id);
