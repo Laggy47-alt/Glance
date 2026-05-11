@@ -63,9 +63,21 @@ export default function RequestSupportCallout() {
       requester_name: profile?.display_name ?? profile?.username ?? null,
       organization_id: activeOrg?.id,
     });
+    if (error) { setBusy(false); toast.error(error.message); return; }
+
+    // Notify platform support by email (non-blocking on failure).
+    const { error: mailErr } = await supabase.functions.invoke("super-callout-email", {
+      body: {
+        subject: subject.trim(),
+        message: message.trim(),
+        requester_name: profile?.display_name ?? profile?.username ?? null,
+        organization_name: activeOrg?.name ?? null,
+        reply_to: profile?.contact_email ?? user.email ?? null,
+      },
+    });
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Request sent to platform support");
+    if (mailErr) toast.warning("Request saved, but email notification failed");
+    else toast.success("Request sent to platform support");
     setSubject(""); setMessage("");
   };
 
