@@ -81,6 +81,10 @@ export function AppSidebar() {
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {items.map((it) => {
           const active = location.pathname === it.to;
+          const showAlert = hasOffline && (it.to === "/nvr-status" || it.to === "/camera-status");
+          const alertTitle = it.to === "/nvr-status"
+            ? `${unreachableNvrs} NVR${unreachableNvrs === 1 ? "" : "s"} unreachable, ${offlineCameras} camera${offlineCameras === 1 ? "" : "s"} offline`
+            : `${offlineCameras} camera${offlineCameras === 1 ? "" : "s"} offline`;
           return (
             <NavLink
               key={it.to}
@@ -95,6 +99,14 @@ export function AppSidebar() {
             >
               <it.icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
               <span className="flex-1">{it.label}</span>
+              {showAlert && (
+                <span
+                  title={alertTitle}
+                  className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold animate-pulse"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                </span>
+              )}
             </NavLink>
           );
         })}
