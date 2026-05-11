@@ -60,6 +60,9 @@ const App = () => (
           <BrandingProvider>
             <Routes>
               <Route path="/offline" element={<Offline />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
+              <Route path="/privacy" element={<Privacy />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/billing" element={protect(<Billing />)} />
