@@ -38,8 +38,14 @@ export function useOrgSubscription() {
 
   useEffect(() => {
     if (!activeOrg?.id) return;
+
+    // The realtime client reuses channels by topic name. React StrictMode can
+    // rerun this effect before the previous async channel removal fully
+    // completes, so use a unique topic per effect run instead of adding a
+    // second postgres_changes callback to an already-subscribed channel.
+    const channelName = `org-sub-${activeOrg.id}-${crypto.randomUUID()}`;
     const ch = supabase
-      .channel(`org-sub-${activeOrg.id}`)
+      .channel(channelName)
       .on("postgres_changes",
         { event: "*", schema: "public", table: "org_subscriptions", filter: `organization_id=eq.${activeOrg.id}` },
         () => void refresh())
