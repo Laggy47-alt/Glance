@@ -42,7 +42,10 @@ const Wall = () => {
   // within this window, the previous un-ACKed alert for that camera is
   // auto-ACKed (archived) and replaced by the newer one. Outside the window,
   // alerts MUST be ACKed by an operator — they are never silently dismissed.
-  const CAMERA_FOLLOWUP_MS = 5_000;
+  // Bundle window: events on the same camera within this window are shown as
+  // a single alert (the latest one). After this window of silence, the next
+  // event becomes a brand-new alert. Same rule for every camera.
+  const CAMERA_FOLLOWUP_MS = 10_000;
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
