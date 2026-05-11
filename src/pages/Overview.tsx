@@ -147,6 +147,20 @@ const Overview = () => {
         .gte("ts", since)
         .order("ts", { ascending: false })
         .limit(5000);
+  // Load audit log (since reset cutoff, max 30 days) for operator stats — scoped to active org
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!activeOrg?.id) { if (!cancelled) setAudit([]); return; }
+      const thirtyDays = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const since = new Date(Math.max(thirtyDays, statsResetAt)).toISOString();
+      const { data } = await supabase
+        .from("event_audit_log")
+        .select("id, action, actor, ts")
+        .eq("organization_id", activeOrg.id)
+        .gte("ts", since)
+        .order("ts", { ascending: false })
+        .limit(5000);
       if (!cancelled && data) setAudit(data as AuditRow[]);
     };
     void load();
@@ -163,7 +177,7 @@ const Overview = () => {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [statsResetAt]);
+  }, [statsResetAt, activeOrg?.id]);
 
   // Load "positive incident" media tags (for positive-incident counter per operator)
   useEffect(() => {
