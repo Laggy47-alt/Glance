@@ -33,9 +33,11 @@ export default function RequestSupportCallout() {
 
   const load = async () => {
     setLoading(true);
+    if (!activeOrg?.id) { setRows([]); setLoading(false); return; }
     const { data } = await supabase
       .from("super_callout_requests")
       .select("id, subject, message, status, admin_note, created_at, resolved_at, requester_name")
+      .eq("organization_id", activeOrg.id)
       .order("created_at", { ascending: false })
       .limit(100);
     setRows((data ?? []) as Row[]);
@@ -49,7 +51,7 @@ export default function RequestSupportCallout() {
       .on("postgres_changes", { event: "*", schema: "public", table: "super_callout_requests" }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
-  }, []);
+  }, [activeOrg?.id]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

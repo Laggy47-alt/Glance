@@ -56,7 +56,7 @@ type ViewerProfile = { user_id: string; username: string; display_name: string |
 
 const Overview = () => {
   const store = useWebhookStore();
-  const { isAdmin } = useAuth();
+  const { isAdmin, activeOrg } = useAuth();
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [viewers, setViewers] = useState<{ list: ViewerProfile[] }>({ list: [] });
   const [positiveTags, setPositiveTags] = useState<{ created_by: string | null; created_at: string }[]>([]);
@@ -103,15 +103,24 @@ const Overview = () => {
 
   const totalCameras = nvrCamCount ?? mediaCameraCount;
 
-  // Load all viewer profiles (non-admin users with a login). They're the only ones shown in operator stats.
+  // Load viewer profiles for the ACTIVE org only (non-admin members with a login).
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeOrg?.id) { if (!cancelled) setViewers({ list: [] }); return; }
+      const { data: members } = await supabase
+        .from("organization_members")
+        .select("user_id, role")
+        .eq("organization_id", activeOrg.id);
+      const memberIds = (members ?? []).map((m) => m.user_id);
+      if (memberIds.length === 0) { if (!cancelled) setViewers({ list: [] }); return; }
       const [{ data: roles }, { data: profs }] = await Promise.all([
-        supabase.from("user_roles").select("user_id, role"),
-        supabase.from("profiles").select("user_id, username, display_name"),
+        supabase.from("user_roles").select("user_id, role").in("user_id", memberIds),
+        supabase.from("profiles").select("user_id, username, display_name").in("user_id", memberIds),
       ]);
-      const adminIds = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
+      const adminIds = new Set((roles ?? []).filter((r) => r.role === "admin" || r.role === "super_admin").map((r) => r.user_id));
+      // Also exclude org-level admins
+      for (const m of members ?? []) if (m.role === "admin") adminIds.add(m.user_id);
       const viewerProfiles = (profs ?? []).filter((p) => !adminIds.has(p.user_id));
       if (!cancelled) setViewers({ list: viewerProfiles.map((p) => ({ user_id: p.user_id, username: p.username, display_name: p.display_name })) });
     };
@@ -121,19 +130,21 @@ const Overview = () => {
       .channel("overview_viewers")
       .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "organization_members" }, () => void load())
       .subscribe();
     return () => { cancelled = true; void supabase.removeChannel(ch); };
-  }, []);
+  }, [activeOrg?.id]);
 
-  // Load audit log (since reset cutoff, max 30 days) for operator stats
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeOrg?.id) { if (!cancelled) setAudit([]); return; }
       const thirtyDays = Date.now() - 30 * 24 * 60 * 60 * 1000;
       const since = new Date(Math.max(thirtyDays, statsResetAt)).toISOString();
       const { data } = await supabase
         .from("event_audit_log")
         .select("id, action, actor, ts")
+        .eq("organization_id", activeOrg.id)
         .gte("ts", since)
         .order("ts", { ascending: false })
         .limit(5000);
@@ -153,7 +164,7 @@ const Overview = () => {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [statsResetAt]);
+  }, [statsResetAt, activeOrg?.id]);
 
   // Load "positive incident" media tags (for positive-incident counter per operator)
   useEffect(() => {
