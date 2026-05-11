@@ -40,6 +40,7 @@ import Offline from "./pages/Offline.tsx";
 import Terms from "./pages/Terms.tsx";
 import RefundPolicy from "./pages/RefundPolicy.tsx";
 import Privacy from "./pages/Privacy.tsx";
+import Pricing from "./pages/Pricing.tsx";
 import { BackendWatchdog } from "./components/BackendWatchdog";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,7 @@ const App = () => (
               <Route path="/terms" element={<Terms />} />
               <Route path="/refund-policy" element={<RefundPolicy />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/pricing" element={<Pricing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/billing" element={protect(<Billing />)} />
