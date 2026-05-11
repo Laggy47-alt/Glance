@@ -72,7 +72,7 @@ export default function RequestSupportCallout() {
         message: message.trim(),
         requester_name: profile?.display_name ?? profile?.username ?? null,
         organization_name: activeOrg?.name ?? null,
-        reply_to: profile?.contact_email ?? user.email ?? null,
+        reply_to: user.email ?? null,
       },
     });
     setBusy(false);
