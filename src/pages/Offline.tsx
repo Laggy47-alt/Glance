@@ -36,10 +36,9 @@ const Offline = () => {
     return () => clearInterval(id);
   }, []);
 
-  // If backend recovers and user isn't using offline mode, bounce back to app.
-  useEffect(() => {
-    if (probe.ok && !authed) navigate("/login", { replace: true });
-  }, [probe.ok, authed, navigate]);
+  // Note: we intentionally do NOT auto-redirect when the backend is reachable.
+  // The emergency login must remain available at all times so the platform
+  // owner can always get into diagnostics, even on a healthy system.
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
