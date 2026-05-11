@@ -77,6 +77,7 @@ const App = () => (
             </Routes>
             <AuthorBadge />
             <OperatorOfflinePopup />
+            <BackendWatchdog />
           </BrandingProvider>
         </AuthProvider>
       </BrowserRouter>
