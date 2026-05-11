@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, LifeBuoy } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, LifeBuoy, AlertTriangle } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
+import { useOfflineStatus } from "@/hooks/useOfflineStatus";
 import { cn } from "@/lib/utils";
 
 const adminItems = [
