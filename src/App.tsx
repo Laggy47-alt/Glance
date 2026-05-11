@@ -37,6 +37,9 @@ import RequestSupportCallout from "./pages/RequestSupportCallout.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Demo from "./pages/Demo.tsx";
 import Offline from "./pages/Offline.tsx";
+import Terms from "./pages/Terms.tsx";
+import RefundPolicy from "./pages/RefundPolicy.tsx";
+import Privacy from "./pages/Privacy.tsx";
 import { BackendWatchdog } from "./components/BackendWatchdog";
 
 const queryClient = new QueryClient();
