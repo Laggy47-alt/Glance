@@ -41,6 +41,7 @@ export function AppSidebar() {
   const store = useWebhookStore();
   const { profile, isAdmin, isCustomer, signOut, activeOrg } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
+  const { offlineCameras, unreachableNvrs, hasOffline } = useOfflineStatus();
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
