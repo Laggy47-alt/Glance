@@ -37,6 +37,9 @@ import RequestSupportCallout from "./pages/RequestSupportCallout.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Demo from "./pages/Demo.tsx";
 import Offline from "./pages/Offline.tsx";
+import Terms from "./pages/Terms.tsx";
+import RefundPolicy from "./pages/RefundPolicy.tsx";
+import Privacy from "./pages/Privacy.tsx";
 import { BackendWatchdog } from "./components/BackendWatchdog";
 
 const queryClient = new QueryClient();
@@ -57,6 +60,9 @@ const App = () => (
           <BrandingProvider>
             <Routes>
               <Route path="/offline" element={<Offline />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
+              <Route path="/privacy" element={<Privacy />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/billing" element={protect(<Billing />)} />
