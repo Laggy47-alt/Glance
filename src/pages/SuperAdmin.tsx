@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
+import { SubscriptionAdminPanel } from "@/components/SubscriptionAdminPanel";
+import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
 
 type Org = { id: string; slug: string; name: string; created_at: string };
@@ -198,7 +200,12 @@ export default function SuperAdmin() {
               {openCallouts.length > 0 && <Badge variant="secondary" className="ml-1">{openCallouts.length}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
+            <TabsTrigger value="subscriptions" className="gap-1.5"><CreditCard className="h-4 w-4" /> Subscriptions</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="subscriptions" className="space-y-4 mt-4">
+            <SubscriptionAdminPanel orgs={orgs} />
+          </TabsContent>
 
           {/* SITES */}
           <TabsContent value="sites" className="space-y-4 mt-4">
