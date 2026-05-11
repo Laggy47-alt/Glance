@@ -25,6 +25,25 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    // Trial email-limit gate
+    if (organization_id) {
+      const { data: subRow } = await supabase
+        .from("org_subscriptions")
+        .select("status, trial_email_limit, trial_emails_sent")
+        .eq("organization_id", organization_id)
+        .maybeSingle();
+      if (subRow?.status === "suspended") {
+        return new Response(JSON.stringify({ error: "Subscription suspended. Visit Billing to renew." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (subRow?.status === "trial" && (subRow.trial_emails_sent ?? 0) >= (subRow.trial_email_limit ?? 5)) {
+        return new Response(JSON.stringify({ error: `Trial email limit reached (${subRow.trial_email_limit}). Upgrade to send more.` }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     let settingsQ = supabase.from("callout_settings").select("*").limit(1);
     let smtpQ = supabase.from("daily_report_settings").select("*").limit(1);
     if (organization_id) {
@@ -99,6 +118,10 @@ Deno.serve(async (req) => {
       });
     } finally {
       await client.close();
+    }
+
+    if (organization_id) {
+      await supabase.rpc("increment_trial_email_count", { _org: organization_id, _n: 1 });
     }
 
     return new Response(JSON.stringify({ ok: true, recipients, subject }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
