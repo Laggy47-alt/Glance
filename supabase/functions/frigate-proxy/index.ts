@@ -53,6 +53,21 @@ Deno.serve(async (req) => {
       signal: AbortSignal.timeout(30000),
     });
 
+    const upstreamContentType = upstream.headers.get("content-type") ?? "";
+    const isCloudflareTunnelError = upstream.status === 530 && upstreamContentType.includes("text/html");
+
+    if (isCloudflareTunnelError) {
+      await upstream.body?.cancel();
+      return new Response(
+        JSON.stringify({
+          error: "nvr_unreachable",
+          message: "The NVR tunnel is unreachable. Check that cloudflared is running for this Frigate instance.",
+          status: 530,
+        }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const respHeaders = new Headers(corsHeaders);
     const passthrough = ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"];
     for (const h of passthrough) {
