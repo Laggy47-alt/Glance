@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, LifeBuoy } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, LifeBuoy, AlertTriangle } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
+import { useOfflineStatus } from "@/hooks/useOfflineStatus";
 import { cn } from "@/lib/utils";
 
 const adminItems = [
@@ -40,6 +41,7 @@ export function AppSidebar() {
   const store = useWebhookStore();
   const { profile, isAdmin, isCustomer, signOut, activeOrg } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
+  const { offlineCameras, unreachableNvrs, hasOffline } = useOfflineStatus();
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
@@ -79,6 +81,10 @@ export function AppSidebar() {
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {items.map((it) => {
           const active = location.pathname === it.to;
+          const showAlert = hasOffline && (it.to === "/nvr-status" || it.to === "/camera-status");
+          const alertTitle = it.to === "/nvr-status"
+            ? `${unreachableNvrs} NVR${unreachableNvrs === 1 ? "" : "s"} unreachable, ${offlineCameras} camera${offlineCameras === 1 ? "" : "s"} offline`
+            : `${offlineCameras} camera${offlineCameras === 1 ? "" : "s"} offline`;
           return (
             <NavLink
               key={it.to}
@@ -93,6 +99,14 @@ export function AppSidebar() {
             >
               <it.icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")} />
               <span className="flex-1">{it.label}</span>
+              {showAlert && (
+                <span
+                  title={alertTitle}
+                  className="inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold animate-pulse"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                </span>
+              )}
             </NavLink>
           );
         })}
