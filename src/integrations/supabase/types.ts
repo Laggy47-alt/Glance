@@ -924,6 +924,71 @@ export type Database = {
           },
         ]
       }
+      org_subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          environment: string
+          notes: string | null
+          organization_id: string
+          paddle_customer_id: string | null
+          paddle_subscription_id: string | null
+          price_id: string | null
+          product_id: string | null
+          status: Database["public"]["Enums"]["org_sub_status"]
+          trial_email_limit: number
+          trial_emails_sent: number
+          trial_nvr_limit: number
+          updated_at: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          environment?: string
+          notes?: string | null
+          organization_id: string
+          paddle_customer_id?: string | null
+          paddle_subscription_id?: string | null
+          price_id?: string | null
+          product_id?: string | null
+          status?: Database["public"]["Enums"]["org_sub_status"]
+          trial_email_limit?: number
+          trial_emails_sent?: number
+          trial_nvr_limit?: number
+          updated_at?: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          environment?: string
+          notes?: string | null
+          organization_id?: string
+          paddle_customer_id?: string | null
+          paddle_subscription_id?: string | null
+          price_id?: string | null
+          product_id?: string | null
+          status?: Database["public"]["Enums"]["org_sub_status"]
+          trial_email_limit?: number
+          trial_emails_sent?: number
+          trial_nvr_limit?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_subscriptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           created_at: string
@@ -1037,6 +1102,81 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      redemption_code_uses: {
+        Row: {
+          code_id: string
+          id: string
+          organization_id: string
+          redeemed_at: string
+          redeemed_by: string | null
+        }
+        Insert: {
+          code_id: string
+          id?: string
+          organization_id: string
+          redeemed_at?: string
+          redeemed_by?: string | null
+        }
+        Update: {
+          code_id?: string
+          id?: string
+          organization_id?: string
+          redeemed_at?: string
+          redeemed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "redemption_code_uses_code_id_fkey"
+            columns: ["code_id"]
+            isOneToOne: false
+            referencedRelation: "redemption_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "redemption_code_uses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      redemption_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          duration_days: number
+          expires_at: string | null
+          id: string
+          max_uses: number
+          notes: string | null
+          uses: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          duration_days?: number
+          expires_at?: string | null
+          id?: string
+          max_uses?: number
+          notes?: string | null
+          uses?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          duration_days?: number
+          expires_at?: string | null
+          id?: string
+          max_uses?: number
+          notes?: string | null
+          uses?: number
         }
         Relationships: []
       }
@@ -1236,6 +1376,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_trial_email_count: {
+        Args: { _n?: number; _org: string }
+        Returns: undefined
+      }
       is_org_admin: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
@@ -1253,6 +1397,21 @@ export type Database = {
           slug: string
         }[]
       }
+      org_is_active: { Args: { _org: string }; Returns: boolean }
+      org_trial_can_add_nvr: { Args: { _org: string }; Returns: boolean }
+      org_trial_can_send_email: { Args: { _org: string }; Returns: boolean }
+      redeem_code: {
+        Args: { _code: string; _org: string }
+        Returns: {
+          message: string
+          new_period_end: string
+          success: boolean
+        }[]
+      }
+      signup_create_trial_org: {
+        Args: { _name: string; _slug: string }
+        Returns: string
+      }
       user_has_camera: {
         Args: { _camera: string; _instance_id: string; _user_id: string }
         Returns: boolean
@@ -1266,6 +1425,12 @@ export type Database = {
     Enums: {
       app_role: "admin" | "user" | "customer" | "super_admin"
       org_member_role: "admin" | "customer"
+      org_sub_status:
+        | "grandfathered"
+        | "trial"
+        | "active"
+        | "past_due"
+        | "suspended"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1395,6 +1560,13 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "user", "customer", "super_admin"],
       org_member_role: ["admin", "customer"],
+      org_sub_status: [
+        "grandfathered",
+        "trial",
+        "active",
+        "past_due",
+        "suspended",
+      ],
     },
   },
 } as const
