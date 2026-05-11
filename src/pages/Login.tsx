@@ -118,6 +118,13 @@ const Login = () => {
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Sign in
           </Button>
+          <button
+            type="button"
+            onClick={() => navigate("/offline")}
+            className="block w-full text-[11px] text-center text-muted-foreground hover:text-foreground"
+          >
+            Emergency super-admin access
+          </button>
         </form>
       </div>
     </div>
