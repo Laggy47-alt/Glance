@@ -224,6 +224,14 @@ class WebhookStore {
   }
 
   // ─── Sources ───
+  private requireOrg(): string {
+    if (!this.activeOrgId) {
+      throw new Error(
+        "No active organization selected. Pick an organization in the top-right switcher before creating items."
+      );
+    }
+    return this.activeOrgId;
+  }
   async createSource(input: { name: string; slug: string; color?: string }) {
     const secret = crypto.randomUUID().replace(/-/g, "");
     const { error } = await supabase.from("webhook_sources").insert({
@@ -231,6 +239,7 @@ class WebhookStore {
       slug: input.slug,
       color: input.color ?? "#06b6d4",
       secret,
+      organization_id: this.requireOrg(),
     });
     if (error) throw error;
   }
@@ -263,7 +272,9 @@ class WebhookStore {
 
   // ─── Rules ───
   async addRule(pattern: string, source_id: string | null = null) {
-    const { error } = await supabase.from("auto_read_rules").insert({ pattern, source_id, enabled: true });
+    const { error } = await supabase.from("auto_read_rules").insert({
+      pattern, source_id, enabled: true, organization_id: this.requireOrg(),
+    });
     if (error) throw error;
   }
   async toggleRule(id: string, enabled: boolean) {
@@ -280,12 +291,14 @@ class WebhookStore {
     const secret = crypto.randomUUID().replace(/-/g, "");
     const color = input.color ?? "#3b82f6";
 
+    const orgId = this.requireOrg();
     // Paired webhook source so push notifications and polled events share the same source view
     const { data: src, error: srcErr } = await supabase.from("webhook_sources").insert({
       name: `Frigate · ${input.name}`,
       slug,
       color,
       secret,
+      organization_id: orgId,
     }).select("id").single();
     if (srcErr) throw srcErr;
 
@@ -296,15 +309,13 @@ class WebhookStore {
       api_key: input.api_key || null,
       color,
       is_local: input.is_local ?? false,
-      // Cloud-poll won't reach LAN URLs, so disable polling by default for local instances
       poll_enabled: input.is_local ? false : true,
-      // Default daytime mute window so alerts only fire after hours
       mute_enabled: true,
       mute_start: "06:00:00",
       mute_end: "17:30:00",
+      organization_id: orgId,
     });
     if (error) {
-      // Roll back the orphan source
       await supabase.from("webhook_sources").delete().eq("id", src.id);
       throw error;
     }
