@@ -33,6 +33,8 @@ import SuperAdmin from "./pages/SuperAdmin.tsx";
 import RequestSupportCallout from "./pages/RequestSupportCallout.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Demo from "./pages/Demo.tsx";
+import Offline from "./pages/Offline.tsx";
+import { BackendWatchdog } from "./components/BackendWatchdog";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +49,7 @@ const App = () => (
         <AuthProvider>
           <BrandingProvider>
             <Routes>
+              <Route path="/offline" element={<Offline />} />
               <Route path="/login" element={<Login />} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/super" element={protect(<SuperAdmin />)} />
