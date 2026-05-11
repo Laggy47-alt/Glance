@@ -135,19 +135,6 @@ const Overview = () => {
     return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, [activeOrg?.id]);
 
-  // Load audit log (since reset cutoff, max 30 days) for operator stats
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const thirtyDays = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      const since = new Date(Math.max(thirtyDays, statsResetAt)).toISOString();
-      const { data } = await supabase
-        .from("event_audit_log")
-        .select("id, action, actor, ts")
-        .gte("ts", since)
-        .order("ts", { ascending: false })
-        .limit(5000);
-  // Load audit log (since reset cutoff, max 30 days) for operator stats — scoped to active org
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
