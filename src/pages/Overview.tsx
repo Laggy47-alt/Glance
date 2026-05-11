@@ -56,7 +56,7 @@ type ViewerProfile = { user_id: string; username: string; display_name: string |
 
 const Overview = () => {
   const store = useWebhookStore();
-  const { isAdmin } = useAuth();
+  const { isAdmin, activeOrg } = useAuth();
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [viewers, setViewers] = useState<{ list: ViewerProfile[] }>({ list: [] });
   const [positiveTags, setPositiveTags] = useState<{ created_by: string | null; created_at: string }[]>([]);
