@@ -6,6 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { BrandingProvider } from "@/hooks/useBranding";
 import { AuthGate } from "@/components/AuthGate";
+import { OrgGate } from "@/components/OrgGate";
+import Signup from "./pages/Signup.tsx";
+import Billing from "./pages/Billing.tsx";
 import { AuthorBadge } from "@/components/AuthorBadge";
 import { OperatorOfflinePopup } from "@/components/OperatorOfflinePopup";
 import Index from "./pages/Index.tsx";
@@ -38,7 +41,11 @@ import { BackendWatchdog } from "./components/BackendWatchdog";
 
 const queryClient = new QueryClient();
 
-const protect = (el: JSX.Element, adminOnly = false) => <AuthGate adminOnly={adminOnly}>{el}</AuthGate>;
+const protect = (el: JSX.Element, adminOnly = false) => (
+  <AuthGate adminOnly={adminOnly}>
+    <OrgGate>{el}</OrgGate>
+  </AuthGate>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -51,6 +58,8 @@ const App = () => (
             <Routes>
               <Route path="/offline" element={<Offline />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/billing" element={protect(<Billing />)} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/super" element={protect(<SuperAdmin />)} />
               <Route path="/change-password" element={protect(<ChangePassword />)} />

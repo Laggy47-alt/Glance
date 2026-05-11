@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, LifeBuoy, AlertTriangle } from "lucide-react";
+import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, LifeBuoy, AlertTriangle, CreditCard } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
 import { useOfflineStatus } from "@/hooks/useOfflineStatus";
+import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 import { cn } from "@/lib/utils";
 
 const adminItems = [
@@ -42,6 +43,7 @@ export function AppSidebar() {
   const { profile, isAdmin, isCustomer, signOut, activeOrg } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const { offlineCameras, unreachableNvrs, hasOffline } = useOfflineStatus();
+  const { isTrial, isGrandfathered } = useOrgSubscription();
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
@@ -50,8 +52,11 @@ export function AppSidebar() {
   );
   const [sitesOpen, setSitesOpen] = useState(true);
 
+  // Hide Customization on trial; always show Billing for admins (except grandfathered free orgs)
+  const filteredAdmin = adminItems.filter((it) => !(isTrial && it.to === "/customization"));
+  const billingItem = !isGrandfathered ? [{ to: "/billing", label: "Billing", icon: CreditCard }] : [];
   const items = isAdmin
-    ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
+    ? [...filteredAdmin, ...billingItem, { to: "/users", label: "Users", icon: UsersIcon }]
     : isCustomer
       ? customerItems
       : userItems;

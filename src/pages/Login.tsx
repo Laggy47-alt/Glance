@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { signInWithUsername } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -118,6 +118,9 @@ const Login = () => {
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Sign in
           </Button>
+          <div className="text-center pt-1 text-[11px] text-muted-foreground">
+            New here? <Link to="/signup" className="text-primary hover:underline">Start a free trial</Link>
+          </div>
           <button
             type="button"
             onClick={() => navigate("/offline")}
