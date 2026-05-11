@@ -121,13 +121,6 @@ const Login = () => {
           <div className="text-center pt-1 text-[11px] text-muted-foreground">
             New here? <Link to="/signup" className="text-primary hover:underline">Start a free trial</Link>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate("/offline")}
-            className="block w-full text-[11px] text-center text-muted-foreground hover:text-foreground"
-          >
-            Emergency super-admin access
-          </button>
         </form>
       </div>
     </div>
