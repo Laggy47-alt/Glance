@@ -9,9 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
-import { CheckCircle2, Loader2, Sparkles, Ticket, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Loader2, Sparkles, Ticket, AlertTriangle, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
+
+const POLICY_VERSION = "2026-05-11";
 
 export default function Billing() {
   const { activeOrg, isAdmin, profile } = useAuth();
@@ -19,13 +24,32 @@ export default function Billing() {
   const [code, setCode] = useState("");
   const [redeeming, setRedeeming] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [ackOpen, setAckOpen] = useState(false);
+  const [ackChecked, setAckChecked] = useState(false);
 
   useEffect(() => { void initializePaddle().catch(() => {}); }, []);
 
+  const openUpgrade = () => {
+    setAckChecked(false);
+    setAckOpen(true);
+  };
+
   const upgrade = async () => {
-    if (!activeOrg) return;
+    if (!activeOrg || !profile) return;
     setCheckoutLoading(true);
     try {
+      // Record acknowledgment first — must succeed before checkout opens
+      const { error: ackErr } = await supabase.from("billing_acknowledgments").insert({
+        organization_id: activeOrg.id,
+        user_id: profile.user_id,
+        terms_version: POLICY_VERSION,
+        refund_version: POLICY_VERSION,
+        privacy_version: POLICY_VERSION,
+        user_agent: navigator.userAgent,
+        context: "upgrade_checkout",
+      });
+      if (ackErr) throw ackErr;
+      setAckOpen(false);
       await initializePaddle();
       const paddlePriceId = await getPaddlePriceId("pro_monthly");
       window.Paddle.Checkout.open({
