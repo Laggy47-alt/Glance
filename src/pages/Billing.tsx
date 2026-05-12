@@ -19,7 +19,7 @@ import { toast } from "sonner";
 const POLICY_VERSION = "2026-05-11";
 
 export default function Billing() {
-  const { activeOrg, isAdmin, profile } = useAuth();
+  const { activeOrg, isAdmin, profile, session } = useAuth();
   const { sub, refresh, isGrandfathered, isTrial, isActivePaid, isSuspended, hasAccess } = useOrgSubscription();
   const [code, setCode] = useState("");
   const [redeeming, setRedeeming] = useState(false);
