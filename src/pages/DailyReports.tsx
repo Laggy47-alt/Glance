@@ -524,6 +524,7 @@ const DailyReports = () => {
             </p>
           </div>
         </div>
+        <Button size="sm" onClick={saveSettings} className="mt-3 gap-1.5"><Save className="h-3.5 w-3.5" /> Save sender settings</Button>
       </Card>
 
       {/* Per-NVR configs */}
