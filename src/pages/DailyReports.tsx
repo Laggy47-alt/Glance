@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Send, Save, Plus, X, Eye, Server, Clock, AlertCircle, ChevronDown } from "lucide-react";
+import { Mail, Send, Save, Plus, X, Eye, Server, Clock, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
