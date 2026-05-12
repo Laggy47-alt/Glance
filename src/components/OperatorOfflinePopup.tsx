@@ -124,7 +124,9 @@ export function OperatorOfflinePopup() {
       .select("instance_id, camera, since")
       .eq("user_id", user.id);
     for (const r of data ?? []) {
-      ackedRef.current.add(`${r.instance_id}::${r.camera}::${r.since}`);
+      // Collapse to (instance, camera) — once acked we won't re-popup until
+      // the camera has been continuously online for RESTORE_STABLE_MS.
+      ackedRef.current.add(`${r.instance_id}::${r.camera}`);
     }
   }, [user]);
 
