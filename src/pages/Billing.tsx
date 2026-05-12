@@ -189,6 +189,66 @@ export default function Billing() {
           </>
         )}
       </div>
+
+      <Dialog open={ackOpen} onOpenChange={(o) => { if (!checkoutLoading) setAckOpen(o); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" /> Before you continue
+            </DialogTitle>
+            <DialogDescription>
+              Please review and acknowledge the following before proceeding to checkout.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="text-sm space-y-3">
+            <p className="text-muted-foreground">
+              By continuing, you confirm you have read and agree to:
+            </p>
+            <ul className="space-y-2">
+              <li>
+                <Link to="/terms" target="_blank" className="text-primary hover:underline font-medium">
+                  Terms &amp; Conditions
+                </Link>
+              </li>
+              <li>
+                <Link to="/refund-policy" target="_blank" className="text-primary hover:underline font-medium">
+                  Refund Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/privacy" target="_blank" className="text-primary hover:underline font-medium">
+                  Privacy Notice
+                </Link>
+              </li>
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Payments are processed by Paddle, the Merchant of Record for this purchase. Your acknowledgment will be recorded with a timestamp for our records.
+            </p>
+
+            <label className="flex items-start gap-2 pt-2 cursor-pointer">
+              <Checkbox
+                checked={ackChecked}
+                onCheckedChange={(v) => setAckChecked(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-sm">
+                I have read and agree to the Terms &amp; Conditions, Refund Policy, and Privacy Notice.
+              </span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAckOpen(false)} disabled={checkoutLoading}>
+              Cancel
+            </Button>
+            <Button onClick={upgrade} disabled={!ackChecked || checkoutLoading}>
+              {checkoutLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Agree &amp; continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
