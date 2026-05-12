@@ -94,6 +94,45 @@ export type Database = {
           },
         ]
       }
+      billing_acknowledgments: {
+        Row: {
+          acknowledged_at: string
+          context: string
+          id: string
+          ip_address: string | null
+          organization_id: string
+          privacy_version: string
+          refund_version: string
+          terms_version: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          context?: string
+          id?: string
+          ip_address?: string | null
+          organization_id: string
+          privacy_version?: string
+          refund_version?: string
+          terms_version?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          context?: string
+          id?: string
+          ip_address?: string | null
+          organization_id?: string
+          privacy_version?: string
+          refund_version?: string
+          terms_version?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       callout_requests: {
         Row: {
           admin_note: string | null
