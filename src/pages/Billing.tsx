@@ -9,9 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
-import { CheckCircle2, Loader2, Sparkles, Ticket, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Loader2, Sparkles, Ticket, AlertTriangle, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
+
+const POLICY_VERSION = "2026-05-11";
 
 export default function Billing() {
   const { activeOrg, isAdmin, profile } = useAuth();
@@ -19,13 +24,32 @@ export default function Billing() {
   const [code, setCode] = useState("");
   const [redeeming, setRedeeming] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [ackOpen, setAckOpen] = useState(false);
+  const [ackChecked, setAckChecked] = useState(false);
 
   useEffect(() => { void initializePaddle().catch(() => {}); }, []);
 
+  const openUpgrade = () => {
+    setAckChecked(false);
+    setAckOpen(true);
+  };
+
   const upgrade = async () => {
-    if (!activeOrg) return;
+    if (!activeOrg || !profile) return;
     setCheckoutLoading(true);
     try {
+      // Record acknowledgment first — must succeed before checkout opens
+      const { error: ackErr } = await supabase.from("billing_acknowledgments").insert({
+        organization_id: activeOrg.id,
+        user_id: profile.user_id,
+        terms_version: POLICY_VERSION,
+        refund_version: POLICY_VERSION,
+        privacy_version: POLICY_VERSION,
+        user_agent: navigator.userAgent,
+        context: "upgrade_checkout",
+      });
+      if (ackErr) throw ackErr;
+      setAckOpen(false);
       await initializePaddle();
       const paddlePriceId = await getPaddlePriceId("pro_monthly");
       window.Paddle.Checkout.open({
@@ -134,7 +158,7 @@ export default function Billing() {
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Full branding & customization</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Cancel anytime</li>
               </ul>
-              <Button onClick={upgrade} disabled={checkoutLoading} className="w-full">
+              <Button onClick={openUpgrade} disabled={checkoutLoading} className="w-full">
                 {checkoutLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {isActivePaid ? "Manage / extend" : "Upgrade now"}
               </Button>
@@ -165,6 +189,66 @@ export default function Billing() {
           </>
         )}
       </div>
+
+      <Dialog open={ackOpen} onOpenChange={(o) => { if (!checkoutLoading) setAckOpen(o); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" /> Before you continue
+            </DialogTitle>
+            <DialogDescription>
+              Please review and acknowledge the following before proceeding to checkout.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="text-sm space-y-3">
+            <p className="text-muted-foreground">
+              By continuing, you confirm you have read and agree to:
+            </p>
+            <ul className="space-y-2">
+              <li>
+                <Link to="/terms" target="_blank" className="text-primary hover:underline font-medium">
+                  Terms &amp; Conditions
+                </Link>
+              </li>
+              <li>
+                <Link to="/refund-policy" target="_blank" className="text-primary hover:underline font-medium">
+                  Refund Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/privacy" target="_blank" className="text-primary hover:underline font-medium">
+                  Privacy Notice
+                </Link>
+              </li>
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Payments are processed by Paddle, the Merchant of Record for this purchase. Your acknowledgment will be recorded with a timestamp for our records.
+            </p>
+
+            <label className="flex items-start gap-2 pt-2 cursor-pointer">
+              <Checkbox
+                checked={ackChecked}
+                onCheckedChange={(v) => setAckChecked(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-sm">
+                I have read and agree to the Terms &amp; Conditions, Refund Policy, and Privacy Notice.
+              </span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAckOpen(false)} disabled={checkoutLoading}>
+              Cancel
+            </Button>
+            <Button onClick={upgrade} disabled={!ackChecked || checkoutLoading}>
+              {checkoutLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Agree &amp; continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
