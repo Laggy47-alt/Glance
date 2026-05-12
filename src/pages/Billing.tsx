@@ -158,7 +158,7 @@ export default function Billing() {
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Full branding & customization</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Cancel anytime</li>
               </ul>
-              <Button onClick={upgrade} disabled={checkoutLoading} className="w-full">
+              <Button onClick={openUpgrade} disabled={checkoutLoading} className="w-full">
                 {checkoutLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {isActivePaid ? "Manage / extend" : "Upgrade now"}
               </Button>
