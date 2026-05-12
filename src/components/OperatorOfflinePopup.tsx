@@ -18,6 +18,11 @@ type OfflineEvent = {
 };
 
 const POLL_MS = 30000;
+// How long a camera must be continuously online before we'll allow a new
+// offline popup for it. This debounces flapping cameras that reconnect &
+// disconnect in short bursts, so the operator only sees one popup per real
+// outage event.
+const RESTORE_STABLE_MS = 5 * 60 * 1000;
 
 function parseStats(stats: unknown): string[] {
   if (!stats || typeof stats !== "object") return [];
