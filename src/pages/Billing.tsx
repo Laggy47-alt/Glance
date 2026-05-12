@@ -52,9 +52,10 @@ export default function Billing() {
       setAckOpen(false);
       await initializePaddle();
       const paddlePriceId = await getPaddlePriceId("pro_monthly");
+      const email = (profile as any)?.contact_email || session?.user?.email || undefined;
       window.Paddle.Checkout.open({
         items: [{ priceId: paddlePriceId, quantity: 1 }],
-        customer: profile ? { email: (profile as any).contact_email || undefined } : undefined,
+        ...(email ? { customer: { email } } : {}),
         customData: { organization_id: activeOrg.id, user_id: profile?.user_id || "" },
         settings: {
           displayMode: "overlay",
