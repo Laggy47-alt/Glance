@@ -445,6 +445,11 @@ const DailyReports = () => {
       from_name: settings.from_name,
       from_email: settings.from_email,
       reply_to: settings.reply_to,
+      smtp_host: settings.smtp_host,
+      smtp_port: settings.smtp_port,
+      smtp_username: settings.smtp_username,
+      smtp_password: settings.smtp_password,
+      smtp_secure: settings.smtp_secure,
     }).eq("id", settings.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Sender settings saved");
