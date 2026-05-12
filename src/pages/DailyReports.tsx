@@ -481,7 +481,49 @@ const DailyReports = () => {
             <Input value={settings?.reply_to ?? ""} onChange={(e) => setSettings(settings && { ...settings, reply_to: e.target.value })} className="bg-secondary border-border" />
           </div>
         </div>
-        <Button size="sm" onClick={saveSettings} className="mt-3 gap-1.5"><Save className="h-3.5 w-3.5" /> Save sender settings</Button>
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <Server className="h-4 w-4 text-primary" />
+            <h4 className="font-semibold text-foreground text-sm">SMTP server</h4>
+            <span className="text-xs text-muted-foreground">— used to deliver every email above</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs">Host</Label>
+              <Input placeholder="smtp.gmail.com" value={settings?.smtp_host ?? ""} onChange={(e) => setSettings(settings && { ...settings, smtp_host: e.target.value })} className="bg-secondary border-border" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Port</Label>
+              <Input type="number" placeholder="587" value={settings?.smtp_port ?? 587} onChange={(e) => setSettings(settings && { ...settings, smtp_port: Number(e.target.value) || 587 })} className="bg-secondary border-border" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Encryption</Label>
+              <select
+                value={settings?.smtp_secure ?? "starttls"}
+                onChange={(e) => setSettings(settings && { ...settings, smtp_secure: e.target.value })}
+                className="w-full h-10 rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+              >
+                <option value="starttls">STARTTLS (port 587)</option>
+                <option value="tls">SSL/TLS (port 465)</option>
+                <option value="none">None (not recommended)</option>
+              </select>
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs">Username</Label>
+              <Input placeholder="user@example.com" value={settings?.smtp_username ?? ""} onChange={(e) => setSettings(settings && { ...settings, smtp_username: e.target.value })} className="bg-secondary border-border" />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs">Password</Label>
+              <Input type="password" placeholder="••••••••" value={settings?.smtp_password ?? ""} onChange={(e) => setSettings(settings && { ...settings, smtp_password: e.target.value })} className="bg-secondary border-border" />
+            </div>
+          </div>
+          <div className="flex items-start gap-2 mt-3 p-2 rounded bg-secondary/40 border border-border">
+            <AlertCircle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground">
+              Make sure the <strong className="text-foreground">From email</strong> above matches an address your SMTP server is allowed to send from. For Gmail, use an <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="text-primary hover:underline">App Password</a>, not your account password.
+            </p>
+          </div>
+        </div>
       </Card>
 
       {/* Per-NVR configs */}
