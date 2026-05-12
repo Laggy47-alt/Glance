@@ -18,6 +18,11 @@ type OfflineEvent = {
 };
 
 const POLL_MS = 30000;
+// How long a camera must be continuously online before we'll allow a new
+// offline popup for it. This debounces flapping cameras that reconnect &
+// disconnect in short bursts, so the operator only sees one popup per real
+// outage event.
+const RESTORE_STABLE_MS = 5 * 60 * 1000;
 
 function parseStats(stats: unknown): string[] {
   if (!stats || typeof stats !== "object") return [];
@@ -46,7 +51,14 @@ export function OperatorOfflinePopup() {
   const { user, isCustomer, activeOrg } = useAuth();
   const store = useWebhookStore();
   const [queue, setQueue] = useState<OfflineEvent[]>([]);
-  const ackedRef = useRef<Set<string>>(new Set()); // local + server-acked keys
+  // Acked keys are scoped to (instance, camera) only — NOT to a specific outage
+  // timestamp. We clear an ack only after the camera has been continuously
+  // online for RESTORE_STABLE_MS, so brief reconnect/disconnect flaps don't
+  // re-trigger popups.
+  const ackedRef = useRef<Set<string>>(new Set());
+  // Tracks when each camera was first observed online again after being acked,
+  // so we know when to clear the ack. Key: `${inst}::${cam}` -> timestamp ms.
+  const onlineSinceRef = useRef<Map<string, number>>(new Map());
   const stateRef = useRef<Map<string, { unreachable: boolean; offline: Set<string>; sinceMap: Map<string, string> }>>(new Map());
   const initRef = useRef(true);
   // NVR-wide notes carry the customer's camera scope so they only fire for THEIR cameras
@@ -112,7 +124,9 @@ export function OperatorOfflinePopup() {
       .select("instance_id, camera, since")
       .eq("user_id", user.id);
     for (const r of data ?? []) {
-      ackedRef.current.add(`${r.instance_id}::${r.camera}::${r.since}`);
+      // Collapse to (instance, camera) — once acked we won't re-popup until
+      // the camera has been continuously online for RESTORE_STABLE_MS.
+      ackedRef.current.add(`${r.instance_id}::${r.camera}`);
     }
   }, [user]);
 
@@ -175,51 +189,58 @@ export function OperatorOfflinePopup() {
       const sinceMap = new Map(prev.sinceMap);
       const nowIso = new Date().toISOString();
 
-      // Determine NEW offline transitions
-      if (!initRef.current) {
-        // NVR went unreachable
-        if (unreachable && !prev.unreachable) {
-          const since = nowIso;
-          sinceMap.set("__nvr__", since);
-          const key = `${inst.id}::__nvr__::${since}`;
-          if (!ackedRef.current.has(key)) {
-            const instr = pickInstruction(inst.id, null);
-            if (instr) {
-              newEvents.push({ key, inst, camera: null, since, instructions: instr });
-            }
+      const nowMs = Date.now();
+
+      // Helper: clear an ack once the target has been continuously online
+      // for RESTORE_STABLE_MS. While offline, we reset the online timer.
+      const maintainAck = (ackKey: string, isOnline: boolean) => {
+        if (isOnline) {
+          const since = onlineSinceRef.current.get(ackKey);
+          if (since === undefined) {
+            onlineSinceRef.current.set(ackKey, nowMs);
+          } else if (nowMs - since >= RESTORE_STABLE_MS) {
+            ackedRef.current.delete(ackKey);
+            onlineSinceRef.current.delete(ackKey);
+          }
+        } else {
+          onlineSinceRef.current.delete(ackKey);
+        }
+      };
+
+      // NVR ack maintenance
+      const nvrAckKey = `${inst.id}::__nvr__`;
+      maintainAck(nvrAckKey, !unreachable);
+
+      // Per-camera ack maintenance — for cameras we previously knew about
+      // (or that are reporting now), update their online timer.
+      const knownCams = new Set<string>([...prev.offline, ...nowOffline]);
+      for (const cam of knownCams) {
+        maintainAck(`${inst.id}::${cam}`, !nowOffline.has(cam));
+      }
+
+      // Determine NEW offline transitions (or, on first tick, current state)
+      const considerNvr = unreachable && (initRef.current || !prev.unreachable);
+      if (considerNvr) {
+        const since = nowIso;
+        sinceMap.set("__nvr__", since);
+        if (!ackedRef.current.has(nvrAckKey)) {
+          const instr = pickInstruction(inst.id, null);
+          if (instr) {
+            newEvents.push({ key: nvrAckKey, inst, camera: null, since, instructions: instr });
           }
         }
-        // Cameras newly offline
-        for (const cam of nowOffline) {
-          if (!prev.offline.has(cam)) {
-            const since = nowIso;
-            sinceMap.set(cam, since);
-            const key = `${inst.id}::${cam}::${since}`;
-            if (!ackedRef.current.has(key)) {
-              const instr = pickInstruction(inst.id, cam);
-              if (instr) {
-                newEvents.push({ key, inst, camera: cam, since, instructions: instr });
-              }
-            }
-          }
-        }
-      } else {
-        // Initial load: capture current state and treat already-offline as needing a popup once
-        if (unreachable) {
-          sinceMap.set("__nvr__", nowIso);
-          const key = `${inst.id}::__nvr__::${nowIso}`;
-          if (!ackedRef.current.has(key)) {
-            const instr = pickInstruction(inst.id, null);
-            if (instr) newEvents.push({ key, inst, camera: null, since: nowIso, instructions: instr });
-          }
-        }
-        for (const cam of nowOffline) {
-          sinceMap.set(cam, nowIso);
-          const key = `${inst.id}::${cam}::${nowIso}`;
-          if (!ackedRef.current.has(key)) {
-            const instr = pickInstruction(inst.id, cam);
-            if (instr) newEvents.push({ key, inst, camera: cam, since: nowIso, instructions: instr });
-          }
+      }
+
+      for (const cam of nowOffline) {
+        const isNew = initRef.current || !prev.offline.has(cam);
+        if (!isNew) continue;
+        const since = nowIso;
+        sinceMap.set(cam, since);
+        const ackKey = `${inst.id}::${cam}`;
+        if (ackedRef.current.has(ackKey)) continue;
+        const instr = pickInstruction(inst.id, cam);
+        if (instr) {
+          newEvents.push({ key: ackKey, inst, camera: cam, since, instructions: instr });
         }
       }
 
