@@ -19,7 +19,7 @@ import { toast } from "sonner";
 const POLICY_VERSION = "2026-05-11";
 
 export default function Billing() {
-  const { activeOrg, isAdmin, profile } = useAuth();
+  const { activeOrg, isAdmin, profile, session } = useAuth();
   const { sub, refresh, isGrandfathered, isTrial, isActivePaid, isSuspended, hasAccess } = useOrgSubscription();
   const [code, setCode] = useState("");
   const [redeeming, setRedeeming] = useState(false);
@@ -52,9 +52,10 @@ export default function Billing() {
       setAckOpen(false);
       await initializePaddle();
       const paddlePriceId = await getPaddlePriceId("pro_monthly");
+      const email = (profile as any)?.contact_email || session?.user?.email || undefined;
       window.Paddle.Checkout.open({
         items: [{ priceId: paddlePriceId, quantity: 1 }],
-        customer: profile ? { email: (profile as any).contact_email || undefined } : undefined,
+        ...(email ? { customer: { email } } : {}),
         customData: { organization_id: activeOrg.id, user_id: profile?.user_id || "" },
         settings: {
           displayMode: "overlay",
