@@ -21,9 +21,13 @@ cp .env.example .env
 #   VITE_SUPABASE_URL
 #   VITE_SUPABASE_PUBLISHABLE_KEY
 #   VITE_SUPABASE_PROJECT_ID
+#   VITE_PAYMENTS_CLIENT_TOKEN   # Paddle client token (test_... for sandbox, live_... for production)
 ```
 
-The values come from the Supabase dashboard → **Project Settings → API**.
+The Supabase values come from the Supabase dashboard → **Project Settings → API**.
+
+The Paddle client token comes from the Paddle dashboard → **Developer Tools → Authentication**.
+Use a `test_` token for sandbox checkout and a `live_` token for production.
 
 ## 3. Build the frontend
 
@@ -87,8 +91,19 @@ The app expects these to exist in the connected Supabase project:
 - All tables/functions/policies under `supabase/migrations/`
 - Edge functions under `supabase/functions/`
 - Storage buckets: `branding`, `camera-snapshots`
-- Required edge-function secrets: `RESEND_API_KEY`, `LOVABLE_API_KEY`
-  (set in Supabase dashboard → Edge Functions → Secrets)
+- Required edge-function secrets (set in Supabase dashboard → **Edge Functions → Secrets**):
+
+| Secret | Required by | Source |
+|--------|-------------|--------|
+| `SUPABASE_URL` | Most functions | Your Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Most functions | Supabase dashboard → Project Settings → API |
+| `SUPABASE_ANON_KEY` | `admin-users` function | Supabase dashboard → Project Settings → API |
+| `LOVABLE_API_KEY` | Paddle shared code | Lovable project settings |
+| `RESEND_API_KEY` | Email functions | [Resend](https://resend.com) dashboard |
+| `PADDLE_SANDBOX_API_KEY` | Paddle shared code | Paddle dashboard → Developer Tools |
+| `PADDLE_LIVE_API_KEY` | Paddle shared code | Paddle dashboard → Developer Tools |
+| `PAYMENTS_SANDBOX_WEBHOOK_SECRET` | `payments-webhook` | Paddle sandbox webhook settings |
+| `PAYMENTS_LIVE_WEBHOOK_SECRET` | `payments-webhook` | Paddle live webhook settings |
 
 To deploy migrations and functions to your own project:
 
@@ -100,7 +115,19 @@ supabase db push                # apply migrations
 supabase functions deploy       # deploy all edge functions
 ```
 
-## 5. Emergency super-admin access
+## 5. Payments (Paddle) configuration
+
+If you are using the built-in subscription billing:
+
+1. Create your products and prices in the **Paddle dashboard**.
+2. Map them to the app's price IDs via the `get-paddle-price` edge function or
+   by inserting rows into the `price_mappings` table (see `supabase/migrations/`).
+3. Set the correct `VITE_PAYMENTS_CLIENT_TOKEN` in your frontend `.env`.
+4. Configure the Paddle webhook to point at:
+   `https://<your-project>.supabase.co/functions/v1/payments-webhook?env=sandbox`
+   (or `env=live` for production).
+
+## 6. Emergency super-admin access
 
 This app ships with an offline diagnostics page at **`/offline`** that is
 always reachable, even when the backend is down or misconfigured. Sign in
@@ -117,7 +144,7 @@ node -e "console.log(require('crypto').createHash('sha256').update('YOUR_NEW_PAS
 Replace `EMERGENCY_USERNAME` and `EMERGENCY_PASSWORD_SHA256` in
 `src/lib/offlineMode.ts`, then rebuild.
 
-## 6. Updating
+## 7. Updating
 
 Pull new code, re-run `npm install && npm run build`, and copy `dist/` over
 your existing webroot. Re-run `supabase db push` / `supabase functions deploy`
