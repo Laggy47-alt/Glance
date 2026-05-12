@@ -51,7 +51,14 @@ export function OperatorOfflinePopup() {
   const { user, isCustomer, activeOrg } = useAuth();
   const store = useWebhookStore();
   const [queue, setQueue] = useState<OfflineEvent[]>([]);
-  const ackedRef = useRef<Set<string>>(new Set()); // local + server-acked keys
+  // Acked keys are scoped to (instance, camera) only — NOT to a specific outage
+  // timestamp. We clear an ack only after the camera has been continuously
+  // online for RESTORE_STABLE_MS, so brief reconnect/disconnect flaps don't
+  // re-trigger popups.
+  const ackedRef = useRef<Set<string>>(new Set());
+  // Tracks when each camera was first observed online again after being acked,
+  // so we know when to clear the ack. Key: `${inst}::${cam}` -> timestamp ms.
+  const onlineSinceRef = useRef<Map<string, number>>(new Map());
   const stateRef = useRef<Map<string, { unreachable: boolean; offline: Set<string>; sinceMap: Map<string, string> }>>(new Map());
   const initRef = useRef(true);
   // NVR-wide notes carry the customer's camera scope so they only fire for THEIR cameras
