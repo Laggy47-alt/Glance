@@ -26,19 +26,21 @@ export default function Billing() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [ackOpen, setAckOpen] = useState(false);
   const [ackChecked, setAckChecked] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<null | { priceId: string; quantity: number; label: string }>(null);
+  const [nvrQty, setNvrQty] = useState(1);
 
   useEffect(() => { void initializePaddle().catch(() => {}); }, []);
 
-  const openUpgrade = () => {
+  const openUpgrade = (plan: { priceId: string; quantity: number; label: string }) => {
+    setPendingPlan(plan);
     setAckChecked(false);
     setAckOpen(true);
   };
 
   const upgrade = async () => {
-    if (!activeOrg || !profile) return;
+    if (!activeOrg || !profile || !pendingPlan) return;
     setCheckoutLoading(true);
     try {
-      // Record acknowledgment first — must succeed before checkout opens
       const { error: ackErr } = await supabase.from("billing_acknowledgments").insert({
         organization_id: activeOrg.id,
         user_id: profile.user_id,
@@ -46,15 +48,15 @@ export default function Billing() {
         refund_version: POLICY_VERSION,
         privacy_version: POLICY_VERSION,
         user_agent: navigator.userAgent,
-        context: "upgrade_checkout",
+        context: pendingPlan.priceId,
       });
       if (ackErr) throw ackErr;
       setAckOpen(false);
       await initializePaddle();
-      const paddlePriceId = await getPaddlePriceId("pro_monthly");
+      const paddlePriceId = await getPaddlePriceId(pendingPlan.priceId);
       const email = (profile as any)?.contact_email || session?.user?.email || undefined;
       window.Paddle.Checkout.open({
-        items: [{ priceId: paddlePriceId, quantity: 1 }],
+        items: [{ priceId: paddlePriceId, quantity: pendingPlan.quantity }],
         ...(email ? { customer: { email } } : {}),
         customData: { organization_id: activeOrg.id, user_id: profile?.user_id || "" },
         settings: {
