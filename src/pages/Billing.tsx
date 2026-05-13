@@ -26,19 +26,21 @@ export default function Billing() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [ackOpen, setAckOpen] = useState(false);
   const [ackChecked, setAckChecked] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<null | { priceId: string; quantity: number; label: string }>(null);
+  const [nvrQty, setNvrQty] = useState(1);
 
   useEffect(() => { void initializePaddle().catch(() => {}); }, []);
 
-  const openUpgrade = () => {
+  const openUpgrade = (plan: { priceId: string; quantity: number; label: string }) => {
+    setPendingPlan(plan);
     setAckChecked(false);
     setAckOpen(true);
   };
 
   const upgrade = async () => {
-    if (!activeOrg || !profile) return;
+    if (!activeOrg || !profile || !pendingPlan) return;
     setCheckoutLoading(true);
     try {
-      // Record acknowledgment first — must succeed before checkout opens
       const { error: ackErr } = await supabase.from("billing_acknowledgments").insert({
         organization_id: activeOrg.id,
         user_id: profile.user_id,
@@ -46,15 +48,15 @@ export default function Billing() {
         refund_version: POLICY_VERSION,
         privacy_version: POLICY_VERSION,
         user_agent: navigator.userAgent,
-        context: "upgrade_checkout",
+        context: pendingPlan.priceId,
       });
       if (ackErr) throw ackErr;
       setAckOpen(false);
       await initializePaddle();
-      const paddlePriceId = await getPaddlePriceId("pro_monthly");
+      const paddlePriceId = await getPaddlePriceId(pendingPlan.priceId);
       const email = (profile as any)?.contact_email || session?.user?.email || undefined;
       window.Paddle.Checkout.open({
-        items: [{ priceId: paddlePriceId, quantity: 1 }],
+        items: [{ priceId: paddlePriceId, quantity: pendingPlan.quantity }],
         ...(email ? { customer: { email } } : {}),
         customData: { organization_id: activeOrg.id, user_id: profile?.user_id || "" },
         settings: {
@@ -150,18 +152,59 @@ export default function Billing() {
             <Card className="p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                <div className="font-semibold">Upgrade to Pro</div>
+                <div className="font-semibold">Lifetime Unlimited</div>
               </div>
-              <div className="text-2xl font-bold">$29<span className="text-sm font-normal text-muted-foreground">/month</span></div>
+              <div className="text-2xl font-bold">R5,000<span className="text-sm font-normal text-muted-foreground"> once-off</span></div>
               <ul className="text-xs space-y-1">
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> All features unlocked, forever</li>
                 <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Unlimited NVRs</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Unlimited emails & daily reports</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Full branding & customization</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Cancel anytime</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Code emailed to you after payment</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> No recurring fees</li>
               </ul>
-              <Button onClick={openUpgrade} disabled={checkoutLoading} className="w-full">
+              <Button
+                onClick={() => openUpgrade({ priceId: "lifetime_unlimited_once", quantity: 1, label: "Lifetime Unlimited" })}
+                disabled={checkoutLoading}
+                className="w-full"
+              >
                 {checkoutLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {isActivePaid ? "Manage / extend" : "Upgrade now"}
+                Buy Lifetime
+              </Button>
+            </Card>
+
+            <Card className="p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <div className="font-semibold">Per-NVR License</div>
+              </div>
+              <div className="text-2xl font-bold">R750<span className="text-sm font-normal text-muted-foreground"> / NVR (once-off)</span></div>
+              <ul className="text-xs space-y-1">
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Permanently adds 1 NVR slot</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> All features unlocked</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Code emailed to you after payment</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Buy as many as you need</li>
+              </ul>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">NVRs:</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={nvrQty}
+                  onChange={(e) => setNvrQty(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                  className="w-20"
+                />
+                <span className="text-xs text-muted-foreground">
+                  Total: R{(750 * nvrQty).toLocaleString()}
+                </span>
+              </div>
+              <Button
+                onClick={() => openUpgrade({ priceId: "nvr_license_once", quantity: nvrQty, label: `NVR License${nvrQty > 1 ? `s × ${nvrQty}` : ""}` })}
+                disabled={checkoutLoading}
+                className="w-full"
+                variant="outline"
+              >
+                {checkoutLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Buy {nvrQty} NVR License{nvrQty > 1 ? "s" : ""}
               </Button>
               <p className="text-[10px] text-muted-foreground text-center">
                 Secure payment by Paddle ({getPaddleEnvironment() === "sandbox" ? "test mode" : "live"}).

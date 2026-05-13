@@ -28,39 +28,38 @@ export default function Pricing() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-          <Card className="p-6 space-y-4">
-            <div>
-              <div className="text-sm text-muted-foreground">Free trial</div>
-              <div className="text-3xl font-bold">$0</div>
-              <div className="text-xs text-muted-foreground">Try it out, no card required</div>
-            </div>
-            <ul className="text-sm space-y-2">
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Up to 1 NVR</li>
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Limited email notifications</li>
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Core monitoring features</li>
-            </ul>
-            <Button asChild variant="outline" className="w-full">
-              <Link to="/signup">Start free trial</Link>
-            </Button>
-          </Card>
-
           <Card className="p-6 space-y-4 border-primary/40 relative">
-            <div className="absolute -top-3 right-4 text-[10px] bg-primary text-primary-foreground px-2 py-1 rounded">Most popular</div>
+            <div className="absolute -top-3 right-4 text-[10px] bg-primary text-primary-foreground px-2 py-1 rounded">Best value</div>
             <div>
-              <div className="text-sm text-muted-foreground">Pro</div>
-              <div className="text-3xl font-bold">$29<span className="text-base font-normal text-muted-foreground">/month</span></div>
-              <div className="text-xs text-muted-foreground">Everything you need to run security ops</div>
+              <div className="text-sm text-muted-foreground">Lifetime Unlimited</div>
+              <div className="text-3xl font-bold">R5,000<span className="text-base font-normal text-muted-foreground"> once-off</span></div>
+              <div className="text-xs text-muted-foreground">All features, unlimited NVRs, forever</div>
             </div>
             <ul className="text-sm space-y-2">
               <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Unlimited NVRs</li>
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Unlimited email notifications</li>
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Daily reports & callout requests</li>
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Full branding & customization</li>
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> All admin features</li>
-              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Cancel anytime</li>
+              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> All features unlocked</li>
+              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> One payment, no subscriptions</li>
+              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Activation code emailed instantly</li>
             </ul>
             <Button asChild className="w-full">
-              <Link to="/signup">Get started</Link>
+              <Link to="/signup">Get Lifetime</Link>
+            </Button>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <div>
+              <div className="text-sm text-muted-foreground">Per-NVR License</div>
+              <div className="text-3xl font-bold">R750<span className="text-base font-normal text-muted-foreground"> / NVR (once-off)</span></div>
+              <div className="text-xs text-muted-foreground">Pay only for what you need</div>
+            </div>
+            <ul className="text-sm space-y-2">
+              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> 1 NVR slot per license, lifetime</li>
+              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> All features unlocked</li>
+              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Buy more anytime</li>
+              <li className="flex items-start gap-2"><CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" /> Activation code emailed instantly</li>
+            </ul>
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/signup">Buy NVR Licenses</Link>
             </Button>
           </Card>
         </div>
@@ -71,7 +70,7 @@ export default function Pricing() {
             30-day money-back guarantee — see our <Link to="/refund-policy" className="underline">Refund Policy</Link>.
           </p>
           <p>
-            Prices in USD. VAT and sales tax may apply based on your location.
+            Prices in ZAR. VAT and sales tax may apply based on your location.
           </p>
         </div>
 
