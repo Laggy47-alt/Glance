@@ -971,6 +971,7 @@ export type Database = {
           current_period_start: string | null
           environment: string
           notes: string | null
+          nvr_license_count: number
           organization_id: string
           paddle_customer_id: string | null
           paddle_subscription_id: string | null
@@ -989,6 +990,7 @@ export type Database = {
           current_period_start?: string | null
           environment?: string
           notes?: string | null
+          nvr_license_count?: number
           organization_id: string
           paddle_customer_id?: string | null
           paddle_subscription_id?: string | null
@@ -1007,6 +1009,7 @@ export type Database = {
           current_period_start?: string | null
           environment?: string
           notes?: string | null
+          nvr_license_count?: number
           organization_id?: string
           paddle_customer_id?: string | null
           paddle_subscription_id?: string | null
@@ -1191,8 +1194,10 @@ export type Database = {
           duration_days: number
           expires_at: string | null
           id: string
+          kind: string
           max_uses: number
           notes: string | null
+          nvr_slots: number
           uses: number
         }
         Insert: {
@@ -1202,8 +1207,10 @@ export type Database = {
           duration_days?: number
           expires_at?: string | null
           id?: string
+          kind?: string
           max_uses?: number
           notes?: string | null
+          nvr_slots?: number
           uses?: number
         }
         Update: {
@@ -1213,8 +1220,10 @@ export type Database = {
           duration_days?: number
           expires_at?: string | null
           id?: string
+          kind?: string
           max_uses?: number
           notes?: string | null
+          nvr_slots?: number
           uses?: number
         }
         Relationships: []
@@ -1470,6 +1479,7 @@ export type Database = {
         | "active"
         | "past_due"
         | "suspended"
+        | "lifetime"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1605,6 +1615,7 @@ export const Constants = {
         "active",
         "past_due",
         "suspended",
+        "lifetime",
       ],
     },
   },
