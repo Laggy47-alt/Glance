@@ -117,7 +117,7 @@ async function emailCode(to: string, code: string, productLabel: string, qty: nu
     body: JSON.stringify({
       from: 'First Glance <onboarding@resend.dev>',
       to: [to],
-      subject: `Your ${productLabel} activation code`,
+      subject: `Your ${productLabel} activation code + Glance setup guide`,
       html,
     }),
   });
