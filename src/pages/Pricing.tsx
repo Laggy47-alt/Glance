@@ -70,7 +70,7 @@ export default function Pricing() {
             30-day money-back guarantee — see our <Link to="/refund-policy" className="underline">Refund Policy</Link>.
           </p>
           <p>
-            Prices in USD. VAT and sales tax may apply based on your location.
+            Prices in ZAR. VAT and sales tax may apply based on your location.
           </p>
         </div>
 
