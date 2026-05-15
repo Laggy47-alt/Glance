@@ -62,10 +62,7 @@ const Frigate = () => {
   };
 
   const save = async () => {
-    if (!editing && trialBlocked) {
-      toast.error(`Trial limit reached (${sub?.trial_nvr_limit ?? 1} NVR). Upgrade to add more.`);
-      return;
-    }
+
     if (!name.trim() || !baseUrl.trim()) { toast.error("Name and base URL are required"); return; }
     if (!/^https?:\/\//i.test(baseUrl.trim())) { toast.error("Base URL must start with http:// or https://"); return; }
     try {
@@ -114,11 +111,9 @@ const Frigate = () => {
             <DialogTrigger asChild>
               <Button
                 onClick={openNew}
-                disabled={trialBlocked}
-                title={trialBlocked ? `Trial limit: ${sub?.trial_nvr_limit ?? 1} NVR. Upgrade for more.` : undefined}
-                className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow disabled:opacity-50"
+                className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow"
               >
-                <Plus className="h-4 w-4 mr-2" /> {trialBlocked ? "Upgrade to add more" : "Add Frigate"}
+                <Plus className="h-4 w-4 mr-2" /> Add Frigate
               </Button>
             </DialogTrigger>
           <DialogContent className="bg-card border-border">
