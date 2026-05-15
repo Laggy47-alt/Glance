@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Plus, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Trash2 } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlatformBranding } from "@/hooks/usePlatformBranding";
@@ -14,8 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
-import { SubscriptionAdminPanel } from "@/components/SubscriptionAdminPanel";
-import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
 
 type Org = { id: string; slug: string; name: string; created_at: string };
