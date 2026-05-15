@@ -104,9 +104,8 @@ Deno.serve(async (req) => {
       await client.close();
     }
 
-    if (organization_id) {
-      await supabase.rpc("increment_trial_email_count", { _org: organization_id, _n: 1 });
-    }
+
+
 
     return new Response(JSON.stringify({ ok: true, recipients, subject }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
