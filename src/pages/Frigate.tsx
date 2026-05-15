@@ -14,14 +14,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
-import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 
 const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6"];
 
 const Frigate = () => {
   const store = useWebhookStore();
-  const { isTrial, sub } = useOrgSubscription();
-  const trialBlocked = !!isTrial && store.frigates.length >= (sub?.trial_nvr_limit ?? 1);
+  const trialBlocked = false;
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FrigateInstance | null>(null);
   const [name, setName] = useState("");

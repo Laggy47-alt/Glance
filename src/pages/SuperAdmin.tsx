@@ -198,12 +198,7 @@ export default function SuperAdmin() {
               {openCallouts.length > 0 && <Badge variant="secondary" className="ml-1">{openCallouts.length}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
-            <TabsTrigger value="subscriptions" className="gap-1.5"><CreditCard className="h-4 w-4" /> Subscriptions</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="subscriptions" className="space-y-4 mt-4">
-            <SubscriptionAdminPanel orgs={orgs} />
-          </TabsContent>
 
           {/* SITES */}
           <TabsContent value="sites" className="space-y-4 mt-4">
@@ -271,9 +266,6 @@ export default function SuperAdmin() {
           <TabsContent value="orgs" className="space-y-4 mt-4">
             <div className="flex justify-between items-center">
               <p className="text-sm text-muted-foreground">{orgs.length} organization{orgs.length === 1 ? "" : "s"}</p>
-              <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
-                <Plus className="h-4 w-4" /> Add Organization
-              </Button>
             </div>
             <Card>
               <Table>
@@ -296,16 +288,9 @@ export default function SuperAdmin() {
                       <TableCell>{(sitesByOrg.get(o.id) ?? []).length}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
-                            Enter <ExternalLink className="h-3.5 w-3.5" />
-                          </Button>
-                          {o.slug !== "super" && (
-                            <Button size="sm" variant="outline" onClick={() => { setDeleteOrg(o); setDeleteConfirm(""); }} className="gap-1.5 text-destructive hover:text-destructive">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
+                        <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
+                          Enter <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
