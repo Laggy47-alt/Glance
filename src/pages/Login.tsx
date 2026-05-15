@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { signInWithUsername } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -8,16 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Webhook, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+// Single-tenant: ABC is the only organization. Slug is fixed.
+const ORG_SLUG = "abc-2026";
+
 const Login = () => {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as { state: { from?: string } | null };
-  const [orgSlug, setOrgSlug] = useState(() => {
-    try { return localStorage.getItem("login.orgSlug") || ""; } catch { return ""; }
-  });
-  const [editingOrg, setEditingOrg] = useState(() => {
-    try { return !localStorage.getItem("login.orgSlug"); } catch { return true; }
-  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +32,16 @@ const Login = () => {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const slug = orgSlug.trim().toLowerCase();
-    try { localStorage.setItem("login.orgSlug", slug); } catch { /* ignore */ }
-    const { error } = await signInWithUsername(username, password, slug);
+    // Try ABC first, then fall back to the legacy "super" slug so super admins can still sign in.
+    let { error: err } = await signInWithUsername(username, password, ORG_SLUG);
+    if (err) {
+      const fallback = await signInWithUsername(username, password, "super");
+      if (!fallback.error) err = null;
+      else err = fallback.error;
+    }
     setBusy(false);
-    if (error) {
-      setError(error.message);
+    if (err) {
+      setError(err.message);
       return;
     }
     navigate(location.state?.from ?? "/", { replace: true });
@@ -55,39 +56,11 @@ const Login = () => {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">Glance</h1>
-            <p className="text-xs text-muted-foreground">Sign in to your organization</p>
+            <p className="text-xs text-muted-foreground">Sign in to your account</p>
           </div>
         </div>
 
         <form onSubmit={submit} className="space-y-4 rounded-lg border border-border bg-card/60 p-5 backdrop-blur">
-          {editingOrg ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="org" className="text-xs">Organization ID</Label>
-              <Input
-                id="org"
-                value={orgSlug}
-                onChange={(e) => setOrgSlug(e.target.value)}
-                placeholder=""
-                autoComplete="organization"
-                autoFocus
-                required
-              />
-            </div>
-          ) : (
-            <div className="flex items-center justify-between rounded-md border border-border bg-background/50 px-3 py-2">
-              <div className="text-xs">
-                <span className="text-muted-foreground">Signing into </span>
-                <span className="font-mono font-medium text-foreground">{orgSlug}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingOrg(true)}
-                className="text-[11px] text-primary hover:underline"
-              >
-                change
-              </button>
-            </div>
-          )}
           <div className="space-y-1.5">
             <Label htmlFor="username" className="text-xs">Username</Label>
             <Input
@@ -95,6 +68,7 @@ const Login = () => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
+              autoFocus
               required
             />
           </div>
@@ -118,9 +92,6 @@ const Login = () => {
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Sign in
           </Button>
-          <div className="text-center pt-1 text-[11px] text-muted-foreground">
-            New here? <Link to="/signup" className="text-primary hover:underline">Start a free trial</Link>
-          </div>
         </form>
       </div>
     </div>

@@ -1,14 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { BrandingProvider } from "@/hooks/useBranding";
 import { AuthGate } from "@/components/AuthGate";
-import { OrgGate } from "@/components/OrgGate";
-import Signup from "./pages/Signup.tsx";
-import Billing from "./pages/Billing.tsx";
 import { AuthorBadge } from "@/components/AuthorBadge";
 import { OperatorOfflinePopup } from "@/components/OperatorOfflinePopup";
 import Index from "./pages/Index.tsx";
@@ -40,15 +37,12 @@ import Offline from "./pages/Offline.tsx";
 import Terms from "./pages/Terms.tsx";
 import RefundPolicy from "./pages/RefundPolicy.tsx";
 import Privacy from "./pages/Privacy.tsx";
-import Pricing from "./pages/Pricing.tsx";
 import { BackendWatchdog } from "./components/BackendWatchdog";
 
 const queryClient = new QueryClient();
 
 const protect = (el: JSX.Element, adminOnly = false) => (
-  <AuthGate adminOnly={adminOnly}>
-    <OrgGate>{el}</OrgGate>
-  </AuthGate>
+  <AuthGate adminOnly={adminOnly}>{el}</AuthGate>
 );
 
 const App = () => (
@@ -64,10 +58,10 @@ const App = () => (
               <Route path="/terms" element={<Terms />} />
               <Route path="/refund-policy" element={<RefundPolicy />} />
               <Route path="/privacy" element={<Privacy />} />
-              <Route path="/pricing" element={<Pricing />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/billing" element={protect(<Billing />)} />
+              <Route path="/signup" element={<Navigate to="/login" replace />} />
+              <Route path="/pricing" element={<Navigate to="/login" replace />} />
+              <Route path="/billing" element={<Navigate to="/" replace />} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/super" element={protect(<SuperAdmin />)} />
               <Route path="/change-password" element={protect(<ChangePassword />)} />

@@ -8,9 +8,8 @@ import { useBranding } from "@/hooks/useBranding";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Trash2, Palette, Image as ImageIcon, Save, Lock } from "lucide-react";
-import { useOrgSubscription } from "@/hooks/useOrgSubscription";
-import { Link } from "react-router-dom";
+import { Upload, Trash2, Palette, Image as ImageIcon, Save } from "lucide-react";
+
 
 export default function Customization() {
   const branding = useBranding();
@@ -94,24 +93,8 @@ export default function Customization() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { isTrial } = useOrgSubscription();
-  if (isTrial) {
-    return (
-      <DashboardLayout title="Customization" subtitle="Locked on the Free Trial">
-        <div className="max-w-2xl mx-auto p-6">
-          <Card className="p-8 text-center space-y-4">
-            <div className="mx-auto h-12 w-12 rounded-full bg-muted grid place-items-center">
-              <Lock className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <h2 className="text-lg font-semibold">Customization is a Pro feature</h2>
-            <p className="text-sm text-muted-foreground">Upgrade your plan to unlock branding, logo upload, and app naming.</p>
-            <Button asChild><Link to="/billing">Upgrade now</Link></Button>
-          </Card>
-        </div>
-      </DashboardLayout>
-    );
-  }
+
+
 
   return (
     <DashboardLayout title="Customization" subtitle="Personalize your dashboard branding">

@@ -14,14 +14,11 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
-import { useOrgSubscription } from "@/hooks/useOrgSubscription";
 
 const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6"];
 
 const Frigate = () => {
   const store = useWebhookStore();
-  const { isTrial, sub } = useOrgSubscription();
-  const trialBlocked = !!isTrial && store.frigates.length >= (sub?.trial_nvr_limit ?? 1);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FrigateInstance | null>(null);
   const [name, setName] = useState("");
@@ -64,10 +61,7 @@ const Frigate = () => {
   };
 
   const save = async () => {
-    if (!editing && trialBlocked) {
-      toast.error(`Trial limit reached (${sub?.trial_nvr_limit ?? 1} NVR). Upgrade to add more.`);
-      return;
-    }
+
     if (!name.trim() || !baseUrl.trim()) { toast.error("Name and base URL are required"); return; }
     if (!/^https?:\/\//i.test(baseUrl.trim())) { toast.error("Base URL must start with http:// or https://"); return; }
     try {
@@ -116,11 +110,9 @@ const Frigate = () => {
             <DialogTrigger asChild>
               <Button
                 onClick={openNew}
-                disabled={trialBlocked}
-                title={trialBlocked ? `Trial limit: ${sub?.trial_nvr_limit ?? 1} NVR. Upgrade for more.` : undefined}
-                className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow disabled:opacity-50"
+                className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow"
               >
-                <Plus className="h-4 w-4 mr-2" /> {trialBlocked ? "Upgrade to add more" : "Add Frigate"}
+                <Plus className="h-4 w-4 mr-2" /> Add Frigate
               </Button>
             </DialogTrigger>
           <DialogContent className="bg-card border-border">
