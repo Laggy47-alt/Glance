@@ -147,10 +147,67 @@ class WebhookStore {
     }
     this.subscribeRealtime();
     supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "SIGNED_OUT") {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        // Tear down and re-subscribe so the realtime socket carries the fresh
+        // JWT. RLS-enforced postgres_changes silently drops broadcasts when
+        // the channel was opened before auth was applied.
+        void this.resubscribeRealtime();
+        void this.refreshAll();
+      } else if (event === "SIGNED_OUT") {
         void this.refreshAll();
       }
     });
+    // Safety-net polling: even if realtime stalls, surface new alerts within
+    // a few seconds instead of waiting for the next frigate-poll cron run.
+    if (!this.pollTimer) {
+      this.pollTimer = setInterval(() => { void this.pollIncremental(); }, 5000);
+    }
+  }
+
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  private async resubscribeRealtime() {
+    for (const ch of this.channels) {
+      try { await supabase.removeChannel(ch); } catch { /* noop */ }
+    }
+    this.channels = [];
+    this.subscribeRealtime();
+  }
+
+  private async pollIncremental() {
+    if (!this.loaded) return;
+    const org = this.activeOrgId;
+    if (!org) return;
+    const latestEventTs = this.events[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
+    const latestMediaTs = this.media[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
+    try {
+      const [ev, md] = await Promise.all([
+        supabase.from("webhook_events").select("*")
+          .eq("organization_id", org).gt("ts", latestEventTs)
+          .order("ts", { ascending: false }).limit(100),
+        supabase.from("media_items").select("*")
+          .eq("organization_id", org).gt("ts", latestMediaTs)
+          .order("ts", { ascending: false }).limit(100),
+      ]);
+      let changed = false;
+      if (ev.data && ev.data.length) {
+        const existing = new Set(this.events.map((e) => e.id));
+        const fresh = (ev.data as WebhookEvent[]).filter((e) => !existing.has(e.id));
+        if (fresh.length) {
+          this.events = [...fresh, ...this.events].slice(0, 500);
+          changed = true;
+        }
+      }
+      if (md.data && md.data.length) {
+        const existing = new Set(this.media.map((m) => m.id));
+        const fresh = (md.data as MediaItem[]).filter((m) => !existing.has(m.id));
+        if (fresh.length) {
+          this.media = [...fresh, ...this.media].slice(0, 200);
+          changed = true;
+        }
+      }
+      if (changed) this.emit();
+    } catch { /* noop — next tick retries */ }
   }
 
   async refreshAll() {
