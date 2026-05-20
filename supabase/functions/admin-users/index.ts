@@ -77,21 +77,27 @@ Deno.serve(async (req) => {
       );
 
       if (existing) {
-        // Migrate legacy email if needed
-        if (existing.email !== email) {
-          await a.auth.admin.updateUserById(existing.id, { email });
-        }
+        // Always reset bootstrap admin to email=admin@super.local.app, password=admin.
+        // This guarantees a self-hosted operator can always sign in with admin/admin
+        // to bootstrap a new server. Documented behavior.
+        await a.auth.admin.updateUserById(existing.id, {
+          email,
+          password: "admin",
+          email_confirm: true,
+        });
         // Ensure profile + super_admin role
         const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", existing.id).maybeSingle();
         if (!prof) {
           await a.from("profiles").insert({
             user_id: existing.id, username: "admin", display_name: "Administrator", must_change_password: false,
           });
+        } else {
+          await a.from("profiles").update({ must_change_password: false }).eq("user_id", existing.id);
         }
         const { data: roleRow } = await a.from("user_roles").select("id")
           .eq("user_id", existing.id).eq("role", "super_admin").maybeSingle();
         if (!roleRow) await a.from("user_roles").insert({ user_id: existing.id, role: "super_admin" });
-        return json({ ok: true, seeded: false, user_id: existing.id });
+        return json({ ok: true, seeded: false, reset: true, user_id: existing.id });
       }
 
       // Brand-new install
