@@ -28,17 +28,36 @@ const Login = () => {
     return <Navigate to={location.state?.from ?? "/"} replace />;
   }
 
+  const attemptSignIn = async (u: string, p: string) => {
+    // Try ABC first, then fall back to the legacy "super" slug so super admins can still sign in.
+    let { error: err } = await signInWithUsername(u, p, ORG_SLUG);
+    if (err) {
+      const fallback = await signInWithUsername(u, p, "super");
+      err = fallback.error ?? null;
+    }
+    return err;
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    // Try ABC first, then fall back to the legacy "super" slug so super admins can still sign in.
-    let { error: err } = await signInWithUsername(username, password, ORG_SLUG);
-    if (err) {
-      const fallback = await signInWithUsername(username, password, "super");
-      if (!fallback.error) err = null;
-      else err = fallback.error;
+    let err = await attemptSignIn(username, password);
+
+    // Fresh self-host bootstrap: if admin/admin fails because the user does not
+    // exist yet, run the seed function and retry once. This lets a brand-new
+    // deployment sign in with admin/admin without manual setup.
+    if (err && username.trim().toLowerCase() === "admin" && password === "admin") {
+      try {
+        await supabase.functions.invoke("admin-users/seed", { method: "POST" });
+        // Small delay so the auth record is consistent before retry.
+        await new Promise((r) => setTimeout(r, 400));
+        err = await attemptSignIn(username, password);
+      } catch (e) {
+        // fall through to original error
+      }
     }
+
     setBusy(false);
     if (err) {
       setError(err.message);
