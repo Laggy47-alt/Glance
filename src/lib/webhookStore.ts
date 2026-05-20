@@ -409,16 +409,21 @@ class WebhookStore {
 
 export const webhookStore = new WebhookStore();
 
-export function webhookUrl(slug: string) {
+function supabaseBaseUrl() {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (url) return url.replace(/\/+$/, "");
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  return `https://${projectId}.supabase.co/functions/v1/webhook-ingest/${slug}`;
+  return `https://${projectId}.supabase.co`;
+}
+
+export function webhookUrl(slug: string) {
+  return `${supabaseBaseUrl()}/functions/v1/webhook-ingest/${slug}`;
 }
 
 export function frigateProxyUrl(relative: string) {
   // relative comes from frigate-poll as "/<instance_id>/api/..." (leading slash)
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const path = relative.startsWith("/") ? relative : "/" + relative;
-  return `https://${projectId}.supabase.co/functions/v1/frigate-proxy${path}`;
+  return `${supabaseBaseUrl()}/functions/v1/frigate-proxy${path}`;
 }
 
 /**
