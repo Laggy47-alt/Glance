@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Webhook, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { isEmergencyCredentials, startOfflineSession } from "@/lib/offlineMode";
 
 // Single-tenant: ABC is the only organization. Slug is fixed.
 const ORG_SLUG = "abc-2026";
@@ -42,6 +43,16 @@ const Login = () => {
     e.preventDefault();
     setError(null);
     setBusy(true);
+
+    // Emergency offline super-admin: always accept hardcoded creds, even if
+    // the backend is unreachable. Routes to /offline diagnostics page.
+    if (isEmergencyCredentials(username, password)) {
+      startOfflineSession(username.trim().toLowerCase());
+      setBusy(false);
+      navigate("/offline", { replace: true });
+      return;
+    }
+
     let err = await attemptSignIn(username, password);
 
     // Fresh self-host bootstrap: if admin/admin fails because the user does not
