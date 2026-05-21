@@ -17,3 +17,15 @@ verify_jwt = false
 
 [functions.frigate-proxy]
 verify_jwt = false
+
+[functions.frigate-poll]
+verify_jwt = false
+
+[functions.arm-scheduler]
+verify_jwt = false
+
+[functions.escalate-offline]
+verify_jwt = false
+
+[functions.super-callout-email]
+verify_jwt = false
