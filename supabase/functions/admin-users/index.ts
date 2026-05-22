@@ -96,32 +96,39 @@ Deno.serve(async (req) => {
       let seeded = false;
 
       if (existing) {
-        // Always reset password + email so admin/admin works after self-host bootstrap.
-        await a.auth.admin.updateUserById(existing.id, {
-          email,
-          password: "admin",
-          email_confirm: true,
-        });
+        // Existing user: do NOT touch the password — the operator may have
+        // changed it and resetting it on every seed call would be a security
+        // hole (anyone hitting the public seed endpoint could log in as admin).
+        // Only ensure the email is normalized + confirmed.
+        if (existing.email !== email || existing.email_confirmed_at == null) {
+          await a.auth.admin.updateUserById(existing.id, {
+            email,
+            email_confirm: true,
+          });
+        }
         userId = existing.id;
       } else {
+        // Brand-new install: create the bootstrap admin with the default
+        // password "admin". The user must change it after first login.
         const { data: created, error: createErr } = await a.auth.admin.createUser({
           email, password: "admin", email_confirm: true,
-          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
+          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true, org_slug: ABC_ORG_SLUG },
         });
         if (createErr) return json({ ok: false, error: createErr.message }, 500);
         userId = created.user!.id;
         seeded = true;
       }
 
-      // 3. Profile (must_change_password=false so the user is not redirected away).
+      // 3. Profile — create on first run only. For existing users we leave
+      // must_change_password and username alone so the admin's own changes stick.
       const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
       if (!prof) {
         await a.from("profiles").insert({
-          user_id: userId, username: "admin", display_name: "Administrator", must_change_password: false,
+          user_id: userId, username: "admin", display_name: "Administrator",
+          must_change_password: seeded, // force change on brand-new bootstrap only
         });
-      } else {
-        await a.from("profiles").update({ must_change_password: false, username: "admin" }).eq("user_id", userId);
       }
+
 
       // 4. Remove any legacy super_admin role — we now use plain admin only.
       await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
