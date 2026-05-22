@@ -96,17 +96,23 @@ Deno.serve(async (req) => {
       let seeded = false;
 
       if (existing) {
-        // Always reset password + email so admin/admin works after self-host bootstrap.
-        await a.auth.admin.updateUserById(existing.id, {
-          email,
-          password: "admin",
-          email_confirm: true,
-        });
+        // Existing user: do NOT touch the password — the operator may have
+        // changed it and resetting it on every seed call would be a security
+        // hole (anyone hitting the public seed endpoint could log in as admin).
+        // Only ensure the email is normalized + confirmed.
+        if (existing.email !== email || existing.email_confirmed_at == null) {
+          await a.auth.admin.updateUserById(existing.id, {
+            email,
+            email_confirm: true,
+          });
+        }
         userId = existing.id;
       } else {
+        // Brand-new install: create the bootstrap admin with the default
+        // password "admin". The user must change it after first login.
         const { data: created, error: createErr } = await a.auth.admin.createUser({
           email, password: "admin", email_confirm: true,
-          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
+          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true, org_slug: ABC_ORG_SLUG },
         });
         if (createErr) return json({ ok: false, error: createErr.message }, 500);
         userId = created.user!.id;
