@@ -68,51 +68,81 @@ Deno.serve(async (req) => {
     const a = admin();
 
     if (action === "seed") {
-      const email = buildEmail("admin", "super");
+      // Default organization for all self-hosted installs. Matches the default
+      // organization_id used across the schema. We always ensure this org row
+      // exists, then ensure an admin/admin account exists that is an admin
+      // of this org. No super_admin role is created — the bootstrap user is
+      // a normal org admin so it can immediately manage users, sites, etc.
+      const ABC_ORG_ID = "c093c027-920c-4e88-865a-fb17413b3b5a";
+      const ABC_ORG_SLUG = "abc-2026";
+      const ABC_ORG_NAME = "ABC";
+      const email = buildEmail("admin", ABC_ORG_SLUG);
 
-      // Find existing admin auth user (look across both new and legacy emails)
-      const { data: list } = await a.auth.admin.listUsers();
-      const existing = list.users.find(
-        (u) => u.email === email || u.email === "admin@local.app"
+      // 1. Make sure the org exists (idempotent on id).
+      await a.from("organizations").upsert(
+        { id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME },
+        { onConflict: "id" },
       );
 
+      // 2. Find existing admin auth user across new + any legacy emails.
+      const { data: list } = await a.auth.admin.listUsers();
+      const existing = list.users.find(
+        (u) => u.email === email
+            || u.email === "admin@local.app"
+            || u.email === "admin@super.local.app",
+      );
+
+      let userId: string;
+      let seeded = false;
+
       if (existing) {
-        // Always reset bootstrap admin to email=admin@super.local.app, password=admin.
-        // This guarantees a self-hosted operator can always sign in with admin/admin
-        // to bootstrap a new server. Documented behavior.
+        // Always reset password + email so admin/admin works after self-host bootstrap.
         await a.auth.admin.updateUserById(existing.id, {
           email,
           password: "admin",
           email_confirm: true,
         });
-        // Ensure profile + super_admin role
-        const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", existing.id).maybeSingle();
-        if (!prof) {
-          await a.from("profiles").insert({
-            user_id: existing.id, username: "admin", display_name: "Administrator", must_change_password: false,
-          });
-        } else {
-          await a.from("profiles").update({ must_change_password: false }).eq("user_id", existing.id);
-        }
-        const { data: roleRow } = await a.from("user_roles").select("id")
-          .eq("user_id", existing.id).eq("role", "super_admin").maybeSingle();
-        if (!roleRow) await a.from("user_roles").insert({ user_id: existing.id, role: "super_admin" });
-        return json({ ok: true, seeded: false, reset: true, user_id: existing.id });
+        userId = existing.id;
+      } else {
+        const { data: created, error: createErr } = await a.auth.admin.createUser({
+          email, password: "admin", email_confirm: true,
+          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
+        });
+        if (createErr) return json({ ok: false, error: createErr.message }, 500);
+        userId = created.user!.id;
+        seeded = true;
       }
 
-      // Brand-new install
-      const { data: created, error: createErr } = await a.auth.admin.createUser({
-        email, password: "admin", email_confirm: true,
-        user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true, org_slug: "super" },
-      });
-      if (createErr) return json({ ok: false, error: createErr.message }, 500);
-      const newId = created.user!.id;
-      await a.from("profiles").upsert(
-        { user_id: newId, username: "admin", display_name: "Administrator", must_change_password: true },
-        { onConflict: "user_id" },
-      );
-      await a.from("user_roles").insert({ user_id: newId, role: "super_admin" });
-      return json({ ok: true, seeded: true, user_id: newId });
+      // 3. Profile (must_change_password=false so the user is not redirected away).
+      const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
+      if (!prof) {
+        await a.from("profiles").insert({
+          user_id: userId, username: "admin", display_name: "Administrator", must_change_password: false,
+        });
+      } else {
+        await a.from("profiles").update({ must_change_password: false, username: "admin" }).eq("user_id", userId);
+      }
+
+      // 4. Remove any legacy super_admin role — we now use plain admin only.
+      await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
+
+      // 5. Ensure app_role = 'admin'.
+      const { data: adminRole } = await a.from("user_roles").select("id")
+        .eq("user_id", userId).eq("role", "admin").maybeSingle();
+      if (!adminRole) await a.from("user_roles").insert({ user_id: userId, role: "admin" });
+
+      // 6. Ensure membership in ABC org as admin (upgrade if currently customer).
+      const { data: member } = await a.from("organization_members").select("id, role")
+        .eq("user_id", userId).eq("organization_id", ABC_ORG_ID).maybeSingle();
+      if (!member) {
+        await a.from("organization_members").insert({
+          organization_id: ABC_ORG_ID, user_id: userId, role: "admin",
+        });
+      } else if ((member as any).role !== "admin") {
+        await a.from("organization_members").update({ role: "admin" }).eq("id", (member as any).id);
+      }
+
+      return json({ ok: true, seeded, reset: !seeded, user_id: userId, organization_id: ABC_ORG_ID });
     }
 
     // All other endpoints require an authenticated caller
