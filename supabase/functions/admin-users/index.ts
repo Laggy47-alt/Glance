@@ -119,15 +119,16 @@ Deno.serve(async (req) => {
         seeded = true;
       }
 
-      // 3. Profile (must_change_password=false so the user is not redirected away).
+      // 3. Profile — create on first run only. For existing users we leave
+      // must_change_password and username alone so the admin's own changes stick.
       const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
       if (!prof) {
         await a.from("profiles").insert({
-          user_id: userId, username: "admin", display_name: "Administrator", must_change_password: false,
+          user_id: userId, username: "admin", display_name: "Administrator",
+          must_change_password: seeded, // force change on brand-new bootstrap only
         });
-      } else {
-        await a.from("profiles").update({ must_change_password: false, username: "admin" }).eq("user_id", userId);
       }
+
 
       // 4. Remove any legacy super_admin role — we now use plain admin only.
       await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
