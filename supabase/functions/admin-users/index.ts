@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       );
 
       // 2. Find existing admin auth user across new + any legacy emails.
-      const { data: list } = await a.auth.admin.listUsers();
+      const { data: list } = await a.auth.admin.listUsers({ page: 1, perPage: 1000 });
       const existing = list.users.find(
         (u) => u.email === email
             || u.email === "admin@local.app"
