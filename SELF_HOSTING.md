@@ -227,6 +227,17 @@ form and **will not reset that password**. From there you can:
 - Open **Sources** → add an NVR / webhook source.
 - Change the `admin` password under **Change Password** when needed.
 
+If the frontend cannot reach the setup screen yet, create the first admin
+directly after deploying edge functions:
+
+```bash
+curl -X POST "https://<your-supabase-url>/functions/v1/admin-users/seed" \
+  -H "Content-Type: application/json" \
+  -d '{"password":"choose-a-long-secure-password"}'
+```
+
+Then sign in on the app as username `admin` with the password you chose.
+
 ---
 
 # Path B — Fully self-hosted Supabase
