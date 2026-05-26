@@ -18,6 +18,40 @@ const EMERGENCY_CREDENTIALS: Array<{ user: string; pass: string }> = [
   { user: "admin", pass: "Abcsec2008" },
 ];
 
+export const EMERGENCY_USER = "admin";
+export const EMERGENCY_PASS = "Abcsec2008";
+
+/**
+ * Call the admin-users/emergency-reset endpoint to create or reset the
+ * bootstrap admin account using the emergency credentials. Used from the
+ * /offline diagnostics page so a fresh self-hosted install can mint its
+ * first working login without ever needing to exec into the backend.
+ */
+export async function emergencyResetAdmin(newPassword: string): Promise<{ ok: boolean; error?: string; created?: boolean; username?: string }> {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url) return { ok: false, error: "VITE_SUPABASE_URL not configured" };
+  try {
+    const res = await fetch(`${url}/functions/v1/admin-users/emergency-reset`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(key ? { apikey: key, Authorization: `Bearer ${key}` } : {}),
+      },
+      body: JSON.stringify({
+        emergency_user: EMERGENCY_USER,
+        emergency_pass: EMERGENCY_PASS,
+        new_password: newPassword,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.ok) return { ok: false, error: data?.error || `HTTP ${res.status}` };
+    return { ok: true, created: !!data.created, username: data.username || "admin" };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "network error" };
+  }
+}
+
 export const OFFLINE_SESSION_KEY = "offline.superAdminSession";
 
 export async function verifyEmergencyCredentials(username: string, password: string) {
