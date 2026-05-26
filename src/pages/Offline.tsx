@@ -24,6 +24,28 @@ const Offline = () => {
   const [authErr, setAuthErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [probe, setProbe] = useState<ProbeState>({ loading: true, ok: false });
+  const [adminPw, setAdminPw] = useState("");
+  const [adminPw2, setAdminPw2] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminMsg, setAdminMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const submitAdminReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminMsg(null);
+    if (adminPw.length < 8) { setAdminMsg({ kind: "err", text: "Password must be at least 8 characters." }); return; }
+    if (adminPw !== adminPw2) { setAdminMsg({ kind: "err", text: "Passwords do not match." }); return; }
+    setAdminBusy(true);
+    const r = await emergencyResetAdmin(adminPw);
+    setAdminBusy(false);
+    if (!r.ok) { setAdminMsg({ kind: "err", text: r.error || "Failed to reset admin." }); return; }
+    setAdminPw(""); setAdminPw2("");
+    setAdminMsg({
+      kind: "ok",
+      text: r.created
+        ? `Admin account created. Sign in with username "admin" and your new password.`
+        : `Admin password updated. Sign in with username "admin" and your new password.`,
+    });
+  };
 
   const runProbe = async () => {
     setProbe((p) => ({ ...p, loading: true }));
