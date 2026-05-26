@@ -247,6 +247,49 @@ const Frigate = () => {
 
                     <NvrSchedulesPanel inst={f} />
 
+                    <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Switch
+                          checked={f.offline_alert_enabled}
+                          onCheckedChange={(v) => store.updateFrigate(f.id, { offline_alert_enabled: v })}
+                        />
+                        <span className="text-xs font-medium">Email when camera offline</span>
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground ml-2">After</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={1440}
+                          value={f.offline_alert_minutes}
+                          onChange={(e) => {
+                            const n = Math.max(1, Math.min(1440, Math.round(Number(e.target.value) || 5)));
+                            if (n !== f.offline_alert_minutes) store.updateFrigate(f.id, { offline_alert_minutes: n });
+                          }}
+                          className="h-7 w-16 bg-secondary border-border text-xs tabular-nums"
+                          disabled={!f.offline_alert_enabled}
+                        />
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">minutes offline</span>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Extra recipients (comma-separated)</Label>
+                        <Input
+                          placeholder="ops@example.com, manager@example.com"
+                          defaultValue={(f.offline_alert_recipients ?? []).join(", ")}
+                          onBlur={(e) => {
+                            const list = e.target.value.split(",").map((s) => s.trim()).filter((s) => s.includes("@"));
+                            const same = list.length === (f.offline_alert_recipients ?? []).length &&
+                              list.every((x, i) => x === f.offline_alert_recipients[i]);
+                            if (!same) store.updateFrigate(f.id, { offline_alert_recipients: list });
+                          }}
+                          className="h-7 bg-secondary border-border text-xs"
+                          disabled={!f.offline_alert_enabled}
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          Assigned customers (from the Users page) are notified automatically. Add extra recipients here if needed.
+                        </p>
+                      </div>
+                    </div>
+
+
                     {f.last_error && (
                       <div className="text-xs bg-destructive/10 border border-destructive/30 rounded px-3 py-2 text-destructive font-mono break-all">{f.last_error}</div>
                     )}
