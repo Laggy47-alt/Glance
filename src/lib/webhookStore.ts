@@ -66,6 +66,9 @@ export type FrigateInstance = {
   mute_enabled: boolean;
   mute_start: string | null; // "HH:MM:SS"
   mute_end: string | null;   // "HH:MM:SS"
+  offline_alert_enabled: boolean;
+  offline_alert_minutes: number;
+  offline_alert_recipients: string[];
   created_at: string;
 };
 
