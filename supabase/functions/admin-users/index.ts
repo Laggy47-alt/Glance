@@ -59,6 +59,13 @@ async function getCaller(authHeader: string | null): Promise<CallerInfo | null> 
   return { userId: userData.user.id, isSuperAdmin, adminOrgIds };
 }
 
+// Emergency credentials — must match src/lib/offlineMode.ts. These let the
+// platform owner reset/create the bootstrap admin from the /offline page even
+// when no working login exists (fresh self-host install, lost password, etc).
+// Override via env EMERGENCY_USER / EMERGENCY_PASS for self-hosted deployments.
+const EMERGENCY_USER = (Deno.env.get("EMERGENCY_USER") ?? "admin").toLowerCase();
+const EMERGENCY_PASS = Deno.env.get("EMERGENCY_PASS") ?? "Abcsec2008";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const url = new URL(req.url);
@@ -66,6 +73,86 @@ Deno.serve(async (req) => {
 
   try {
     const a = admin();
+
+    if (action === "emergency-reset") {
+      // Creates the bootstrap admin if missing, or resets its password.
+      // Authenticated by the emergency credentials shipped in the client bundle
+      // (or overridden via env on the server). Mirrors the seed flow.
+      const body = await req.json().catch(() => ({} as Record<string, unknown>));
+      const emergencyUser = String(body.emergency_user ?? "").trim().toLowerCase();
+      const emergencyPass = String(body.emergency_pass ?? "");
+      const newPassword = String(body.new_password ?? "");
+      if (emergencyUser !== EMERGENCY_USER || emergencyPass !== EMERGENCY_PASS) {
+        return json({ ok: false, error: "invalid emergency credentials" }, 401);
+      }
+      if (newPassword.length < 8) {
+        return json({ ok: false, error: "new_password must be at least 8 characters" }, 400);
+      }
+
+      const ABC_ORG_ID = "c093c027-920c-4e88-865a-fb17413b3b5a";
+      const ABC_ORG_SLUG = "abc-2026";
+      const ABC_ORG_NAME = "ABC";
+      const email = buildEmail("admin", ABC_ORG_SLUG);
+
+      await a.from("organizations").upsert(
+        { id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME },
+        { onConflict: "id" },
+      );
+
+      const { data: list } = await a.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const existing = list.users.find(
+        (u) => u.email === email
+            || u.email === "admin@local.app"
+            || u.email === "admin@super.local.app",
+      );
+
+      let userId: string;
+      let created = false;
+      if (existing) {
+        const { error: updErr } = await a.auth.admin.updateUserById(existing.id, {
+          email, email_confirm: true, password: newPassword,
+        });
+        if (updErr) return json({ ok: false, error: updErr.message }, 500);
+        userId = existing.id;
+      } else {
+        const { data: createdUser, error: createErr } = await a.auth.admin.createUser({
+          email, password: newPassword, email_confirm: true,
+          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
+        });
+        if (createErr) return json({ ok: false, error: createErr.message }, 500);
+        userId = createdUser.user!.id;
+        created = true;
+      }
+
+      const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
+      if (!prof) {
+        await a.from("profiles").insert({
+          user_id: userId, username: "admin", display_name: "Administrator", must_change_password: false,
+        });
+      } else {
+        await a.from("profiles").update({ must_change_password: false }).eq("user_id", userId);
+      }
+
+      await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
+      const { data: adminRole } = await a.from("user_roles").select("id")
+        .eq("user_id", userId).eq("role", "admin").maybeSingle();
+      if (!adminRole) await a.from("user_roles").insert({ user_id: userId, role: "admin" });
+
+      const { data: member } = await a.from("organization_members").select("id, role")
+        .eq("user_id", userId).eq("organization_id", ABC_ORG_ID).maybeSingle();
+      if (!member) {
+        await a.from("organization_members").insert({
+          organization_id: ABC_ORG_ID, user_id: userId, role: "admin",
+        });
+      } else if ((member as any).role !== "admin") {
+        await a.from("organization_members").update({ role: "admin" }).eq("id", (member as any).id);
+      }
+
+      return json({
+        ok: true, created, user_id: userId, organization_id: ABC_ORG_ID,
+        username: "admin", login_email: email,
+      });
+    }
 
     if (action === "seed") {
       const body = await req.json().catch(() => ({} as Record<string, unknown>));
