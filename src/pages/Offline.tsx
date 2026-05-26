@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, LogOut, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, LogOut, ShieldAlert, KeyRound } from "lucide-react";
 import {
+  emergencyResetAdmin,
   endOfflineSession,
   hasOfflineSession,
   pingSupabase,
