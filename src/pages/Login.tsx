@@ -41,7 +41,7 @@ const Login = () => {
   }
 
   const attemptSignIn = async (u: string, p: string) => {
-    // Try ABC first, then fall back to the legacy "super" slug so super admins can still sign in.
+    // Try ABC first, then fall back to the legacy "super" slug for upgraded installs.
     let { error: err } = await signInWithUsername(u, p, ORG_SLUG);
     if (err) {
       const fallback = await signInWithUsername(u, p, "super");
@@ -55,7 +55,7 @@ const Login = () => {
     setError(null);
     setBusy(true);
 
-    // Emergency offline super-admin: always accept hardcoded creds, even if
+    // Emergency offline admin: always accept hardcoded creds, even if
     // the backend is unreachable. Routes to /offline diagnostics page.
     if (isEmergencyCredentials(username, password)) {
       startOfflineSession(username.trim().toLowerCase());
@@ -140,7 +140,7 @@ const Login = () => {
           )}
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Sign in
+            {bootstrapNeeded ? "Create admin account" : "Sign in"}
           </Button>
           {bootstrapNeeded && (
             <p className="text-[11px] leading-relaxed text-muted-foreground">
