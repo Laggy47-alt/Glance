@@ -22,12 +22,17 @@ const Login = () => {
   const [busy, setBusy] = useState(false);
   const [bootstrapNeeded, setBootstrapNeeded] = useState(false);
   const [bootstrapChecking, setBootstrapChecking] = useState(true);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     supabase.functions.invoke("admin-users/seed", { method: "POST", body: { check_only: true } })
-      .then(({ data }) => {
+      .then(({ data, error: seedError }) => {
         if (cancelled) return;
+        if (seedError || (data as { ok?: boolean } | null)?.ok === false) {
+          setSetupError((data as { error?: string } | null)?.error ?? seedError?.message ?? "Could not check backend setup.");
+          return;
+        }
         const needsPassword = Boolean((data as { needs_password?: boolean } | null)?.needs_password);
         setBootstrapNeeded(needsPassword);
         if (needsPassword) setUsername("admin");
@@ -136,6 +141,11 @@ const Login = () => {
           {error && (
             <div className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded px-2.5 py-2">
               {error}
+            </div>
+          )}
+          {setupError && !error && (
+            <div className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded px-2.5 py-2">
+              Backend setup check failed: {setupError}
             </div>
           )}
           <Button type="submit" className="w-full" disabled={busy}>
