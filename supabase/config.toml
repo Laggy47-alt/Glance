@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.super-callout-email]
 verify_jwt = false
+
+[functions.camera-watch]
+verify_jwt = false

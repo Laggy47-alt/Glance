@@ -58,12 +58,12 @@ function formatDuration(ms: number): string {
   return remH ? `${d}d ${remH}h` : `${d}d`;
 }
 
-async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; offline: string[] }> {
+async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; offline: string[]; reachable: boolean }> {
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (inst.api_key) headers["Authorization"] = `Bearer ${inst.api_key}`;
     const r = await fetch(`${trimUrl(inst.base_url)}/api/stats`, { headers, signal: AbortSignal.timeout(10000) });
-    if (!r.ok) return { online: [], offline: [] };
+    if (!r.ok) return { online: [], offline: [], reachable: false };
     const j: any = await r.json();
     const cams = j?.cameras ?? {};
     const online: string[] = [];
@@ -72,11 +72,28 @@ async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; of
       const camFps = Number(data?.camera_fps ?? 0);
       if (camFps > 0) online.push(name); else offline.push(name);
     }
-    return { online: online.sort(), offline: offline.sort() };
+    return { online: online.sort(), offline: offline.sort(), reachable: true };
   } catch {
-    return { online: [], offline: [] };
+    return { online: [], offline: [], reachable: false };
   }
 }
+
+async function fetchAndUploadSnapshot(supabase: any, inst: Instance, camera: string): Promise<{ name: string; url: string } | null> {
+  try {
+    const headers: Record<string, string> = {};
+    if (inst.api_key) headers["Authorization"] = `Bearer ${inst.api_key}`;
+    const r = await fetch(`${trimUrl(inst.base_url)}/api/${encodeURIComponent(camera)}/latest.jpg?h=400`, { headers, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    if (!blob.type.startsWith("image/")) return null;
+    const safe = camera.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const path = `${inst.id}/${safe}.jpg`;
+    await supabase.storage.from("camera-snapshots").upload(path, blob, { upsert: true, contentType: "image/jpeg", cacheControl: "60" });
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    return { name: camera, url: `${supabaseUrl}/storage/v1/object/public/camera-snapshots/${path}` };
+  } catch { return null; }
+}
+
 
 async function reconcileStatus(supabase: any, instId: string, online: string[], offline: string[]): Promise<Map<string, CamState>> {
   const now = new Date().toISOString();
@@ -157,13 +174,31 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
 
   // Optional camera filter for multi-site NVRs
   const filter = (cfg.cameras && cfg.cameras.length > 0) ? new Set(cfg.cameras) : null;
+
+  // If NVR unreachable from cloud, fall back to last-known camera_status so we
+  // don't wipe history and report bogus 0/0 counts.
+  let effective = statsAll;
+  if (!statsAll.reachable) {
+    const { data: known } = await supabase.from("camera_status").select("camera, online").eq("instance_id", inst.id);
+    effective = {
+      online: (known ?? []).filter((r: any) => r.online).map((r: any) => r.camera).sort(),
+      offline: (known ?? []).filter((r: any) => !r.online).map((r: any) => r.camera).sort(),
+      reachable: false,
+    };
+  }
   const stats = filter
-    ? { online: statsAll.online.filter((c) => filter.has(c)), offline: statsAll.offline.filter((c) => filter.has(c)) }
-    : statsAll;
+    ? { online: effective.online.filter((c) => filter.has(c)), offline: effective.offline.filter((c) => filter.has(c)) }
+    : { online: effective.online, offline: effective.offline };
   const incidents = filter ? incidentsAll.filter((i: any) => filter.has(i.camera)) : incidentsAll;
 
-  // Track status transitions and compute offline duration (track all, but only show filtered)
-  const status = await reconcileStatus(supabase, inst.id, statsAll.online, statsAll.offline);
+  // Only reconcile camera_status when we actually reached the NVR; otherwise
+  // preserve the existing `since` timestamps maintained by camera-watch.
+  const status = statsAll.reachable
+    ? await reconcileStatus(supabase, inst.id, statsAll.online, statsAll.offline)
+    : new Map<string, CamState>(
+        ((await supabase.from("camera_status").select("camera, online, since").eq("instance_id", inst.id)).data ?? [])
+          .map((r: any) => [r.camera, { name: r.camera, online: r.online, since: r.since }]),
+      );
   const now = Date.now();
   const offlineWithDur = stats.offline.map((n) => {
     const st = status.get(n);
@@ -175,6 +210,17 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
     ? providedSnapshots
     : await listStoredSnapshots(supabase, inst.id);
   if (filter) snapshots = snapshots.filter((s) => filter.has(s.name));
+
+  // If reachable and missing snapshots for some online cameras, fetch them now.
+  if (statsAll.reachable) {
+    const have = new Set(snapshots.map((s) => s.name));
+    const missing = stats.online.filter((c) => !have.has(c));
+    if (missing.length) {
+      const fetched = await Promise.all(missing.map((c) => fetchAndUploadSnapshot(supabase, inst, c)));
+      for (const f of fetched) if (f) snapshots.push(f);
+    }
+  }
+
 
   const date = new Date().toISOString().slice(0, 10);
   const siteName = cfg.label?.trim() || inst.name;

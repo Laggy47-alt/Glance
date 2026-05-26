@@ -157,6 +157,16 @@ select cron.schedule('daily-report', '0 * * * *', $$
     headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer <SERVICE_KEY>')
   );
 $$);
+
+-- Camera watch — every minute. Maintains live camera online/offline
+-- status (so the daily report shows real offline durations) and sends
+-- per-NVR offline alerts to assigned customers.
+select cron.schedule('camera-watch', '*/1 * * * *', $$
+  select net.http_post(
+    url := '<URL>/functions/v1/camera-watch',
+    headers := jsonb_build_object('Content-Type','application/json','Authorization','Bearer <SERVICE_KEY>')
+  );
+$$);
 ```
 
 ### A8. Build & serve the frontend

@@ -1,49 +1,46 @@
-# Strip multi-tenancy → single-tenant ABC
+## Goals
+1. Snapshots: ensure they actually appear in daily reports.
+2. Offline timer: stop showing "0s" — track real `since` continuously.
+3. New: alert the customer assigned to an NVR when any camera is offline > N minutes (configurable per NVR).
 
-ABC org `c093c027-920c-4e88-865a-fb17413b3b5a` becomes the implicit, hard-coded tenant. The `test` org and all its data are deleted. All paywall/billing UI and logic are removed. Super admin role survives for user/branding management.
+## Root causes
+- `camera_status.since` is only written inside `daily-report-send` once a day, so the duration is always ~0 at send time.
+- For locally-hosted NVRs, the cloud function can't reach `/api/stats`, so cameras list and snapshots are empty. Snapshots rely on the browser hook `useSnapshotRefresher`, which only runs while a user has the app open.
 
-## Database migration (single SQL migration)
+## Changes
 
-1. **Delete `test` org cascade** — remove rows in every tenant table where `organization_id = c181e17d-...`, then delete its memberships and the org row itself.
-2. **Drop billing / payments tables**: `org_subscriptions`, `billing_acknowledgments`, `redemption_codes`, `redemption_code_uses`. Drop enum `org_sub_status`.
-3. **Drop billing helper functions**: `org_is_active`, `org_trial_can_add_nvr`, `org_trial_can_send_email`, `increment_trial_email_count`, `redeem_code`, `signup_create_trial_org`.
-4. **Simplify RLS** on every tenant table (`app_settings`, `webhook_sources`, `webhook_events`, `frigate_instances`, `media_items`, `media_tags`, `camera_*`, `auto_read_rules`, `daily_report_*`, `callout_*`, `customer_*`, `event_audit_log`, `offline_instruction_acks`, `super_callout_requests`):
-   - Replace `can_read_org(...)` policies with `auth.uid() IS NOT NULL`.
-   - Replace `can_admin_org(...)` write policies with `is_admin(auth.uid())` (uses existing `has_role`).
-   - Customer-scoped policies (`user_has_instance`, `user_id = auth.uid()`) stay.
-5. **Default `organization_id`** on every tenant table to ABC's UUID (so existing client inserts that omit it still work). `current_user_org()` is rewritten to just `select 'c093c027-...'::uuid`.
-6. **Lock orgs**: keep `organizations` and `organization_members` (auth/profile code reads them), but RLS becomes read-only for everyone authenticated; only super admin can write. No new orgs can be created.
+### Database
+Add to `frigate_instances`:
+- `offline_alert_enabled boolean default false`
+- `offline_alert_minutes int default 5`
+- `offline_alert_recipients text[] default '{}'` (extra recipients, in addition to assigned customers)
 
-## Edge functions
+Add table `camera_offline_alerts` (`instance_id, camera, alerted_at`) to avoid spamming — one alert per offline streak.
 
-- **Delete**: `payments-webhook`, `get-paddle-price`, `signup-trial`.
-- Leave the rest untouched.
+### New edge function `camera-watch` (runs every 1 min via pg_cron)
+For each enabled instance:
+- Fetch `/api/stats` (best-effort; if unreachable, skip but still mark NVR-level offline).
+- Upsert `camera_status` with proper `since` only changing on transition (same logic as today but run frequently).
+- For each camera offline ≥ `offline_alert_minutes` AND no alert sent for this streak AND `offline_alert_enabled`:
+  - Resolve recipients = `offline_alert_recipients` ∪ contact_emails of users in `customer_nvr_assignments` for this NVR.
+  - Call `escalate-offline` with the camera list.
+  - Insert into `camera_offline_alerts` keyed on `(instance_id, camera, since)`.
+- When camera comes back online, clear the streak row.
 
-## Frontend
+Pg_cron: `*/1 * * * *` invoking `camera-watch`.
 
-- **Delete pages**: `Billing.tsx`, `Pricing.tsx`, `Signup.tsx`. Remove their routes from `App.tsx`. `/signup` → redirect to `/login`.
-- **Delete components**: `OrgGate.tsx`, `PaymentTestModeBanner.tsx`, `SubscriptionAdminPanel.tsx` (org-sub specific bits) — replace SubscriptionAdminPanel with a stub or remove from SuperAdmin.
-- **Delete libs**: `src/lib/paddle.ts`, `src/hooks/useOrgSubscription.tsx`.
-- **`useAuth`**: keep the org concept internally because RLS still uses `organization_id` defaults, but:
-  - Always force `activeOrg` = ABC (fetch once, ignore membership list switching).
-  - Remove org switcher UI from `AppSidebar` / `DashboardLayout`.
-  - Super admin still can impersonate (no-op now, since only one org).
-- **Remove `<OrgGate>` wrapper** from `App.tsx`. Remove suspended/billing redirects from `AuthGate`.
-- **Login page**: remove "Sign up" link.
-- **SuperAdmin page**: drop the subscriptions/billing tab; keep users, branding, codes (delete the codes section since redemption_codes is gone).
+### `daily-report-send`
+- Don't reset `since` — preserve transitions written by camera-watch (uses same upsert helper, just doesn't overwrite since when state unchanged — already true; we'll add a guard so it never overwrites a row's existing since if the row exists with same state).
+- For local NVRs where stats fetch fails, fall back to reading current `camera_status` rather than wiping it.
+- Snapshots: if no stored snapshots, attempt to fetch latest.jpg via the instance's base_url for each online camera, upload, then use them. (Still won't work for local-only NVRs from cloud — document.)
 
-## Login auto-binding
+### UI
+Add to NVR edit form on `src/pages/Frigate.tsx` (or wherever NVRs are managed):
+- Toggle "Email assigned customer when camera offline"
+- Minutes input
+- Additional recipients (comma-separated)
 
-Add a tiny one-shot effect in `useAuth` (or a new edge function `ensure-abc-membership`) that, after sign-in, inserts the user into `organization_members` for ABC if missing, role `customer`. This keeps RLS reads working without a signup flow.
-
-## Out of scope / kept
-
-- `organization_id` columns stay on every table (cheaper than rewriting every query).
-- Super admin role + `/super` portal stay.
-- Paddle secrets in Supabase remain (not actively used; harmless).
-
-## Risk callouts
-
-- This **cannot be undone** without restoring from a Supabase backup. Confirm before I run the migration.
-- Any user currently a member of `test` org loses that membership. They keep their auth account; they'll get auto-added to ABC on next login.
-- Hardcoding ABC's UUID into `current_user_org()` means cloning this codebase to a new project requires updating that function.
+## Technical notes
+- `escalate-offline` already accepts a recipients array — reuse as-is.
+- Profiles have `contact_email`; fallback to `auth.users.email` via service role.
+- The plan only changes backend monitoring + a small NVR settings UI; no other UI redesign.
