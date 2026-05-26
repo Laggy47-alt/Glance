@@ -182,6 +182,49 @@ const Offline = () => {
           )}
         </Card>
 
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-foreground" />
+            <h2 className="text-sm font-medium text-foreground">Create / reset admin account</h2>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Use this on a fresh self-hosted install or when you've lost the admin password.
+            This creates the <span className="font-mono">admin</span> account in the default organization
+            (or resets its password if it already exists). You can then sign in normally with username{" "}
+            <span className="font-mono">admin</span> and the password you set here.
+          </p>
+          {!probe.ok ? (
+            <div className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded px-2.5 py-2">
+              Backend must be reachable before you can create or reset the admin account.
+            </div>
+          ) : (
+            <form onSubmit={submitAdminReset} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ap1" className="text-xs">New admin password</Label>
+                <Input id="ap1" type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} minLength={8} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ap2" className="text-xs">Confirm password</Label>
+                <Input id="ap2" type="password" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} minLength={8} required />
+              </div>
+              {adminMsg && (
+                <div className={`text-xs rounded px-2.5 py-2 border ${
+                  adminMsg.kind === "ok"
+                    ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/30"
+                    : "text-destructive bg-destructive/10 border-destructive/30"
+                }`}>
+                  {adminMsg.text}
+                </div>
+              )}
+              <Button type="submit" className="w-full" disabled={adminBusy}>
+                {adminBusy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Create / reset admin account
+              </Button>
+            </form>
+          )}
+        </Card>
+
+
         <Card className="p-5 space-y-3 text-xs text-muted-foreground">
           <h2 className="text-sm font-medium text-foreground">Troubleshooting</h2>
           <ul className="space-y-1.5 list-disc pl-4">
