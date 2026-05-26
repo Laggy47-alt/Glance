@@ -64,7 +64,7 @@ const Offline = () => {
             <div>
               <h1 className="text-lg font-semibold text-foreground">Backend Unreachable</h1>
               <p className="text-xs text-muted-foreground">
-                Sign in with emergency super-admin credentials to view diagnostics.
+                Sign in with the emergency admin credentials to view diagnostics.
               </p>
             </div>
           </div>
@@ -110,7 +110,7 @@ const Offline = () => {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-foreground">Offline Diagnostics</h1>
-              <p className="text-xs text-muted-foreground">Emergency super-admin session</p>
+              <p className="text-xs text-muted-foreground">Emergency diagnostics session</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={signOut}>

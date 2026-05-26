@@ -2,12 +2,11 @@
  * Offline diagnostics mode.
  *
  * If the Supabase backend is unreachable, the app falls back to an emergency
- * diagnostics page gated by a hardcoded super-admin credential. This lets the
+ * diagnostics page gated by a hardcoded emergency credential. This lets the
  * platform owner inspect connectivity and reconnect even when the database is
  * down.
  *
- * Emergency credentials (any one of these works):
- *   - charl / CrownTE12
+ * Emergency credentials:
  *   - admin / Abcsec2008
  *
  * Plain-text comparison is used intentionally — `crypto.subtle` is unavailable
@@ -16,7 +15,6 @@
  */
 
 const EMERGENCY_CREDENTIALS: Array<{ user: string; pass: string }> = [
-  { user: "charl", pass: "CrownTE12" },
   { user: "admin", pass: "Abcsec2008" },
 ];
 
