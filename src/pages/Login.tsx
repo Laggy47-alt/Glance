@@ -20,9 +20,25 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bootstrapNeeded, setBootstrapNeeded] = useState(false);
+  const [bootstrapChecking, setBootstrapChecking] = useState(true);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   useEffect(() => {
-    void supabase.functions.invoke("admin-users/seed", { method: "POST" });
+    let cancelled = false;
+    supabase.functions.invoke("admin-users/seed", { method: "POST", body: { check_only: true } })
+      .then(({ data, error: seedError }) => {
+        if (cancelled) return;
+        if (seedError || (data as { ok?: boolean } | null)?.ok === false) {
+          setSetupError((data as { error?: string } | null)?.error ?? seedError?.message ?? "Could not check backend setup.");
+          return;
+        }
+        const needsPassword = Boolean((data as { needs_password?: boolean } | null)?.needs_password);
+        setBootstrapNeeded(needsPassword);
+        if (needsPassword) setUsername("admin");
+      })
+      .finally(() => { if (!cancelled) setBootstrapChecking(false); });
+    return () => { cancelled = true; };
   }, []);
 
   if (!loading && session) {
@@ -30,7 +46,7 @@ const Login = () => {
   }
 
   const attemptSignIn = async (u: string, p: string) => {
-    // Try ABC first, then fall back to the legacy "super" slug so super admins can still sign in.
+    // Try ABC first, then fall back to the legacy "super" slug for upgraded installs.
     let { error: err } = await signInWithUsername(u, p, ORG_SLUG);
     if (err) {
       const fallback = await signInWithUsername(u, p, "super");
@@ -44,7 +60,7 @@ const Login = () => {
     setError(null);
     setBusy(true);
 
-    // Emergency offline super-admin: always accept hardcoded creds, even if
+    // Emergency offline admin: always accept hardcoded creds, even if
     // the backend is unreachable. Routes to /offline diagnostics page.
     if (isEmergencyCredentials(username, password)) {
       startOfflineSession(username.trim().toLowerCase());
@@ -53,20 +69,26 @@ const Login = () => {
       return;
     }
 
-    let err = await attemptSignIn(username, password);
+    let err: { message: string } | null = null;
 
-    // Fresh self-host bootstrap: if admin/admin fails because the user does not
-    // exist yet, run the seed function and retry once. This lets a brand-new
-    // deployment sign in with admin/admin without manual setup.
-    if (err && username.trim().toLowerCase() === "admin" && password === "admin") {
-      try {
-        await supabase.functions.invoke("admin-users/seed", { method: "POST" });
-        // Small delay so the auth record is consistent before retry.
-        await new Promise((r) => setTimeout(r, 400));
-        err = await attemptSignIn(username, password);
-      } catch (e) {
-        // fall through to original error
+    if (bootstrapNeeded) {
+      if (password.length < 8) {
+        setBusy(false);
+        setError("Choose a password with at least 8 characters.");
+        return;
       }
+      const { data, error: seedError } = await supabase.functions.invoke("admin-users/seed", {
+        method: "POST",
+        body: { password },
+      });
+      if (seedError || !(data as { ok?: boolean } | null)?.ok) {
+        setBusy(false);
+        setError((data as { error?: string } | null)?.error ?? seedError?.message ?? "Could not create the admin account.");
+        return;
+      }
+      err = await attemptSignIn("admin", password);
+    } else {
+      err = await attemptSignIn(username, password);
     }
 
     setBusy(false);
@@ -86,7 +108,9 @@ const Login = () => {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">Glance</h1>
-            <p className="text-xs text-muted-foreground">Sign in to your account</p>
+            <p className="text-xs text-muted-foreground">
+              {bootstrapNeeded ? "Create the first admin password" : "Sign in to your account"}
+            </p>
           </div>
         </div>
 
@@ -99,17 +123,18 @@ const Login = () => {
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               autoFocus
+              disabled={bootstrapNeeded || bootstrapChecking}
               required
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-xs">Password</Label>
+            <Label htmlFor="password" className="text-xs">{bootstrapNeeded ? "New admin password" : "Password"}</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
+              autoComplete={bootstrapNeeded ? "new-password" : "current-password"}
               required
             />
           </div>
@@ -118,10 +143,20 @@ const Login = () => {
               {error}
             </div>
           )}
+          {setupError && !error && (
+            <div className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded px-2.5 py-2">
+              Backend setup check failed: {setupError}
+            </div>
+          )}
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Sign in
+            {bootstrapNeeded ? "Create admin account" : "Sign in"}
           </Button>
+          {bootstrapNeeded && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              This only appears when no backend admin exists. Existing admin passwords are never reset automatically.
+            </p>
+          )}
         </form>
       </div>
     </div>

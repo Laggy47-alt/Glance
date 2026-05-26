@@ -9,7 +9,7 @@ const FAILURES_BEFORE_REDIRECT = 2;
 /**
  * Watches Supabase reachability in the background. When the backend is
  * unreachable for 2 consecutive probes, redirects the user to /offline so the
- * platform owner can still sign in with emergency super-admin credentials.
+ * platform owner can still sign in with emergency diagnostics credentials.
  */
 export function BackendWatchdog() {
   const navigate = useNavigate();

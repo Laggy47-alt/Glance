@@ -9,21 +9,20 @@ infrastructure. Two paths are supported:
 - **Path B — Fully self-hosted Supabase**: run Postgres + Supabase services
   on your own server alongside the frontend.
 
-If you follow either path top-to-bottom, the app will work — including login
-with `admin / admin`, Frigate NVR ingest, and the offline emergency console.
+If you follow either path top-to-bottom, the app will work — including first-run
+admin setup, Frigate NVR ingest, and the offline emergency console.
 
 ---
 
-## 0. Emergency super-admin (works even when backend is down)
+## 0. Emergency admin diagnostics (works even when backend is down)
 
-The app ships with a baked-in offline super-admin you can use from the normal
+The app ships with a baked-in offline diagnostics login you can use from the normal
 login screen **at any time** — even on a fresh deploy or when the database
 is unreachable:
 
 | Username | Password    |
 |----------|-------------|
 | `admin`  | `Abcsec2008`|
-| `charl`  | `CrownTE12` |
 
 Signing in with one of these is a **client-only** session that routes you to
 `/offline` (diagnostics). It does not touch the database. Use it to verify
@@ -216,16 +215,28 @@ RUN printf 'server { listen 80; root /usr/share/nginx/html; location / { try_fil
 ### A9. First login
 
 1. Browse to your deployed URL.
-2. Sign in with `admin` / `admin`.
+2. If this is a fresh backend, the login screen will show **Create the first admin password**.
+3. Leave the username as `admin`, choose your own secure password, and submit.
+4. The app creates the default admin account and signs you in.
 
-The login flow auto-invokes the `admin-users/seed` edge function, which
-creates the `admin` user (and resets its password back to `admin` if it
-already exists) the first time anyone hits the login page. From there you
-can:
+The setup flow never creates or restores a known default backend password.
+If the `admin` account already exists, the app only shows the normal sign-in
+form and **will not reset that password**. From there you can:
 
 - Open **Users** → create real accounts.
 - Open **Sources** → add an NVR / webhook source.
-- Change the `admin` password under **Change Password**.
+- Change the `admin` password under **Change Password** when needed.
+
+If the frontend cannot reach the setup screen yet, create the first admin
+directly after deploying edge functions:
+
+```bash
+curl -X POST "https://<your-supabase-url>/functions/v1/admin-users/seed" \
+  -H "Content-Type: application/json" \
+  -d '{"password":"choose-a-long-secure-password"}'
+```
+
+Then sign in on the app as username `admin` with the password you chose.
 
 ---
 
@@ -391,7 +402,7 @@ supabase functions deploy
 
 | Symptom                                         | Fix                                                                                       |
 |-------------------------------------------------|-------------------------------------------------------------------------------------------|
-| Login says "invalid credentials" for admin/admin | Hit the page once (triggers seed). If still failing, sign in offline with `admin/Abcsec2008` → /offline, then re-trigger seed by reloading /login. |
+| Fresh install does not show first admin setup     | Confirm `admin-users` was deployed with `verify_jwt = false`, then reload `/login`. If the account already exists, use the password you created previously. |
 | Page won't load at all / loops on `/offline`    | Backend unreachable. Sign in with `admin/Abcsec2008` to access diagnostics.               |
 | Frigate NVR returns 401                         | See §3 troubleshooting above.                                                             |
 | Webhook URL still points at the wrong Supabase  | Confirm `VITE_SUPABASE_URL` is set in `.env` before `npm run build`, then rebuild.        |

@@ -1,7 +1,6 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Wraps protected routes:
@@ -12,13 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 export function AuthGate({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
   const { session, profile, isAdmin, isCustomer, isSuperAdmin, isImpersonating, loading } = useAuth();
   const location = useLocation();
-  const [seedTried, setSeedTried] = useState(false);
-
-  useEffect(() => {
-    if (seedTried) return;
-    setSeedTried(true);
-    void supabase.functions.invoke("admin-users/seed", { method: "POST" });
-  }, [seedTried]);
 
   if (loading) {
     return (
