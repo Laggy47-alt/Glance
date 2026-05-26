@@ -346,6 +346,33 @@ export type Database = {
           },
         ]
       }
+      camera_offline_alerts: {
+        Row: {
+          alerted_at: string
+          camera: string
+          id: string
+          instance_id: string
+          organization_id: string
+          since: string
+        }
+        Insert: {
+          alerted_at?: string
+          camera: string
+          id?: string
+          instance_id: string
+          organization_id?: string
+          since: string
+        }
+        Update: {
+          alerted_at?: string
+          camera?: string
+          id?: string
+          instance_id?: string
+          organization_id?: string
+          since?: string
+        }
+        Relationships: []
+      }
       camera_status: {
         Row: {
           camera: string
@@ -722,6 +749,9 @@ export type Database = {
           mute_end: string | null
           mute_start: string | null
           name: string
+          offline_alert_enabled: boolean
+          offline_alert_minutes: number
+          offline_alert_recipients: string[]
           organization_id: string
           poll_enabled: boolean
           poll_interval_seconds: number
@@ -742,6 +772,9 @@ export type Database = {
           mute_end?: string | null
           mute_start?: string | null
           name: string
+          offline_alert_enabled?: boolean
+          offline_alert_minutes?: number
+          offline_alert_recipients?: string[]
           organization_id?: string
           poll_enabled?: boolean
           poll_interval_seconds?: number
@@ -762,6 +795,9 @@ export type Database = {
           mute_end?: string | null
           mute_start?: string | null
           name?: string
+          offline_alert_enabled?: boolean
+          offline_alert_minutes?: number
+          offline_alert_recipients?: string[]
           organization_id?: string
           poll_enabled?: boolean
           poll_interval_seconds?: number
