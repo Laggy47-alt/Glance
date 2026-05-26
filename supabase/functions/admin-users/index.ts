@@ -1,6 +1,6 @@
 // Admin users + organizations management — uses the service role key.
 // Endpoints:
-//   POST /admin-users/seed              -> idempotently creates the bootstrap super-admin (admin/admin under org slug "super")
+//   POST /admin-users/seed              -> idempotently checks/creates the bootstrap admin for the default org
 //   POST /admin-users/create            -> { username, password, display_name, role, organization_id, contact_email }
 //   POST /admin-users/reset-password    -> { user_id, password }
 //   POST /admin-users/set-contact-email -> { user_id, contact_email }
@@ -8,7 +8,7 @@
 //   POST /admin-users/create-org        -> { slug, name }            (super-admin only)
 //   POST /admin-users/list-orgs         -> {}                         (super-admin sees all, org-admins see their orgs)
 //
-// Login model: synthetic email = `${username}@${org_slug}.local.app`. Bootstrap admin uses slug `super`.
+// Login model: synthetic email = `${username}@${org_slug}.local.app`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -68,9 +68,12 @@ Deno.serve(async (req) => {
     const a = admin();
 
     if (action === "seed") {
+      const body = await req.json().catch(() => ({} as Record<string, unknown>));
+      const requestedPassword = String(body.password ?? "");
+      const checkOnly = Boolean(body.check_only);
       // Default organization for all self-hosted installs. Matches the default
       // organization_id used across the schema. We always ensure this org row
-      // exists, then ensure an admin/admin account exists that is an admin
+      // exists, then ensure an admin account exists that is an admin
       // of this org. No super_admin role is created — the bootstrap user is
       // a normal org admin so it can immediately manage users, sites, etc.
       const ABC_ORG_ID = "c093c027-920c-4e88-865a-fb17413b3b5a";
@@ -108,11 +111,18 @@ Deno.serve(async (req) => {
         }
         userId = existing.id;
       } else {
-        // Brand-new install: create the bootstrap admin with the default
-        // password "admin". The user must change it after first login.
+        if (checkOnly || !requestedPassword) {
+          return json({ ok: true, exists: false, needs_password: true, organization_id: ABC_ORG_ID }, 200);
+        }
+        if (requestedPassword.length < 8) {
+          return json({ ok: false, error: "password must be at least 8 characters" }, 400);
+        }
+        // Brand-new install: create the bootstrap admin with the password the
+        // installer chose on the setup screen. Never create a known default
+        // backend password.
         const { data: created, error: createErr } = await a.auth.admin.createUser({
-          email, password: "admin", email_confirm: true,
-          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: true, org_slug: ABC_ORG_SLUG },
+          email, password: requestedPassword, email_confirm: true,
+          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
         });
         if (createErr) return json({ ok: false, error: createErr.message }, 500);
         userId = created.user!.id;
@@ -125,7 +135,7 @@ Deno.serve(async (req) => {
       if (!prof) {
         await a.from("profiles").insert({
           user_id: userId, username: "admin", display_name: "Administrator",
-          must_change_password: seeded, // force change on brand-new bootstrap only
+          must_change_password: false,
         });
       }
 
@@ -149,7 +159,7 @@ Deno.serve(async (req) => {
         await a.from("organization_members").update({ role: "admin" }).eq("id", (member as any).id);
       }
 
-      return json({ ok: true, seeded, reset: !seeded, user_id: userId, organization_id: ABC_ORG_ID });
+      return json({ ok: true, exists: true, seeded, reset: false, user_id: userId, organization_id: ABC_ORG_ID });
     }
 
     // All other endpoints require an authenticated caller
