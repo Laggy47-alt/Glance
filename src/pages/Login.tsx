@@ -20,9 +20,20 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bootstrapNeeded, setBootstrapNeeded] = useState(false);
+  const [bootstrapChecking, setBootstrapChecking] = useState(true);
 
   useEffect(() => {
-    void supabase.functions.invoke("admin-users/seed", { method: "POST" });
+    let cancelled = false;
+    supabase.functions.invoke("admin-users/seed", { method: "POST", body: { check_only: true } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const needsPassword = Boolean((data as { needs_password?: boolean } | null)?.needs_password);
+        setBootstrapNeeded(needsPassword);
+        if (needsPassword) setUsername("admin");
+      })
+      .finally(() => { if (!cancelled) setBootstrapChecking(false); });
+    return () => { cancelled = true; };
   }, []);
 
   if (!loading && session) {
@@ -53,20 +64,26 @@ const Login = () => {
       return;
     }
 
-    let err = await attemptSignIn(username, password);
+    let err: { message: string } | null = null;
 
-    // Fresh self-host bootstrap: if admin/admin fails because the user does not
-    // exist yet, run the seed function and retry once. This lets a brand-new
-    // deployment sign in with admin/admin without manual setup.
-    if (err && username.trim().toLowerCase() === "admin" && password === "admin") {
-      try {
-        await supabase.functions.invoke("admin-users/seed", { method: "POST" });
-        // Small delay so the auth record is consistent before retry.
-        await new Promise((r) => setTimeout(r, 400));
-        err = await attemptSignIn(username, password);
-      } catch (e) {
-        // fall through to original error
+    if (bootstrapNeeded) {
+      if (password.length < 8) {
+        setBusy(false);
+        setError("Choose a password with at least 8 characters.");
+        return;
       }
+      const { data, error: seedError } = await supabase.functions.invoke("admin-users/seed", {
+        method: "POST",
+        body: { password },
+      });
+      if (seedError || !(data as { ok?: boolean } | null)?.ok) {
+        setBusy(false);
+        setError((data as { error?: string } | null)?.error ?? seedError?.message ?? "Could not create the admin account.");
+        return;
+      }
+      err = await attemptSignIn("admin", password);
+    } else {
+      err = await attemptSignIn(username, password);
     }
 
     setBusy(false);
@@ -86,7 +103,9 @@ const Login = () => {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">Glance</h1>
-            <p className="text-xs text-muted-foreground">Sign in to your account</p>
+            <p className="text-xs text-muted-foreground">
+              {bootstrapNeeded ? "Create the first admin password" : "Sign in to your account"}
+            </p>
           </div>
         </div>
 
@@ -99,17 +118,18 @@ const Login = () => {
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               autoFocus
+              disabled={bootstrapNeeded || bootstrapChecking}
               required
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-xs">Password</Label>
+            <Label htmlFor="password" className="text-xs">{bootstrapNeeded ? "New admin password" : "Password"}</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
+              autoComplete={bootstrapNeeded ? "new-password" : "current-password"}
               required
             />
           </div>
@@ -122,6 +142,11 @@ const Login = () => {
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Sign in
           </Button>
+          {bootstrapNeeded && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              This only appears when no backend admin exists. Existing admin passwords are never reset automatically.
+            </p>
+          )}
         </form>
       </div>
     </div>
