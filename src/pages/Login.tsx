@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Webhook, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { isEmergencyCredentials, startOfflineSession } from "@/lib/offlineMode";
+import { forceCreateAdmin, isEmergencyCredentials, startOfflineSession } from "@/lib/offlineMode";
 
 // Single-tenant: ABC is the only organization. Slug is fixed.
 const ORG_SLUG = "abc-2026";
@@ -23,6 +23,7 @@ const Login = () => {
   const [bootstrapNeeded, setBootstrapNeeded] = useState(false);
   const [bootstrapChecking, setBootstrapChecking] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [forceSetup, setForceSetup] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +32,7 @@ const Login = () => {
         if (cancelled) return;
         if (seedError || (data as { ok?: boolean } | null)?.ok === false) {
           setSetupError((data as { error?: string } | null)?.error ?? seedError?.message ?? "Could not check backend setup.");
+          setUsername("admin");
           return;
         }
         const needsPassword = Boolean((data as { needs_password?: boolean } | null)?.needs_password);
@@ -71,19 +73,19 @@ const Login = () => {
 
     let err: { message: string } | null = null;
 
-    if (bootstrapNeeded) {
+    if (bootstrapNeeded || forceSetup) {
       if (password.length < 8) {
         setBusy(false);
         setError("Choose a password with at least 8 characters.");
         return;
       }
-      const { data, error: seedError } = await supabase.functions.invoke("admin-users/seed", {
-        method: "POST",
-        body: { password },
-      });
-      if (seedError || !(data as { ok?: boolean } | null)?.ok) {
+      const result = forceSetup
+        ? await forceCreateAdmin(password)
+        : await supabase.functions.invoke("admin-users/seed", { method: "POST", body: { password } })
+          .then(({ data, error: seedError }) => ({ ok: Boolean((data as { ok?: boolean } | null)?.ok) && !seedError, error: (data as { error?: string } | null)?.error ?? seedError?.message }));
+      if (!result.ok) {
         setBusy(false);
-        setError((data as { error?: string } | null)?.error ?? seedError?.message ?? "Could not create the admin account.");
+        setError(result.error ?? "Could not create the admin account.");
         return;
       }
       err = await attemptSignIn("admin", password);
@@ -109,7 +111,7 @@ const Login = () => {
           <div>
             <h1 className="text-lg font-semibold text-foreground">Glance</h1>
             <p className="text-xs text-muted-foreground">
-              {bootstrapNeeded ? "Create the first admin password" : "Sign in to your account"}
+              {bootstrapNeeded || forceSetup ? "Create the first admin password" : "Sign in to your account"}
             </p>
           </div>
         </div>
@@ -123,18 +125,18 @@ const Login = () => {
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               autoFocus
-              disabled={bootstrapNeeded || bootstrapChecking}
+              disabled={bootstrapNeeded || forceSetup || bootstrapChecking}
               required
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-xs">{bootstrapNeeded ? "New admin password" : "Password"}</Label>
+            <Label htmlFor="password" className="text-xs">{bootstrapNeeded || forceSetup ? "New admin password" : "Password"}</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete={bootstrapNeeded ? "new-password" : "current-password"}
+              autoComplete={bootstrapNeeded || forceSetup ? "new-password" : "current-password"}
               required
             />
           </div>
@@ -150,12 +152,21 @@ const Login = () => {
           )}
           <Button type="submit" className="w-full" disabled={busy}>
             {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {bootstrapNeeded ? "Create admin account" : "Sign in"}
+            {bootstrapNeeded || forceSetup ? "Force create admin account" : "Sign in"}
           </Button>
-          {bootstrapNeeded && (
+          {(bootstrapNeeded || forceSetup) && (
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              This only appears when no backend admin exists. Existing admin passwords are never reset automatically.
+              This will create or repair the admin account and set this as the admin password.
             </p>
+          )}
+          {!bootstrapNeeded && !forceSetup && (
+            <button
+              type="button"
+              onClick={() => { setForceSetup(true); setUsername("admin"); setError(null); }}
+              className="block w-full text-[11px] text-center text-muted-foreground hover:text-foreground"
+            >
+              Force create / repair admin account
+            </button>
           )}
         </form>
       </div>

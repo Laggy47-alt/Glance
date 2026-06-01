@@ -47,9 +47,23 @@ export async function emergencyResetAdmin(newPassword: string): Promise<{ ok: bo
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data?.ok) return { ok: false, error: data?.error || `HTTP ${res.status}` };
     return { ok: true, created: !!data.created, username: data.username || "admin" };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "network error" };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }
+}
+
+export async function forceCreateAdmin(newPassword: string): Promise<{ ok: boolean; error?: string; created?: boolean; username?: string }> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data, error } = await supabase.functions.invoke("admin-users/emergency-reset", {
+    method: "POST",
+    body: {
+      emergency_user: EMERGENCY_USER,
+      emergency_pass: EMERGENCY_PASS,
+      new_password: newPassword,
+    },
+  });
+  if (error || !data?.ok) return { ok: false, error: data?.error || error?.message || "Failed to create admin account." };
+  return { ok: true, created: !!data.created, username: data.username || "admin" };
 }
 
 export const OFFLINE_SESSION_KEY = "offline.superAdminSession";
@@ -99,8 +113,8 @@ export async function pingSupabase(timeoutMs = 5000): Promise<{ ok: boolean; sta
       signal: ctl.signal,
     });
     return { ok: res.ok || res.status < 500, status: res.status };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "network error" };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
   } finally {
     clearTimeout(t);
   }
