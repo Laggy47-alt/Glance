@@ -142,7 +142,11 @@ class WebhookStore {
 
   private async init() {
     // Wait for the auth session to be restored before issuing RLS-protected queries.
-    const { data } = await supabase.auth.getSession();
+    const { data } = await supabase.auth.getSession().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/lock request is aborted|aborterror/i.test(message)) throw error;
+      return { data: { session: null } };
+    });
     if (!data.session) {
       // Defer: when auth signs in, the listener below will trigger refreshAll.
     } else {
