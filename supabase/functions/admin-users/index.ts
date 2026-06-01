@@ -207,7 +207,7 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
     });
     if (error) {
       // Race / duplicate-email: the user actually exists, just re-fetch and reset password.
-      const recovered = await findBootstrapAdmin(a);
+      const recovered = await findBootstrapAdmin(a) ?? await recoverOrClearAdminProfile(a);
       if (!recovered) throw new Error(`admin auth create failed: ${error.message}`);
       const { error: upErr } = await a.auth.admin.updateUserById(recovered.id, { email: ADMIN_EMAIL, email_confirm: true, password });
       if (upErr) throw new Error(`admin auth update failed: ${upErr.message}`);
