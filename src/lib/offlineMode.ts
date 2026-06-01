@@ -59,6 +59,33 @@ export async function forceCreateAdmin(newPassword: string) {
   return emergencyResetAdmin(newPassword);
 }
 
+export async function seedAdmin(body: { check_only?: boolean; password?: string }): Promise<{
+  ok: boolean;
+  error?: string;
+  exists?: boolean;
+  needs_password?: boolean;
+}> {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url) return { ok: false, error: "VITE_SUPABASE_URL not configured" };
+
+  try {
+    const res = await fetch(`${url}/functions/v1/admin-users/seed`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(key ? { apikey: key, Authorization: `Bearer ${key}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.ok === false) return { ok: false, error: data?.error || `HTTP ${res.status}` };
+    return { ok: true, exists: !!data?.exists, needs_password: !!data?.needs_password };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
+  }
+}
+
 export const OFFLINE_SESSION_KEY = "offline.superAdminSession";
 
 export async function verifyEmergencyCredentials(username: string, password: string) {
