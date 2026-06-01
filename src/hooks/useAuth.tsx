@@ -36,6 +36,9 @@ type AuthCtx = {
 const Ctx = createContext<AuthCtx | null>(null);
 const ACTIVE_ORG_KEY = "auth.activeOrgId";
 const IMPERSONATE_KEY = "auth.impersonateOrg";
+// Single shared org across the whole platform — every user, every alert,
+// every insert/select is scoped to this org so nothing is hidden by RLS.
+const SHARED_ORG_ID = "c093c027-920c-4e88-865a-fb17413b3b5a";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
