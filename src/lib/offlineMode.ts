@@ -47,8 +47,8 @@ export async function emergencyResetAdmin(newPassword: string): Promise<{ ok: bo
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data?.ok) return { ok: false, error: data?.error || `HTTP ${res.status}` };
     return { ok: true, created: !!data.created, username: data.username || "admin" };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "network error" };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }
 }
 
@@ -113,8 +113,8 @@ export async function pingSupabase(timeoutMs = 5000): Promise<{ ok: boolean; sta
       signal: ctl.signal,
     });
     return { ok: res.ok || res.status < 500, status: res.status };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "network error" };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
   } finally {
     clearTimeout(t);
   }
