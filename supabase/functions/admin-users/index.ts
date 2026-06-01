@@ -124,7 +124,7 @@ async function ensureBootstrapOrg(a: ReturnType<typeof admin>): Promise<string> 
 }
 
 async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: string, resetPassword = false) {
-  await ensureBootstrapOrg(a);
+  const orgId = await ensureBootstrapOrg(a);
 
   let existing = await findBootstrapAdmin(a);
   let created = false;
