@@ -77,9 +77,7 @@ const Overview = () => {
       if (enabled.length === 0) { if (!cancelled) setNvrCamCount(0); return; }
       const results = await Promise.all(enabled.map(async (f) => {
         try {
-          const res = await fetch(frigateUrl(f, "/api/stats"));
-          if (!res.ok) return [] as string[];
-          return parseCameraNames(await res.json()).map((n) => `${f.id}::${n}`);
+          return parseCameraNames(await fetchFrigateStats(f)).map((n) => `${f.id}::${n}`);
         } catch { return [] as string[]; }
       }));
       if (cancelled) return;

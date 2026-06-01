@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
-import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
+import type { FrigateInstance } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -175,9 +176,7 @@ export function OperatorOfflinePopup() {
       let unreachable = false;
       let offlineNow: string[] = [];
       try {
-        const res = await fetch(frigateUrl(inst, "/api/stats"));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        offlineNow = parseStats(await res.json());
+        offlineNow = parseStats(await fetchFrigateStats(inst));
       } catch {
         unreachable = true;
       }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState, useCallback } from "react";
 import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, WifiOff } from "lucide-react";
-import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { cn } from "@/lib/utils";
 
 type CameraStatus = {
@@ -57,10 +57,7 @@ const CameraStatusPage = () => {
       [instanceId]: { ...(prev[instanceId] ?? { cameras: [], fetchedAt: null }), loading: true, error: null },
     }));
     try {
-      const url = frigateUrl(inst, "/api/stats");
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
+      const json = await fetchFrigateStats(inst);
       setStatuses((prev) => ({
         ...prev,
         [instanceId]: { loading: false, error: null, cameras: parseStats(json), fetchedAt: Date.now() },
