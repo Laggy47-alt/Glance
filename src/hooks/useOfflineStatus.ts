@@ -61,6 +61,7 @@ export function useOfflineStatus() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const tick = async () => {
       const enabled = store.frigates.filter((f) => f.enabled);
       if (enabled.length === 0) {
@@ -72,12 +73,13 @@ export function useOfflineStatus() {
       await Promise.all(enabled.map(async (f) => {
         try {
           const url = frigateUrl(f, "/api/stats");
-          const res = await fetch(url);
+          const res = await fetch(url, { signal: controller.signal });
           if (!res.ok) { unreach += 1; return; }
           const json = await res.json();
           const { offline } = parseOfflineCount(json);
           off += offline;
-        } catch {
+        } catch (e) {
+          if ((e as Error).name === "AbortError") return;
           unreach += 1;
         }
       }));
@@ -90,7 +92,7 @@ export function useOfflineStatus() {
     };
     void tick();
     const t = setInterval(() => void tick(), POLL_MS);
-    return () => { cancelled = true; clearInterval(t); };
+    return () => { cancelled = true; controller.abort(); clearInterval(t); };
   }, [store.frigates]);
 
   return {
