@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId),
     ]);
     setProfile((prof as Profile) ?? null);
+    const list = (memberships ?? []) as unknown as OrgMembership[];
     const roleSet = new Set((roles ?? []).map((r) => r.role as string));
     const superAdmin = roleSet.has("super_admin");
     setIsSuperAdmin(superAdmin);
@@ -84,9 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // ONLY when the legacy app_role is explicitly 'customer' — org_members.role
     // defaults to 'customer' for non-admins, which would otherwise mis-classify operators.
     const isOperator = roleSet.has("user");
-    setIsAdmin(superAdmin || roleSet.has("admin") || (memberships ?? []).some((m: any) => m.role === "admin"));
-    setIsCustomer(!isOperator && (roleSet.has("customer") || (memberships ?? []).some((m: any) => m.role === "customer")));
-    const list = (memberships ?? []) as unknown as OrgMembership[];
+    setIsAdmin(superAdmin || roleSet.has("admin") || list.some((m) => m.role === "admin"));
+    setIsCustomer(!isOperator && (roleSet.has("customer") || list.some((m) => m.role === "customer")));
     setOrgs(list);
     // Pick a default active org if none stored
     if (!activeOrgId && list.length > 0) {
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setSession(s);
       if (s?.user) {
-        setTimeout(() => { void loadProfile(s.user.id); }, 0);
+        setTimeout(() => { void loadProfile(s.user.id).catch(() => undefined); }, 0);
       } else {
         setProfile(null);
         setIsAdmin(false);
@@ -110,11 +110,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         impersonateOrg(null);
       }
     });
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
-      if (data.session?.user) await loadProfile(data.session.user.id);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(async ({ data }) => {
+        setSession(data.session);
+        if (data.session?.user) await loadProfile(data.session.user.id);
+      })
+      .catch(() => {
+        setSession(null);
+      })
+      .finally(() => setLoading(false));
     return () => sub.subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

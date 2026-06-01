@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Webhook, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { forceCreateAdmin, isEmergencyCredentials, startOfflineSession } from "@/lib/offlineMode";
+import { forceCreateAdmin, isEmergencyCredentials, seedAdmin, startOfflineSession } from "@/lib/offlineMode";
 
 // Single-tenant: ABC is the only organization. Slug is fixed.
 const ORG_SLUG = "abc-2026";
@@ -27,15 +26,15 @@ const Login = () => {
 
   useEffect(() => {
     let cancelled = false;
-    supabase.functions.invoke("admin-users/seed", { method: "POST", body: { check_only: true } })
-      .then(({ data, error: seedError }) => {
+    seedAdmin({ check_only: true })
+      .then((result) => {
         if (cancelled) return;
-        if (seedError || (data as { ok?: boolean } | null)?.ok === false) {
-          setSetupError((data as { error?: string } | null)?.error ?? seedError?.message ?? "Could not check backend setup.");
+        if (!result.ok) {
+          setSetupError(result.error ?? "Could not check backend setup.");
           setUsername("admin");
           return;
         }
-        const needsPassword = Boolean((data as { needs_password?: boolean } | null)?.needs_password);
+        const needsPassword = Boolean(result.needs_password);
         setBootstrapNeeded(needsPassword);
         if (needsPassword) setUsername("admin");
       })
@@ -59,6 +58,7 @@ const Login = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     setBusy(true);
 
@@ -81,8 +81,7 @@ const Login = () => {
       }
       const result = forceSetup
         ? await forceCreateAdmin(password)
-        : await supabase.functions.invoke("admin-users/seed", { method: "POST", body: { password } })
-          .then(({ data, error: seedError }) => ({ ok: Boolean((data as { ok?: boolean } | null)?.ok) && !seedError, error: (data as { error?: string } | null)?.error ?? seedError?.message }));
+        : await seedAdmin({ password });
       if (!result.ok) {
         setBusy(false);
         setError(result.error ?? "Could not create the admin account.");

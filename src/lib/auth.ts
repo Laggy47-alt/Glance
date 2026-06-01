@@ -21,11 +21,32 @@ export const emailToOrgSlug = (e: string | null | undefined) => {
 export const isSuperSlug = (slug: string | null | undefined) =>
   (slug ?? "").toLowerCase() === SUPER_SLUG;
 
+const AUTH_LOCK_ABORT_MESSAGE = "The previous sign-in attempt was interrupted. Please try again.";
+
+function normalizeAuthError(error: unknown): { message: string } | null {
+  if (!error) return null;
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === "object" && error && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : String(error);
+
+  if (/lock request is aborted|aborterror/i.test(message)) {
+    return { message: AUTH_LOCK_ABORT_MESSAGE };
+  }
+  return { message: message || "Sign in failed." };
+}
+
 export async function signInWithUsername(username: string, password: string, orgSlug: string) {
-  return supabase.auth.signInWithPassword({
-    email: buildAuthEmail(username, orgSlug),
-    password,
-  });
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: buildAuthEmail(username, orgSlug),
+      password,
+    });
+    return { data, error: normalizeAuthError(error) };
+  } catch (error) {
+    return { data: { user: null, session: null }, error: normalizeAuthError(error) };
+  }
 }
 
 export async function changeOwnPassword(newPassword: string) {
