@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
-import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 
 const POLL_MS = 30_000;
 
@@ -72,10 +72,9 @@ export function useOfflineStatus() {
       let unreach = 0;
       await Promise.all(enabled.map(async (f) => {
         try {
-          const url = frigateUrl(f, "/api/stats");
-          const res = await fetch(url, { signal: controller.signal });
-          if (!res.ok) { unreach += 1; return; }
-          const json = await res.json();
+          if (controller.signal.aborted) return;
+          const json = await fetchFrigateStats(f);
+          if (controller.signal.aborted) return;
           const { offline } = parseOfflineCount(json);
           off += offline;
         } catch (e) {
