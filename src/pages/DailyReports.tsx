@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,9 +36,7 @@ async function refreshAndUploadSnapshots(instanceId: string): Promise<Array<{ na
   if (!inst) return [];
   let online: string[] = [];
   try {
-    const statsRes = await fetch(frigateUrl(inst as any, "/api/stats"));
-    if (!statsRes.ok) return [];
-    const stats: any = await statsRes.json();
+    const stats: any = await fetchFrigateStats(inst as any);
     const cams = stats?.cameras ?? {};
     online = Object.entries<any>(cams)
       .filter(([, d]) => Number(d?.camera_fps ?? 0) > 0)
@@ -141,9 +140,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(frigateUrl(instance, "/api/stats"));
-        if (!r.ok) return;
-        const j: any = await r.json();
+        const j: any = await fetchFrigateStats(instance);
         const cams = j?.cameras && typeof j.cameras === "object" ? j.cameras : j;
         const names = Object.keys(cams || {}).filter((n) => typeof cams[n] === "object");
         if (!cancelled) setAvailableCameras(names.sort());
