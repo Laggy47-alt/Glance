@@ -173,12 +173,12 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
   if (roleErr) throw new Error(`role repair failed: ${roleErr.message}`);
 
   const { error: memberErr } = await a.from("organization_members").upsert(
-    { organization_id: ABC_ORG_ID, user_id: userId, role: "admin" },
+    { organization_id: orgId, user_id: userId, role: "admin" },
     { onConflict: "organization_id,user_id" },
   );
   if (memberErr) throw new Error(`organization membership repair failed: ${memberErr.message}`);
 
-  return { created, userId, organizationId: ABC_ORG_ID, username: "admin", loginEmail: ADMIN_EMAIL };
+  return { created, userId, organizationId: orgId, username: "admin", loginEmail: ADMIN_EMAIL };
 }
 
 Deno.serve(async (req) => {
