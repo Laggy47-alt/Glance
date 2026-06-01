@@ -135,15 +135,51 @@ async function findBootstrapAdmin(a: ReturnType<typeof admin>) {
   }
 }
 
+async function recoverOrClearAdminProfile(a: ReturnType<typeof admin>): Promise<AuthUserRecord | null> {
+  const { data: profile } = await a.from("profiles").select("user_id").eq("username", "admin").maybeSingle();
+  const row = profile as UserIdRow | null;
+  if (!row?.user_id) return null;
+
+  const { data } = await a.auth.admin.getUserById(row.user_id);
+  if (data?.user) return data.user as AuthUserRecord;
+
+  const { error } = await a
+    .from("profiles")
+    .update({ username: `admin_legacy_${Date.now()}` })
+    .eq("user_id", row.user_id);
+  if (error) throw new Error(`stale admin profile cleanup failed: ${error.message}`);
+  return null;
+}
+
+async function ensureCanonicalOrgForAuthTriggers(a: ReturnType<typeof admin>) {
+  const candidates = [
+    `${ABC_ORG_SLUG}-canonical`,
+    `${ABC_ORG_SLUG}-default`,
+    `${ABC_ORG_SLUG}-home`,
+    `${ABC_ORG_SLUG}-${ABC_ORG_ID.slice(0, 8)}`,
+  ];
+
+  for (const slug of candidates) {
+    const { error } = await a.from("organizations").insert({ id: ABC_ORG_ID, slug, name: ABC_ORG_NAME });
+    if (!error) return;
+    if (error.code !== "23505") throw new Error(`canonical organization setup failed: ${error.message}`);
+  }
+  throw new Error("canonical organization setup failed: no available fallback slug");
+}
+
 async function ensureBootstrapOrg(a: ReturnType<typeof admin>): Promise<string> {
-  const { data: byId } = await a.from("organizations").select("id").eq("id", ABC_ORG_ID).maybeSingle();
+  const { data: byId } = await a.from("organizations").select("id, slug").eq("id", ABC_ORG_ID).maybeSingle();
   if (byId) {
-    await a.from("organizations").update({ slug: ABC_ORG_SLUG, name: ABC_ORG_NAME }).eq("id", ABC_ORG_ID);
+    const { data: slugOwner } = await a.from("organizations").select("id").eq("slug", ABC_ORG_SLUG).maybeSingle();
+    const slugOwnerId = (slugOwner as { id?: string } | null)?.id;
+    const patch = slugOwnerId && slugOwnerId !== ABC_ORG_ID ? { name: ABC_ORG_NAME } : { slug: ABC_ORG_SLUG, name: ABC_ORG_NAME };
+    await a.from("organizations").update(patch).eq("id", ABC_ORG_ID);
     return ABC_ORG_ID;
   }
   const { data: bySlug } = await a.from("organizations").select("id").eq("slug", ABC_ORG_SLUG).maybeSingle();
   if (bySlug) {
     await a.from("organizations").update({ name: ABC_ORG_NAME }).eq("slug", ABC_ORG_SLUG);
+    await ensureCanonicalOrgForAuthTriggers(a);
     return (bySlug as { id: string }).id;
   }
   const { error } = await a.from("organizations").insert({ id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME });
@@ -163,22 +199,29 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
     if (error) throw new Error(`admin auth update failed: ${error.message}`);
   } else {
     if (!password) throw new Error("admin password is required");
-    const { data, error } = await a.auth.admin.createUser({
-      email: ADMIN_EMAIL,
-      password,
-      email_confirm: true,
-      user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
-    });
-    if (error) {
-      // Race / duplicate-email: the user actually exists, just re-fetch and reset password.
-      const recovered = await findBootstrapAdmin(a);
-      if (!recovered) throw new Error(`admin auth create failed: ${error.message}`);
+    const recovered = await recoverOrClearAdminProfile(a);
+    if (recovered) {
       const { error: upErr } = await a.auth.admin.updateUserById(recovered.id, { email: ADMIN_EMAIL, email_confirm: true, password });
       if (upErr) throw new Error(`admin auth update failed: ${upErr.message}`);
       existing = recovered;
     } else {
-      existing = data.user;
-      created = true;
+      const { data, error } = await a.auth.admin.createUser({
+        email: ADMIN_EMAIL,
+        password,
+        email_confirm: true,
+        user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
+      });
+      if (error) {
+        // Race / duplicate-email: the user actually exists, just re-fetch and reset password.
+        const refetched = await findBootstrapAdmin(a) ?? await recoverOrClearAdminProfile(a);
+        if (!refetched) throw new Error(`admin auth create failed: ${error.message}`);
+        const { error: upErr } = await a.auth.admin.updateUserById(refetched.id, { email: ADMIN_EMAIL, email_confirm: true, password });
+        if (upErr) throw new Error(`admin auth update failed: ${upErr.message}`);
+        existing = refetched;
+      } else {
+        existing = data.user;
+        created = true;
+      }
     }
   }
 
