@@ -196,16 +196,22 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "new_password must be at least 8 characters" }, 400);
       }
 
-      const result = await ensureBootstrapAdmin(a, newPassword, true);
-
-      return json({
-        ok: true,
-        created: result.created,
-        user_id: result.userId,
-        organization_id: result.organizationId,
-        username: result.username,
-        login_email: result.loginEmail,
-      });
+      try {
+        const result = await ensureBootstrapAdmin(a, newPassword, true);
+        return json({
+          ok: true,
+          created: result.created,
+          user_id: result.userId,
+          organization_id: result.organizationId,
+          username: result.username,
+          login_email: result.loginEmail,
+        });
+      } catch (e) {
+        // Surface auth/validation errors (e.g. weak password) as 400 so the
+        // client UI can show the underlying reason instead of a generic
+        // "Edge Function returned a non-2xx status code".
+        return json({ ok: false, error: (e as Error).message }, 400);
+      }
     }
 
     if (action === "seed") {
