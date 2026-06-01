@@ -107,22 +107,20 @@ async function findBootstrapAdmin(a: ReturnType<typeof admin>) {
   return null;
 }
 
-async function ensureBootstrapOrg(a: ReturnType<typeof admin>) {
-  // An org may already exist either by the canonical id or by the slug
-  // (e.g. created manually on a self-hosted install). Handle both safely.
-  const { data: byId } = await a.from("organizations").select("id, slug").eq("id", ABC_ORG_ID).maybeSingle();
+async function ensureBootstrapOrg(a: ReturnType<typeof admin>): Promise<string> {
+  const { data: byId } = await a.from("organizations").select("id").eq("id", ABC_ORG_ID).maybeSingle();
   if (byId) {
     await a.from("organizations").update({ slug: ABC_ORG_SLUG, name: ABC_ORG_NAME }).eq("id", ABC_ORG_ID);
-    return;
+    return ABC_ORG_ID;
   }
   const { data: bySlug } = await a.from("organizations").select("id").eq("slug", ABC_ORG_SLUG).maybeSingle();
   if (bySlug) {
-    // Slug already taken by a different id — keep that row, just make sure the name is set.
     await a.from("organizations").update({ name: ABC_ORG_NAME }).eq("slug", ABC_ORG_SLUG);
-    return;
+    return (bySlug as { id: string }).id;
   }
   const { error } = await a.from("organizations").insert({ id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME });
   if (error) throw new Error(`organization setup failed: ${error.message}`);
+  return ABC_ORG_ID;
 }
 
 async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: string, resetPassword = false) {
