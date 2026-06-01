@@ -183,68 +183,15 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "new_password must be at least 8 characters" }, 400);
       }
 
-      const ABC_ORG_ID = "c093c027-920c-4e88-865a-fb17413b3b5a";
-      const ABC_ORG_SLUG = "abc-2026";
-      const ABC_ORG_NAME = "ABC";
-      const email = buildEmail("admin", ABC_ORG_SLUG);
-
-      await a.from("organizations").upsert(
-        { id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME },
-        { onConflict: "id" },
-      );
-
-      const { data: list } = await a.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const existing = list.users.find(
-        (u) => u.email === email
-            || u.email === "admin@local.app"
-            || u.email === "admin@super.local.app",
-      );
-
-      let userId: string;
-      let created = false;
-      if (existing) {
-        const { error: updErr } = await a.auth.admin.updateUserById(existing.id, {
-          email, email_confirm: true, password: newPassword,
-        });
-        if (updErr) return json({ ok: false, error: updErr.message }, 500);
-        userId = existing.id;
-      } else {
-        const { data: createdUser, error: createErr } = await a.auth.admin.createUser({
-          email, password: newPassword, email_confirm: true,
-          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
-        });
-        if (createErr) return json({ ok: false, error: createErr.message }, 500);
-        userId = createdUser.user!.id;
-        created = true;
-      }
-
-      const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
-      if (!prof) {
-        await a.from("profiles").insert({
-          user_id: userId, username: "admin", display_name: "Administrator", must_change_password: false,
-        });
-      } else {
-        await a.from("profiles").update({ must_change_password: false }).eq("user_id", userId);
-      }
-
-      await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
-      const { data: adminRole } = await a.from("user_roles").select("id")
-        .eq("user_id", userId).eq("role", "admin").maybeSingle();
-      if (!adminRole) await a.from("user_roles").insert({ user_id: userId, role: "admin" });
-
-      const { data: member } = await a.from("organization_members").select("id, role")
-        .eq("user_id", userId).eq("organization_id", ABC_ORG_ID).maybeSingle();
-      if (!member) {
-        await a.from("organization_members").insert({
-          organization_id: ABC_ORG_ID, user_id: userId, role: "admin",
-        });
-      } else if ((member as any).role !== "admin") {
-        await a.from("organization_members").update({ role: "admin" }).eq("id", (member as any).id);
-      }
+      const result = await ensureBootstrapAdmin(a, newPassword, true);
 
       return json({
-        ok: true, created, user_id: userId, organization_id: ABC_ORG_ID,
-        username: "admin", login_email: email,
+        ok: true,
+        created: result.created,
+        user_id: result.userId,
+        organization_id: result.organizationId,
+        username: result.username,
+        login_email: result.loginEmail,
       });
     }
 
@@ -257,90 +204,22 @@ Deno.serve(async (req) => {
       // exists, then ensure an admin account exists that is an admin
       // of this org. No super_admin role is created — the bootstrap user is
       // a normal org admin so it can immediately manage users, sites, etc.
-      const ABC_ORG_ID = "c093c027-920c-4e88-865a-fb17413b3b5a";
-      const ABC_ORG_SLUG = "abc-2026";
-      const ABC_ORG_NAME = "ABC";
-      const email = buildEmail("admin", ABC_ORG_SLUG);
-
-      // 1. Make sure the org exists (idempotent on id).
-      await a.from("organizations").upsert(
-        { id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME },
-        { onConflict: "id" },
-      );
-
-      // 2. Find existing admin auth user across new + any legacy emails.
-      const { data: list } = await a.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const existing = list.users.find(
-        (u) => u.email === email
-            || u.email === "admin@local.app"
-            || u.email === "admin@super.local.app",
-      );
-
-      let userId: string;
-      let seeded = false;
+      await ensureBootstrapOrg(a);
+      const existing = await findBootstrapAdmin(a);
 
       if (existing) {
-        // Existing user: do NOT touch the password — the operator may have
-        // changed it and resetting it on every seed call would be a security
-        // hole (anyone hitting the public seed endpoint could log in as admin).
-        // Only ensure the email is normalized + confirmed.
-        if (existing.email !== email || existing.email_confirmed_at == null) {
-          await a.auth.admin.updateUserById(existing.id, {
-            email,
-            email_confirm: true,
-          });
-        }
-        userId = existing.id;
-      } else {
-        if (checkOnly || !requestedPassword) {
-          return json({ ok: true, exists: false, needs_password: true, organization_id: ABC_ORG_ID }, 200);
-        }
-        if (requestedPassword.length < 8) {
-          return json({ ok: false, error: "password must be at least 8 characters" }, 400);
-        }
-        // Brand-new install: create the bootstrap admin with the password the
-        // installer chose on the setup screen. Never create a known default
-        // backend password.
-        const { data: created, error: createErr } = await a.auth.admin.createUser({
-          email, password: requestedPassword, email_confirm: true,
-          user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
-        });
-        if (createErr) return json({ ok: false, error: createErr.message }, 500);
-        userId = created.user!.id;
-        seeded = true;
+        const result = await ensureBootstrapAdmin(a, undefined, false);
+        return json({ ok: true, exists: true, seeded: false, reset: false, user_id: result.userId, organization_id: result.organizationId });
       }
-
-      // 3. Profile — create on first run only. For existing users we leave
-      // must_change_password and username alone so the admin's own changes stick.
-      const { data: prof } = await a.from("profiles").select("user_id").eq("user_id", userId).maybeSingle();
-      if (!prof) {
-        await a.from("profiles").insert({
-          user_id: userId, username: "admin", display_name: "Administrator",
-          must_change_password: false,
-        });
+      if (checkOnly || !requestedPassword) {
+        return json({ ok: true, exists: false, needs_password: true, organization_id: ABC_ORG_ID }, 200);
       }
-
-
-      // 4. Remove any legacy super_admin role — we now use plain admin only.
-      await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
-
-      // 5. Ensure app_role = 'admin'.
-      const { data: adminRole } = await a.from("user_roles").select("id")
-        .eq("user_id", userId).eq("role", "admin").maybeSingle();
-      if (!adminRole) await a.from("user_roles").insert({ user_id: userId, role: "admin" });
-
-      // 6. Ensure membership in ABC org as admin (upgrade if currently customer).
-      const { data: member } = await a.from("organization_members").select("id, role")
-        .eq("user_id", userId).eq("organization_id", ABC_ORG_ID).maybeSingle();
-      if (!member) {
-        await a.from("organization_members").insert({
-          organization_id: ABC_ORG_ID, user_id: userId, role: "admin",
-        });
-      } else if ((member as any).role !== "admin") {
-        await a.from("organization_members").update({ role: "admin" }).eq("id", (member as any).id);
+      if (requestedPassword.length < 8) {
+        return json({ ok: false, error: "password must be at least 8 characters" }, 400);
       }
+      const result = await ensureBootstrapAdmin(a, requestedPassword, false);
 
-      return json({ ok: true, exists: true, seeded, reset: false, user_id: userId, organization_id: ABC_ORG_ID });
+      return json({ ok: true, exists: true, seeded: result.created, reset: false, user_id: result.userId, organization_id: result.organizationId });
     }
 
     // All other endpoints require an authenticated caller
