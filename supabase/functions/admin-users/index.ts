@@ -38,6 +38,14 @@ type CallerInfo = {
   adminOrgIds: Set<string>;
 };
 
+type AuthUserRecord = {
+  id: string;
+  email?: string | null;
+  email_confirmed_at?: string | null;
+};
+
+type UserIdRow = { user_id: string };
+
 async function getCaller(authHeader: string | null): Promise<CallerInfo | null> {
   if (!authHeader) return null;
   const token = authHeader.replace(/^Bearer\s+/i, "");
@@ -55,7 +63,10 @@ async function getCaller(authHeader: string | null): Promise<CallerInfo | null> 
   const roleSet = new Set((roles ?? []).map((r) => r.role as string));
   const isSuperAdmin = roleSet.has("super_admin");
   const adminOrgIds = new Set<string>();
-  for (const m of members ?? []) if ((m as any).role === "admin") adminOrgIds.add((m as any).organization_id);
+  for (const m of members ?? []) {
+    const member = m as { role?: string; organization_id?: string };
+    if (member.role === "admin" && member.organization_id) adminOrgIds.add(member.organization_id);
+  }
   return { userId: userData.user.id, isSuperAdmin, adminOrgIds };
 }
 
@@ -73,11 +84,11 @@ const ADMIN_EMAIL = buildEmail("admin", ABC_ORG_SLUG);
 const LEGACY_ADMIN_EMAILS = [ADMIN_EMAIL, "admin@local.app", "admin@super.local.app"];
 
 async function listAllUsers(a: ReturnType<typeof admin>) {
-  const users: any[] = [];
+  const users: AuthUserRecord[] = [];
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await a.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw new Error(error.message);
-    users.push(...(data?.users ?? []));
+    users.push(...((data?.users ?? []) as AuthUserRecord[]));
     if (!data?.users || data.users.length < 1000) break;
   }
   return users;
@@ -89,8 +100,9 @@ async function findBootstrapAdmin(a: ReturnType<typeof admin>) {
   if (byEmail) return byEmail;
 
   const { data: profile } = await a.from("profiles").select("user_id").eq("username", "admin").maybeSingle();
-  if ((profile as any)?.user_id) {
-    return users.find((u) => u.id === (profile as any).user_id) ?? null;
+  const row = profile as UserIdRow | null;
+  if (row?.user_id) {
+    return users.find((u) => u.id === row.user_id) ?? null;
   }
   return null;
 }
@@ -132,8 +144,9 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
 
   const userId = existing!.id;
   const { data: conflictingProfile } = await a.from("profiles").select("user_id").eq("username", "admin").maybeSingle();
-  if ((conflictingProfile as any)?.user_id && (conflictingProfile as any).user_id !== userId) {
-    await a.from("profiles").update({ username: `admin_legacy_${Date.now()}` }).eq("user_id", (conflictingProfile as any).user_id);
+  const conflictingProfileRow = conflictingProfile as UserIdRow | null;
+  if (conflictingProfileRow?.user_id && conflictingProfileRow.user_id !== userId) {
+    await a.from("profiles").update({ username: `admin_legacy_${Date.now()}` }).eq("user_id", conflictingProfileRow.user_id);
   }
 
   const { error: profileErr } = await a.from("profiles").upsert({
