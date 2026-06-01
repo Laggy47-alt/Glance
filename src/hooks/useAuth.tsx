@@ -133,11 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ?? orgs[0].organization) ?? null;
   }, [orgs, activeOrgId, impersonated]);
 
-  // Scope all webhook/frigate data to the active org so switching orgs (or
-  // super-admin impersonation) never leaks rows from another org.
+  // Scope all webhook/frigate data to the SHARED org so alerts are visible to
+  // every authenticated user regardless of their stored active org. This makes
+  // the platform behave as a single tenant for alert routing purposes.
   useEffect(() => {
-    webhookStore.setActiveOrg(activeOrg?.id ?? null);
-  }, [activeOrg?.id]);
+    webhookStore.setActiveOrg(SHARED_ORG_ID);
+  }, []);
 
   const value = useMemo<AuthCtx>(() => ({
     session,
