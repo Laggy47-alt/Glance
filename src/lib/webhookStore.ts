@@ -398,8 +398,16 @@ class WebhookStore {
   }
   async deleteFrigate(id: string) {
     const inst = this.frigates.find((f) => f.id === id);
+    // Optimistically remove from local state so in-flight stats polls stop
+    // immediately (otherwise they 404 against frigate-proxy for ~1 cycle).
+    this.frigates = this.frigates.filter((f) => f.id !== id);
+    if (inst?.source_id) this.sources = this.sources.filter((s) => s.id !== inst.source_id);
+    this.emit();
     const { error } = await supabase.from("frigate_instances").delete().eq("id", id);
-    if (error) throw error;
+    if (error) {
+      await this.refreshAll();
+      throw error;
+    }
     if (inst?.source_id) await supabase.from("webhook_sources").delete().eq("id", inst.source_id);
   }
   async pollFrigateNow(id?: string) {
