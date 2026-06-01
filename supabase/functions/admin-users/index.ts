@@ -66,6 +66,100 @@ async function getCaller(authHeader: string | null): Promise<CallerInfo | null> 
 const EMERGENCY_USER = (Deno.env.get("EMERGENCY_USER") ?? "admin").toLowerCase();
 const EMERGENCY_PASS = Deno.env.get("EMERGENCY_PASS") ?? "Abcsec2008";
 
+const ABC_ORG_ID = "c093c027-920c-4e88-865a-fb17413b3b5a";
+const ABC_ORG_SLUG = "abc-2026";
+const ABC_ORG_NAME = "ABC";
+const ADMIN_EMAIL = buildEmail("admin", ABC_ORG_SLUG);
+const LEGACY_ADMIN_EMAILS = [ADMIN_EMAIL, "admin@local.app", "admin@super.local.app"];
+
+async function listAllUsers(a: ReturnType<typeof admin>) {
+  const users: any[] = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await a.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(error.message);
+    users.push(...(data?.users ?? []));
+    if (!data?.users || data.users.length < 1000) break;
+  }
+  return users;
+}
+
+async function findBootstrapAdmin(a: ReturnType<typeof admin>) {
+  const users = await listAllUsers(a);
+  const byEmail = users.find((u) => LEGACY_ADMIN_EMAILS.includes(String(u.email ?? "").toLowerCase()));
+  if (byEmail) return byEmail;
+
+  const { data: profile } = await a.from("profiles").select("user_id").eq("username", "admin").maybeSingle();
+  if ((profile as any)?.user_id) {
+    return users.find((u) => u.id === (profile as any).user_id) ?? null;
+  }
+  return null;
+}
+
+async function ensureBootstrapOrg(a: ReturnType<typeof admin>) {
+  const { error } = await a.from("organizations").upsert(
+    { id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME },
+    { onConflict: "id" },
+  );
+  if (error) throw new Error(`organization setup failed: ${error.message}`);
+}
+
+async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: string, resetPassword = false) {
+  await ensureBootstrapOrg(a);
+
+  let existing = await findBootstrapAdmin(a);
+  let created = false;
+  if (existing) {
+    const attrs: Record<string, unknown> = { email: ADMIN_EMAIL, email_confirm: true };
+    if (resetPassword && password) attrs.password = password;
+    const { error } = await a.auth.admin.updateUserById(existing.id, attrs);
+    if (error) throw new Error(`admin auth update failed: ${error.message}`);
+  } else {
+    if (!password) throw new Error("admin password is required");
+    const { data, error } = await a.auth.admin.createUser({
+      email: ADMIN_EMAIL,
+      password,
+      email_confirm: true,
+      user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
+    });
+    if (error) {
+      existing = await findBootstrapAdmin(a);
+      if (!existing) throw new Error(`admin auth create failed: ${error.message}`);
+    } else {
+      existing = data.user;
+      created = true;
+    }
+  }
+
+  const userId = existing!.id;
+  const { data: conflictingProfile } = await a.from("profiles").select("user_id").eq("username", "admin").maybeSingle();
+  if ((conflictingProfile as any)?.user_id && (conflictingProfile as any).user_id !== userId) {
+    await a.from("profiles").update({ username: `admin_legacy_${Date.now()}` }).eq("user_id", (conflictingProfile as any).user_id);
+  }
+
+  const { error: profileErr } = await a.from("profiles").upsert({
+    user_id: userId,
+    username: "admin",
+    display_name: "Administrator",
+    must_change_password: false,
+  }, { onConflict: "user_id" });
+  if (profileErr) throw new Error(`profile repair failed: ${profileErr.message}`);
+
+  await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
+  const { error: roleErr } = await a.from("user_roles").upsert(
+    { user_id: userId, role: "admin" },
+    { onConflict: "user_id,role" },
+  );
+  if (roleErr) throw new Error(`role repair failed: ${roleErr.message}`);
+
+  const { error: memberErr } = await a.from("organization_members").upsert(
+    { organization_id: ABC_ORG_ID, user_id: userId, role: "admin" },
+    { onConflict: "organization_id,user_id" },
+  );
+  if (memberErr) throw new Error(`organization membership repair failed: ${memberErr.message}`);
+
+  return { created, userId, organizationId: ABC_ORG_ID, username: "admin", loginEmail: ADMIN_EMAIL };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const url = new URL(req.url);
