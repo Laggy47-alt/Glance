@@ -141,7 +141,7 @@ const Wall = () => {
       window.clearInterval(timer);
       releaseLiveWallPollLock(owner);
     };
-  }, [store.loaded, pollableSignature]);
+  }, [store, store.loaded, pollableFrigates, pollableSignature]);
 
   // Helper: find best media match for an event (frigate_event_id, then event_id, then camera+time window)
   const findMedia = (e: WebhookEvent, kind: "snapshot" | "clip") => {
