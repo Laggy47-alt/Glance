@@ -25,6 +25,30 @@ type Alert = {
   receivedAt: number;
 };
 
+const LIVE_WALL_POLL_LOCK_KEY = "abc-glance.live-wall-poll-lock";
+const LIVE_WALL_POLL_LOCK_TTL_MS = 20_000;
+
+function claimLiveWallPollLock(owner: string) {
+  try {
+    const now = Date.now();
+    const raw = localStorage.getItem(LIVE_WALL_POLL_LOCK_KEY);
+    const current = raw ? JSON.parse(raw) as { owner?: string; expiresAt?: number } : null;
+    if (current?.owner && current.owner !== owner && (current.expiresAt ?? 0) > now) return false;
+    localStorage.setItem(LIVE_WALL_POLL_LOCK_KEY, JSON.stringify({ owner, expiresAt: now + LIVE_WALL_POLL_LOCK_TTL_MS }));
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function releaseLiveWallPollLock(owner: string) {
+  try {
+    const raw = localStorage.getItem(LIVE_WALL_POLL_LOCK_KEY);
+    const current = raw ? JSON.parse(raw) as { owner?: string } : null;
+    if (current?.owner === owner) localStorage.removeItem(LIVE_WALL_POLL_LOCK_KEY);
+  } catch { /* no-op */ }
+}
+
 
 
 const Wall = () => {
@@ -34,10 +58,11 @@ const Wall = () => {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [auditFor, setAuditFor] = useState<Alert | null>(null);
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
-  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set(["person"]));
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
   const autoArchivedRef = useRef<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
+  const pollOwnerRef = useRef<string>(`wall-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`);
   // Per-camera follow-up window: if new motion fires on the SAME camera
   // within this window, the previous un-ACKed alert for that camera is
   // auto-ACKed (archived) and replaced by the newer one. Outside the window,
@@ -79,6 +104,44 @@ const Wall = () => {
   };
 
   const activeFilterCount = cameraFilter.size + labelFilter.size;
+
+  const pollableFrigates = useMemo(
+    () => store.frigates.filter((f) => f.enabled && f.poll_enabled && !f.is_local),
+    [store.frigates]
+  );
+  const pollableSignature = useMemo(
+    () => pollableFrigates.map((f) => `${f.id}:${f.poll_interval_seconds}`).join("|"),
+    [pollableFrigates]
+  );
+
+  useEffect(() => {
+    if (!store.loaded || pollableFrigates.length === 0) return;
+    let stopped = false;
+    let running = false;
+    const owner = pollOwnerRef.current;
+    const minInterval = Math.min(...pollableFrigates.map((f) => Math.max(5, f.poll_interval_seconds || 10))) * 1000;
+    const intervalMs = Math.max(5_000, Math.min(minInterval, 15_000));
+
+    const poll = async () => {
+      if (stopped || running || document.visibilityState !== "visible") return;
+      if (!claimLiveWallPollLock(owner)) return;
+      running = true;
+      try {
+        await Promise.allSettled(pollableFrigates.map((f) => store.pollFrigateNow(f.id)));
+        if (!stopped) await store.refreshAll();
+      } finally {
+        running = false;
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), intervalMs);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      releaseLiveWallPollLock(owner);
+    };
+  }, [store.loaded, pollableSignature]);
 
   // Helper: find best media match for an event (frigate_event_id, then event_id, then camera+time window)
   const findMedia = (e: WebhookEvent, kind: "snapshot" | "clip") => {
