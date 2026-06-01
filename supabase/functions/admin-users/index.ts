@@ -199,22 +199,29 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
     if (error) throw new Error(`admin auth update failed: ${error.message}`);
   } else {
     if (!password) throw new Error("admin password is required");
-    const { data, error } = await a.auth.admin.createUser({
-      email: ADMIN_EMAIL,
-      password,
-      email_confirm: true,
-      user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
-    });
-    if (error) {
-      // Race / duplicate-email: the user actually exists, just re-fetch and reset password.
-      const recovered = await findBootstrapAdmin(a) ?? await recoverOrClearAdminProfile(a);
-      if (!recovered) throw new Error(`admin auth create failed: ${error.message}`);
+    const recovered = await recoverOrClearAdminProfile(a);
+    if (recovered) {
       const { error: upErr } = await a.auth.admin.updateUserById(recovered.id, { email: ADMIN_EMAIL, email_confirm: true, password });
       if (upErr) throw new Error(`admin auth update failed: ${upErr.message}`);
       existing = recovered;
     } else {
-      existing = data.user;
-      created = true;
+      const { data, error } = await a.auth.admin.createUser({
+        email: ADMIN_EMAIL,
+        password,
+        email_confirm: true,
+        user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
+      });
+      if (error) {
+        // Race / duplicate-email: the user actually exists, just re-fetch and reset password.
+        const refetched = await findBootstrapAdmin(a) ?? await recoverOrClearAdminProfile(a);
+        if (!refetched) throw new Error(`admin auth create failed: ${error.message}`);
+        const { error: upErr } = await a.auth.admin.updateUserById(refetched.id, { email: ADMIN_EMAIL, email_confirm: true, password });
+        if (upErr) throw new Error(`admin auth update failed: ${upErr.message}`);
+        existing = refetched;
+      } else {
+        existing = data.user;
+        created = true;
+      }
     }
   }
 
