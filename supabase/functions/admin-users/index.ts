@@ -107,16 +107,24 @@ async function findBootstrapAdmin(a: ReturnType<typeof admin>) {
   return null;
 }
 
-async function ensureBootstrapOrg(a: ReturnType<typeof admin>) {
-  const { error } = await a.from("organizations").upsert(
-    { id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME },
-    { onConflict: "id" },
-  );
+async function ensureBootstrapOrg(a: ReturnType<typeof admin>): Promise<string> {
+  const { data: byId } = await a.from("organizations").select("id").eq("id", ABC_ORG_ID).maybeSingle();
+  if (byId) {
+    await a.from("organizations").update({ slug: ABC_ORG_SLUG, name: ABC_ORG_NAME }).eq("id", ABC_ORG_ID);
+    return ABC_ORG_ID;
+  }
+  const { data: bySlug } = await a.from("organizations").select("id").eq("slug", ABC_ORG_SLUG).maybeSingle();
+  if (bySlug) {
+    await a.from("organizations").update({ name: ABC_ORG_NAME }).eq("slug", ABC_ORG_SLUG);
+    return (bySlug as { id: string }).id;
+  }
+  const { error } = await a.from("organizations").insert({ id: ABC_ORG_ID, slug: ABC_ORG_SLUG, name: ABC_ORG_NAME });
   if (error) throw new Error(`organization setup failed: ${error.message}`);
+  return ABC_ORG_ID;
 }
 
 async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: string, resetPassword = false) {
-  await ensureBootstrapOrg(a);
+  const orgId = await ensureBootstrapOrg(a);
 
   let existing = await findBootstrapAdmin(a);
   let created = false;
@@ -165,12 +173,12 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
   if (roleErr) throw new Error(`role repair failed: ${roleErr.message}`);
 
   const { error: memberErr } = await a.from("organization_members").upsert(
-    { organization_id: ABC_ORG_ID, user_id: userId, role: "admin" },
+    { organization_id: orgId, user_id: userId, role: "admin" },
     { onConflict: "organization_id,user_id" },
   );
   if (memberErr) throw new Error(`organization membership repair failed: ${memberErr.message}`);
 
-  return { created, userId, organizationId: ABC_ORG_ID, username: "admin", loginEmail: ADMIN_EMAIL };
+  return { created, userId, organizationId: orgId, username: "admin", loginEmail: ADMIN_EMAIL };
 }
 
 Deno.serve(async (req) => {
