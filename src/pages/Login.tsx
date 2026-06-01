@@ -58,6 +58,7 @@ const Login = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     setBusy(true);
 
