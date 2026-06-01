@@ -94,17 +94,45 @@ async function listAllUsers(a: ReturnType<typeof admin>) {
   return users;
 }
 
-async function findBootstrapAdmin(a: ReturnType<typeof admin>) {
-  const users = await listAllUsers(a);
-  const byEmail = users.find((u) => LEGACY_ADMIN_EMAILS.includes(String(u.email ?? "").toLowerCase()));
-  if (byEmail) return byEmail;
+/** Deterministic email lookup via GoTrue admin REST — avoids relying on
+ *  listUsers pagination, which can miss the target user under DB load. */
+async function findAuthUserByEmail(email: string): Promise<AuthUserRecord | null> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
+      { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } },
+    );
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null) as { users?: AuthUserRecord[] } | AuthUserRecord | null;
+    if (!body) return null;
+    if (Array.isArray((body as { users?: AuthUserRecord[] }).users)) {
+      const list = (body as { users: AuthUserRecord[] }).users;
+      return list.find((u) => String(u.email ?? "").toLowerCase() === email.toLowerCase()) ?? list[0] ?? null;
+    }
+    const single = body as AuthUserRecord;
+    return single?.id ? single : null;
+  } catch {
+    return null;
+  }
+}
 
+async function findBootstrapAdmin(a: ReturnType<typeof admin>) {
+  for (const email of LEGACY_ADMIN_EMAILS) {
+    const hit = await findAuthUserByEmail(email);
+    if (hit) return hit;
+  }
   const { data: profile } = await a.from("profiles").select("user_id").eq("username", "admin").maybeSingle();
   const row = profile as UserIdRow | null;
   if (row?.user_id) {
-    return users.find((u) => u.id === row.user_id) ?? null;
+    const { data } = await a.auth.admin.getUserById(row.user_id);
+    if (data?.user) return data.user as AuthUserRecord;
   }
-  return null;
+  try {
+    const users = await listAllUsers(a);
+    return users.find((u) => LEGACY_ADMIN_EMAILS.includes(String(u.email ?? "").toLowerCase())) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function ensureBootstrapOrg(a: ReturnType<typeof admin>): Promise<string> {
@@ -142,8 +170,12 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
       user_metadata: { username: "admin", display_name: "Administrator", must_change_password: false, org_slug: ABC_ORG_SLUG },
     });
     if (error) {
-      existing = await findBootstrapAdmin(a);
-      if (!existing) throw new Error(`admin auth create failed: ${error.message}`);
+      // Race / duplicate-email: the user actually exists, just re-fetch and reset password.
+      const recovered = await findBootstrapAdmin(a);
+      if (!recovered) throw new Error(`admin auth create failed: ${error.message}`);
+      const { error: upErr } = await a.auth.admin.updateUserById(recovered.id, { email: ADMIN_EMAIL, email_confirm: true, password });
+      if (upErr) throw new Error(`admin auth update failed: ${upErr.message}`);
+      existing = recovered;
     } else {
       existing = data.user;
       created = true;
