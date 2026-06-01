@@ -1,44 +1,54 @@
-# Self‑Hosting Guide — ABC Glance
+# Self‑Hosting Guide — ABC Glance (with hosted Supabase)
 
-This guide walks you through running the **entire** ABC Glance stack on your own server
-(no Lovable Cloud, no managed Supabase). It covers:
+This guide walks you through running the ABC Glance **frontend** on your own server
+while using **Supabase Cloud** (the hosted, managed Supabase at supabase.com) as the
+backend. You get full control of the web app and TLS, without operating Postgres,
+Auth, Storage, Realtime, or Edge Functions yourself.
+
+Contents:
 
 1. Server prerequisites
 2. Directory layout (where every file lives)
-3. Installing self‑hosted Supabase
-4. Building & deploying the React frontend
-5. Deploying the Edge Functions
+3. Create & configure your hosted Supabase project
+4. Apply migrations and deploy edge functions to Supabase Cloud
+5. Build & deploy the React frontend
 6. NGINX reverse‑proxy + HTTPS (Let's Encrypt)
 7. First‑run admin bootstrap (and emergency recovery)
 8. Updating, backups, troubleshooting
 
-> Target OS for the examples: **Ubuntu 22.04 / 24.04 LTS**. Anything Linux with Docker
-> works — adjust package names accordingly.
+> Target OS for the examples: **Ubuntu 22.04 / 24.04 LTS**. Anything Linux works —
+> adjust package names accordingly.
 
 ---
 
 ## 1. Prerequisites
 
-On your server:
+### 1.1 Accounts
+
+| Service | Why |
+|---------|-----|
+| **Supabase Cloud** (supabase.com) | Hosted Postgres, Auth, Storage, Realtime, Edge Functions |
+| **Resend** (or any SMTP) | Optional — outbound email (daily reports, callouts) |
+| Domain registrar | DNS for `glance.example.com` |
+
+Create a free Supabase project at <https://supabase.com/dashboard> before continuing.
+Note the **Project Ref** (the subdomain, e.g. `abcdwxyz` in `abcdwxyz.supabase.co`),
+the **anon / publishable key**, and the **service_role key** — you'll need all three.
+
+### 1.2 Server packages
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
-| Docker Engine | ≥ 24.x | Runs Supabase |
-| Docker Compose plugin | ≥ 2.x | Orchestrates Supabase services |
 | Node.js | ≥ 20.x (LTS) | Build the frontend |
 | Bun *(optional)* | ≥ 1.1 | Faster install/build |
 | NGINX | ≥ 1.22 | Reverse proxy + TLS termination |
 | Certbot | latest | Free Let's Encrypt certificates |
 | Git | any | Clone the repo |
-| Supabase CLI | ≥ 1.200 | Deploys edge functions & migrations |
+| Supabase CLI | ≥ 1.200 | Deploys edge functions & migrations to Supabase Cloud |
 
 Install everything:
 
 ```bash
-# Docker + Compose
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER       # log out / back in after this
-
 # Node 20 LTS (NodeSource)
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
@@ -46,7 +56,7 @@ sudo apt-get install -y nodejs
 # Bun (optional but recommended — the project uses bun.lock)
 curl -fsSL https://bun.sh/install | bash
 
-# NGINX + Certbot
+# NGINX + Certbot + Git
 sudo apt-get install -y nginx certbot python3-certbot-nginx git
 
 # Supabase CLI
@@ -54,36 +64,27 @@ curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_lin
   | sudo tar -xz -C /usr/local/bin supabase
 ```
 
-### Network / DNS
+### 1.3 DNS
 
-Point two A‑records at your server's public IP **before** requesting certificates:
+Point one A‑record at your server's public IP **before** requesting certificates:
 
 | Host | Purpose |
 |------|---------|
 | `glance.example.com` | The React app |
-| `api.example.com` | Supabase (Postgres REST, Auth, Storage, Edge Functions) |
 
-You can host both on one machine. NGINX will route by hostname.
+The backend lives at `https://<project-ref>.supabase.co` — Supabase owns that
+hostname and TLS, so you do not configure it.
 
 ---
 
 ## 2. Recommended directory layout
 
-Pick a parent directory and stick with it. The rest of the guide assumes:
-
 ```
 /srv/abc-glance/
-├── app/                       ← git clone of this repo
-│   ├── dist/                  ← built static frontend (output of `bun run build`)
-│   ├── supabase/              ← migrations + edge functions (shipped with the repo)
-│   └── .env.production        ← VITE_* build‑time variables (see §4)
-│
-├── supabase/                  ← self‑hosted Supabase (docker‑compose project)
-│   ├── docker-compose.yml
-│   ├── .env                   ← Supabase service secrets (POSTGRES_PASSWORD, JWT_SECRET, …)
-│   └── volumes/               ← Postgres data, storage objects, logs (DO NOT delete)
-│
-└── backups/                   ← nightly pg_dump + storage tarballs
+└── app/                       ← git clone of this repo
+    ├── dist/                  ← built static frontend (output of `bun run build`)
+    ├── supabase/              ← migrations + edge functions (shipped with the repo)
+    └── .env.production        ← VITE_* build‑time variables (see §5)
 ```
 
 NGINX config lives under `/etc/nginx/sites-available/`. TLS certs are written to
@@ -93,142 +94,77 @@ NGINX config lives under `/etc/nginx/sites-available/`. TLS certs are written to
 Create the tree:
 
 ```bash
-sudo mkdir -p /srv/abc-glance/{app,supabase,backups}
+sudo mkdir -p /srv/abc-glance/app
 sudo chown -R $USER:$USER /srv/abc-glance
 cd /srv/abc-glance
 ```
 
 ---
 
-## 3. Self‑hosted Supabase
+## 3. Configure your hosted Supabase project
 
-### 3.1 Bring up the stack
+In the Supabase dashboard for your new project:
 
-```bash
-cd /srv/abc-glance/supabase
-git clone --depth 1 https://github.com/supabase/supabase .supabase-src
-cp -r .supabase-src/docker/* .
-cp .env.example .env
-```
+### 3.1 Auth settings
 
-### 3.2 Edit `/srv/abc-glance/supabase/.env`
+- **Authentication → URL Configuration**
+  - **Site URL**: `https://glance.example.com`
+  - **Additional redirect URLs**: `https://glance.example.com/*`
+- **Authentication → Providers → Email**: enabled. Disable "Confirm email" if you
+  want immediate sign‑in for the bootstrap admin; otherwise leave it on.
+- **Authentication → SMTP** (optional): plug in your Resend / SES / SMTP credentials
+  so password reset and confirmation mails are sent from your domain.
 
-Mandatory changes — **do not ship the defaults to production**:
+### 3.2 Storage buckets
 
-```ini
-############
-# Postgres
-############
-POSTGRES_PASSWORD=<long-random-string>
+The app uses two public buckets (created automatically by the migrations):
 
-############
-# JWT
-############
-JWT_SECRET=<64+ chars random>            # generate: openssl rand -base64 64
-ANON_KEY=<generate from Supabase tool>   # https://supabase.com/docs/guides/self-hosting/docker
-SERVICE_ROLE_KEY=<generate>
+| Bucket | Public? | Used for |
+|--------|---------|----------|
+| `branding` | yes | Org logos, hero images |
+| `camera-snapshots` | yes | Camera thumbnails |
 
-############
-# Public URLs (must match what NGINX exposes)
-############
-API_EXTERNAL_URL=https://api.example.com
-SITE_URL=https://glance.example.com
-SUPABASE_PUBLIC_URL=https://api.example.com
-ADDITIONAL_REDIRECT_URLS=https://glance.example.com
+If migrations don't create them for some reason, create them manually under
+**Storage → Buckets** with public read enabled.
 
-############
-# Studio (admin UI) — keep behind auth or LAN-only
-############
-STUDIO_DEFAULT_ORGANIZATION=ABC
-STUDIO_DEFAULT_PROJECT=Glance
-DASHBOARD_USERNAME=admin
-DASHBOARD_PASSWORD=<strong password>
+### 3.3 Grab the keys
 
-############
-# SMTP (used by Supabase Auth emails)
-############
-SMTP_ADMIN_EMAIL=ops@example.com
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=465
-SMTP_USER=resend
-SMTP_PASS=<resend api key>
-SMTP_SENDER_NAME=ABC Glance
-```
+From **Project Settings → API**:
 
-Generate `ANON_KEY` and `SERVICE_ROLE_KEY` with the official helper:
-<https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys> (paste your
-`JWT_SECRET`, copy the two resulting JWTs).
+- `Project URL` → e.g. `https://abcdwxyz.supabase.co`
+- `anon` / `publishable` key → safe to ship in the frontend
+- `service_role` key → **secret** (used only by edge functions)
 
-### 3.3 Start it
-
-```bash
-cd /srv/abc-glance/supabase
-docker compose pull
-docker compose up -d
-docker compose ps        # should show kong, db, auth, rest, storage, realtime, studio, functions
-```
-
-Postgres data lives in `./volumes/db/data`; storage objects in `./volumes/storage`.
-**Back these up.** See §8.
-
-### 3.4 Apply this project's migrations
-
-```bash
-cd /srv/abc-glance/app
-supabase link --project-ref local        # answer prompts; pick "self-hosted"
-# Or, simpler for self-hosting, push the SQL directly:
-for f in supabase/migrations/*.sql; do
-  PGPASSWORD=$POSTGRES_PASSWORD psql \
-    -h 127.0.0.1 -p 5432 -U postgres -d postgres -f "$f"
-done
-```
+You'll paste these into `.env.production` (§5) and the edge function secrets (§4.2).
 
 ---
 
-## 4. Build & deploy the frontend
+## 4. Apply migrations & deploy edge functions to Supabase Cloud
 
-### 4.1 Clone & configure
+### 4.1 Clone the repo & link the project
 
 ```bash
 cd /srv/abc-glance
 git clone https://github.com/<your-fork>/abc-glance.git app
 cd app
+
+# Authenticate the CLI (opens a browser, or paste a PAT)
+supabase login
+
+# Link this local copy to your hosted project
+supabase link --project-ref <your-project-ref>
 ```
 
-Create `/srv/abc-glance/app/.env.production`:
-
-```ini
-VITE_SUPABASE_URL=https://api.example.com
-VITE_SUPABASE_PUBLISHABLE_KEY=<ANON_KEY from supabase .env>
-VITE_SUPABASE_PROJECT_ID=local
-```
-
-> These three variables are **baked into the JS bundle at build time**. Rebuild after
-> any change.
-
-### 4.2 Build
+Push the migrations:
 
 ```bash
-bun install            # or: npm ci
-bun run build          # outputs to ./dist
+supabase db push
 ```
 
-Result: `/srv/abc-glance/app/dist/` contains `index.html`, `assets/*.js`, `assets/*.css`,
-plus the `public/` files. NGINX serves this folder.
+This applies everything in `supabase/migrations/` to your hosted database, creating
+tables, RLS policies, helper functions, and the storage buckets.
 
-### 4.3 Updating later
-
-```bash
-cd /srv/abc-glance/app
-git pull
-bun install
-bun run build
-sudo systemctl reload nginx     # not strictly required, but harmless
-```
-
----
-
-## 5. Edge Functions
+### 4.2 Edge functions
 
 The repo ships these functions under `supabase/functions/`:
 
@@ -239,33 +175,36 @@ escalate-offline         frigate-poll            frigate-proxy
 super-callout-email      webhook-ingest          _shared/
 ```
 
-Deploy them all to your self‑hosted Supabase:
+Deploy them all:
 
 ```bash
 cd /srv/abc-glance/app
 
-# Tell the CLI where your stack lives
-export SUPABASE_URL=https://api.example.com
-export SUPABASE_ANON_KEY=<ANON_KEY>
-export SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>
-export SUPABASE_ACCESS_TOKEN=<personal access token, if used>
-
-# Deploy every function
 for fn in supabase/functions/*/; do
   name=$(basename "$fn")
   [ "$name" = "_shared" ] && continue
-  supabase functions deploy "$name" --no-verify-jwt --project-ref local
+  supabase functions deploy "$name" --no-verify-jwt
 done
 ```
 
-### 5.1 Function secrets
+### 4.3 Edge function secrets
 
-Set these on the Supabase functions runtime (`docker compose exec functions ...` or
-through Studio → Edge Functions → Secrets):
+Set these via **Project Settings → Edge Functions → Secrets** in the Supabase
+dashboard, or via the CLI:
+
+```bash
+supabase secrets set \
+  SUPABASE_URL=https://<project-ref>.supabase.co \
+  SUPABASE_ANON_KEY=<anon key> \
+  SUPABASE_SERVICE_ROLE_KEY=<service_role key> \
+  RESEND_API_KEY=<optional> \
+  EMERGENCY_USER=admin \
+  EMERGENCY_PASS=<rotate this in production>
+```
 
 | Secret | Required? | What it does |
 |--------|-----------|--------------|
-| `SUPABASE_URL` | yes | Same as `API_EXTERNAL_URL` |
+| `SUPABASE_URL` | yes | Same as your project URL |
 | `SUPABASE_ANON_KEY` | yes | For client‑style calls inside functions |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | Admin operations (users, RLS bypass) |
 | `RESEND_API_KEY` | recommended | Email (daily reports, callouts, alerts) |
@@ -273,12 +212,59 @@ through Studio → Edge Functions → Secrets):
 | `EMERGENCY_PASS` | optional | Override emergency password (default `Abcsec2008`) |
 | `LOVABLE_API_KEY` | optional | Only if you keep using Lovable AI Gateway |
 
-> **Change `EMERGENCY_PASS` in production.** The default exists only to bootstrap a brand
-> new install.
+> **Change `EMERGENCY_PASS` in production.** The default exists only to bootstrap a
+> brand new install. Redeploy `admin-users` after rotating it.
+
+---
+
+## 5. Build & deploy the frontend
+
+### 5.1 Configure
+
+Create `/srv/abc-glance/app/.env.production`:
+
+```ini
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
+VITE_SUPABASE_PROJECT_ID=<project-ref>
+```
+
+> These three variables are **baked into the JS bundle at build time**. Rebuild after
+> any change.
+
+### 5.2 Build
+
+```bash
+cd /srv/abc-glance/app
+bun install            # or: npm ci
+bun run build          # outputs to ./dist
+```
+
+Result: `/srv/abc-glance/app/dist/` contains `index.html`, `assets/*.js`,
+`assets/*.css`, plus the `public/` files. NGINX serves this folder.
+
+### 5.3 Updating later
+
+```bash
+cd /srv/abc-glance/app
+git pull
+bun install
+bun run build
+# Apply any new migrations / functions:
+supabase db push
+for fn in supabase/functions/*/; do
+  name=$(basename "$fn")
+  [ "$name" = "_shared" ] && continue
+  supabase functions deploy "$name" --no-verify-jwt
+done
+sudo systemctl reload nginx     # harmless even if not strictly required
+```
 
 ---
 
 ## 6. NGINX
+
+You only need **one** server block — the backend is on Supabase, not on this server.
 
 ### 6.1 Frontend site — `/etc/nginx/sites-available/glance.conf`
 
@@ -314,55 +300,19 @@ server {
         add_header Cache-Control "no-store";
     }
 
-    client_max_body_size 25M;   # camera snapshot uploads
+    client_max_body_size 25M;
     gzip on;
     gzip_types text/plain text/css application/json application/javascript image/svg+xml;
 }
 ```
 
-### 6.2 Supabase API site — `/etc/nginx/sites-available/api.conf`
-
-```nginx
-server {
-    listen 80;
-    server_name api.example.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name api.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/api.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
-
-    # Supabase Kong listens on 8000 (HTTP) by default
-    location / {
-        proxy_pass         http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-
-        # Realtime / websockets
-        proxy_set_header   Upgrade           $http_upgrade;
-        proxy_set_header   Connection        "upgrade";
-        proxy_read_timeout 3600s;
-    }
-
-    client_max_body_size 50M;   # storage uploads (snapshots, branding)
-}
-```
-
-### 6.3 Enable & issue TLS
+### 6.2 Enable & issue TLS
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/glance.conf /etc/nginx/sites-enabled/
-sudo ln -s /etc/nginx/sites-available/api.conf    /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
-sudo certbot --nginx -d glance.example.com -d api.example.com \
+sudo certbot --nginx -d glance.example.com \
      --redirect --agree-tos -m ops@example.com
 ```
 
@@ -372,60 +322,55 @@ Certbot's systemd timer auto‑renews. Verify with `sudo certbot renew --dry-run
 
 ## 7. First‑run admin bootstrap
 
-The app is designed to bootstrap itself the first time you visit it on a clean database.
+The app bootstraps itself the first time you visit it against an empty database.
 
 1. Open `https://glance.example.com/login`.
 2. The login page calls `admin-users/seed?check_only=true`. On a fresh database it
    returns `needs_password: true` and the form switches to **"Create admin account"**.
 3. Username is locked to `admin`. Enter a password (min 8 chars) and submit.
-4. You're signed in and redirected to the dashboard. The "create admin" form will not
-   re‑appear (the public endpoint refuses to overwrite an existing admin).
+4. You're signed in and redirected to the dashboard. The "create admin" form will
+   not re‑appear (the public endpoint refuses to overwrite an existing admin).
 
 ### 7.1 Recovery — if step 2 fails or you lose the password
 
 Go to `https://glance.example.com/offline`. The page exposes two tools that talk
 directly to the `admin-users` edge function using the emergency credentials:
 
-- **Create / reset admin account** — uses `admin-users/emergency-reset` to rebuild the
-  `admin` profile, role rows, and organization membership; then sets a new password.
+- **Create / reset admin account** — uses `admin-users/emergency-reset` to rebuild
+  the `admin` profile, role rows, and organization membership; then sets a new
+  password.
 - **Force create / repair admin account** — same endpoint, called with the default
   emergency credentials (`admin / Abcsec2008` unless you set `EMERGENCY_USER` /
   `EMERGENCY_PASS`). Use this when the seed check itself is broken.
 
-After recovery, **rotate `EMERGENCY_PASS`** via Supabase function secrets and redeploy
-the `admin-users` function:
+After recovery, **rotate `EMERGENCY_PASS`** via Supabase function secrets and
+redeploy the `admin-users` function:
 
 ```bash
-supabase functions deploy admin-users --no-verify-jwt --project-ref local
+supabase secrets set EMERGENCY_PASS=<new strong value>
+supabase functions deploy admin-users --no-verify-jwt
 ```
 
 ---
 
 ## 8. Backups, upgrades, troubleshooting
 
-### 8.1 Nightly backup (cron)
+### 8.1 Backups
 
-`/etc/cron.daily/abc-glance-backup`:
+Supabase Cloud takes **automatic daily backups** of your database on paid plans;
+free projects can use **Project Settings → Database → Backups** to trigger
+on‑demand snapshots, or run `pg_dump` against the connection string in
+**Project Settings → Database → Connection string**:
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-TS=$(date +%F)
-OUT=/srv/abc-glance/backups
-mkdir -p "$OUT"
-
-# Postgres
-docker compose -f /srv/abc-glance/supabase/docker-compose.yml exec -T db \
-  pg_dump -U postgres postgres | gzip > "$OUT/db-$TS.sql.gz"
-
-# Storage objects
-tar czf "$OUT/storage-$TS.tar.gz" -C /srv/abc-glance/supabase/volumes storage
-
-# Retain 14 days
-find "$OUT" -type f -mtime +14 -delete
+# Example: nightly local dump via cron
+pg_dump "postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres" \
+  | gzip > /srv/abc-glance/backups/db-$(date +%F).sql.gz
 ```
 
-`chmod +x /etc/cron.daily/abc-glance-backup`.
+Storage objects are stored in Supabase Storage; for a full disaster‑recovery copy,
+either rely on Supabase's bucket replication (paid plans) or sync the buckets with
+the Storage API / `supabase storage cp` periodically.
 
 ### 8.2 Updating the app
 
@@ -434,50 +379,51 @@ cd /srv/abc-glance/app
 git pull
 bun install
 bun run build
-# Re-deploy any changed edge functions / migrations:
-for f in supabase/migrations/*.sql; do
-  PGPASSWORD=$POSTGRES_PASSWORD psql -h 127.0.0.1 -U postgres -d postgres -f "$f"
+supabase db push
+for fn in supabase/functions/*/; do
+  name=$(basename "$fn")
+  [ "$name" = "_shared" ] && continue
+  supabase functions deploy "$name" --no-verify-jwt
 done
-supabase functions deploy --project-ref local --no-verify-jwt
 ```
 
 ### 8.3 Common issues
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Login page never switches to "create admin" | Edge function `admin-users` not deployed | `supabase functions deploy admin-users` |
-| 401 / "Invalid JWT" on every request | `ANON_KEY` in `.env.production` doesn't match Supabase `.env` | Rebuild frontend after fixing the key |
-| Realtime never connects | NGINX missing `Upgrade`/`Connection` headers on `/api.example.com` | Use the config in §6.2 verbatim |
-| Camera snapshots fail to upload | `client_max_body_size` too low | Raise it on both NGINX server blocks |
-| Edge functions can't reach the NVR | Functions container has no LAN route | Use `network_mode: host` on the `functions` service, or put the NVR on the same Docker network |
-| Daily report emails don't arrive | `RESEND_API_KEY` unset or SMTP block wrong | Set the secret, redeploy `daily-report-send` |
+| Login page never switches to "create admin" | Edge function `admin-users` not deployed | `supabase functions deploy admin-users --no-verify-jwt` |
+| 401 / "Invalid JWT" on every request | `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.production` doesn't match the project's anon key | Rebuild frontend with the correct key |
+| Auth callbacks redirect to localhost | **Site URL** / **Additional redirect URLs** not updated in Supabase Auth | Set them to `https://glance.example.com` |
+| Realtime never connects | Browser blocked by a proxy / Supabase project paused | Check Supabase dashboard project status; whitelist `*.supabase.co` |
+| Camera snapshots fail to upload | `client_max_body_size` too low | Raise it in the NGINX server block |
+| Edge functions can't reach the NVR | Function runs on Supabase's edge network with no LAN access | Expose the NVR publicly (with auth) or run `frigate-poll` from a worker inside your LAN |
+| Daily report emails don't arrive | `RESEND_API_KEY` unset | Set it under Edge Function Secrets, redeploy `daily-report-send` |
 
 ### 8.4 Useful one‑liners
 
 ```bash
-# Tail edge function logs
-docker compose -f /srv/abc-glance/supabase/docker-compose.yml logs -f functions
+# Tail edge function logs (Supabase Cloud)
+supabase functions logs admin-users --tail
 
-# Open a psql shell
-docker compose -f /srv/abc-glance/supabase/docker-compose.yml exec db \
-  psql -U postgres -d postgres
+# Open a psql shell against the hosted DB
+psql "postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres"
 
-# Restart just the API gateway
-docker compose -f /srv/abc-glance/supabase/docker-compose.yml restart kong
+# Re-deploy a single function
+supabase functions deploy admin-users --no-verify-jwt
 ```
 
 ---
 
 ## Appendix A — Minimal checklist
 
-- [ ] DNS A records for `glance.example.com` and `api.example.com`
-- [ ] Docker + Compose + Node 20 + NGINX + Certbot installed
-- [ ] `/srv/abc-glance/supabase/.env` filled in with strong secrets
-- [ ] `docker compose up -d` shows all services healthy
-- [ ] Migrations applied (`supabase/migrations/*.sql`)
+- [ ] Supabase Cloud project created; project ref, anon key, service_role key noted
+- [ ] DNS A record for `glance.example.com`
+- [ ] Node 20 + NGINX + Certbot + Supabase CLI installed
+- [ ] Auth **Site URL** and redirect URLs set to your domain
+- [ ] `supabase link` + `supabase db push` succeeded (migrations applied)
 - [ ] All edge functions deployed, function secrets set
 - [ ] `/srv/abc-glance/app/.env.production` filled in
 - [ ] `bun run build` produced `dist/`
-- [ ] Both NGINX sites enabled, TLS issued
+- [ ] NGINX site enabled, TLS issued
 - [ ] First‑run admin created at `/login`
-- [ ] `EMERGENCY_PASS` rotated, backups scheduled
+- [ ] `EMERGENCY_PASS` rotated, backup strategy in place
