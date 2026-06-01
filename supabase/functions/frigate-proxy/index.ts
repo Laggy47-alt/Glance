@@ -7,10 +7,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, range, apikey, x-client-info",
+  "Access-Control-Allow-Headers": "authorization, content-type, range, apikey, x-client-info, accept, cache-control, pragma",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges",
 };
+
+function textResponse(message: string, status: number) {
+  return new Response(message, { status, headers: corsHeaders });
+}
+
+function jsonResponse(body: Record<string, unknown>, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -26,18 +37,24 @@ Deno.serve(async (req) => {
     const instanceId = segs[fpIdx + 1];
     const rest = segs.slice(fpIdx + 2).join("/");
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceKey) {
+      return jsonResponse({ error: "proxy_not_configured", message: "Missing backend proxy secrets." }, 500);
+    }
+
+    const supabase = createClient(supabaseUrl, serviceKey);
     const { data: inst, error } = await supabase
       .from("frigate_instances")
       .select("base_url, api_key, enabled")
       .eq("id", instanceId)
       .maybeSingle();
 
-    if (error || !inst) return new Response("Instance not found", { status: 404, headers: corsHeaders });
-    if (!inst.enabled) return new Response("Instance disabled", { status: 403, headers: corsHeaders });
+    if (error) {
+      return jsonResponse({ error: "instance_lookup_failed", message: error.message }, 500);
+    }
+    if (!inst) return textResponse("Instance not found", 404);
+    if (!inst.enabled) return textResponse("Instance disabled", 403);
 
     const base = (inst.base_url as string).replace(/\/+$/, "");
     const target = `${base}/${rest}${url.search}`;
@@ -47,11 +64,17 @@ Deno.serve(async (req) => {
     if (range) upstreamHeaders["Range"] = range;
     if (inst.api_key) upstreamHeaders["Authorization"] = `Bearer ${inst.api_key}`;
 
-    const upstream = await fetch(target, {
-      method: req.method === "HEAD" ? "HEAD" : "GET",
-      headers: upstreamHeaders,
-      signal: AbortSignal.timeout(30000),
-    });
+    let upstream: Response;
+    try {
+      upstream = await fetch(target, {
+        method: req.method === "HEAD" ? "HEAD" : "GET",
+        headers: upstreamHeaders,
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (e) {
+      const message = (e as Error).message || "Unable to reach the NVR.";
+      return jsonResponse({ error: "nvr_unreachable", message, target }, 502);
+    }
 
     const upstreamContentType = upstream.headers.get("content-type") ?? "";
     const isCloudflareTunnelError = upstream.status === 530 && upstreamContentType.includes("text/html");
@@ -78,6 +101,6 @@ Deno.serve(async (req) => {
 
     return new Response(upstream.body, { status: upstream.status, headers: respHeaders });
   } catch (e) {
-    return new Response(`Proxy error: ${(e as Error).message}`, { status: 502, headers: corsHeaders });
+    return jsonResponse({ error: "proxy_error", message: (e as Error).message }, 502);
   }
 });

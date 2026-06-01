@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000; // hourly
 const STORAGE_KEY = "snapshot-refresher:lastRun";
@@ -8,9 +9,7 @@ const STORAGE_KEY = "snapshot-refresher:lastRun";
 async function refreshInstance(inst: { id: string; base_url: string; is_local: boolean }) {
   let online: string[] = [];
   try {
-    const r = await fetch(frigateUrl(inst, "/api/stats"));
-    if (!r.ok) return;
-    const j: any = await r.json();
+    const j: any = await fetchFrigateStats(inst);
     online = Object.entries<any>(j?.cameras ?? {})
       .filter(([, d]) => Number(d?.camera_fps ?? 0) > 0)
       .map(([n]) => n);

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
+import type { FrigateInstance } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { CameraScheduleDialog } from "@/components/CameraScheduleDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,9 +34,7 @@ export function NvrSchedulesPanel({ inst }: { inst: FrigateInstance }) {
   const loadCameras = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(frigateUrl(inst, "/api/stats"));
-      if (!res.ok) throw new Error();
-      setCameras(parseCameras(await res.json()));
+      setCameras(parseCameras(await fetchFrigateStats(inst)));
     } catch {
       setCameras([]);
     } finally {

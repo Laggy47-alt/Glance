@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { frigateUrl, type FrigateInstance } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { toast } from "@/hooks/use-toast";
 import { Phone, Server, ShieldAlert, ShieldCheck, VideoOff, Loader2, AlertTriangle, WifiOff, ImageOff } from "lucide-react";
 import { CustomerInstructionsCard } from "@/components/CustomerInstructionsCard";
@@ -169,9 +170,7 @@ const Customer = () => {
     }
     const results = await Promise.all(myInstances.map(async (inst): Promise<NvrView> => {
       try {
-        const res = await fetch(frigateUrl(inst, "/api/stats"));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const stats = await res.json();
+        const stats = await fetchFrigateStats(inst);
         const { online, offline } = parseStats(stats);
         const allow = camFilter.get(inst.id);
         const keep = (n: string) => !allow || allow.has(n);

@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { supabase } from "@/integrations/supabase/client";
-import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { CustomerInstructionsCard } from "@/components/CustomerInstructionsCard";
 import { Loader2, Server } from "lucide-react";
 
@@ -59,9 +59,7 @@ const CustomerInstructions = () => {
     const map = new Map<string, string[]>();
     await Promise.all(myInstances.map(async (inst) => {
       try {
-        const res = await fetch(frigateUrl(inst, "/api/stats"));
-        if (!res.ok) throw new Error();
-        const all = parseCameras(await res.json());
+        const all = parseCameras(await fetchFrigateStats(inst));
         const allow = camFilter.get(inst.id);
         map.set(inst.id, allow ? all.filter((n) => allow.has(n)) : all);
       } catch {

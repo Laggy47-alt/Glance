@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { Loader2, Plus, KeyRound, Trash2, ShieldCheck, User as UserIcon, Building2, Server, Mail, ChevronDown } from "lucide-react";
-import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -359,8 +359,7 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
     if (!inst) return;
     setCamLoading((s) => new Set(s).add(instId));
     try {
-      const res = await fetch(frigateUrl(inst, "/api/stats"));
-      const stats = await res.json();
+      const stats = await fetchFrigateStats(inst);
       const cams = parseCameraNames(stats);
       setCamList((m) => new Map(m).set(instId, cams));
     } catch {

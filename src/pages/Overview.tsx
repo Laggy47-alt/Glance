@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
-import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 
 function parseCameraNames(stats: unknown): string[] {
   if (!stats || typeof stats !== "object") return [];
@@ -77,9 +77,7 @@ const Overview = () => {
       if (enabled.length === 0) { if (!cancelled) setNvrCamCount(0); return; }
       const results = await Promise.all(enabled.map(async (f) => {
         try {
-          const res = await fetch(frigateUrl(f, "/api/stats"));
-          if (!res.ok) return [] as string[];
-          return parseCameraNames(await res.json()).map((n) => `${f.id}::${n}`);
+          return parseCameraNames(await fetchFrigateStats(f)).map((n) => `${f.id}::${n}`);
         } catch { return [] as string[]; }
       }));
       if (cancelled) return;

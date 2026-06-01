@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
-import { frigateUrl } from "@/lib/webhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -85,9 +85,7 @@ export function OfflineNotifications() {
     const enabled = store.frigates.filter((f) => f.enabled);
     const results = await Promise.all(enabled.map(async (f): Promise<NvrSnapshot> => {
       try {
-        const res = await fetch(frigateUrl(f, "/api/stats"));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await fetchFrigateStats(f);
         return { id: f.id, name: f.name, reachable: true, offlineCameras: parseStats(json) };
       } catch {
         return { id: f.id, name: f.name, reachable: false, offlineCameras: [] };
