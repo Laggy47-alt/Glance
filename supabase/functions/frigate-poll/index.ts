@@ -100,8 +100,19 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   const sinceSec = Math.floor(sinceMs / 1000);
   const orgId = inst.organization_id;
 
+  // Skip ingesting events for cameras that are currently disarmed
+  // (set by the arm-scheduler based on the user's schedules).
+  const { data: armedRows } = await supabase
+    .from("camera_armed_state")
+    .select("camera, armed")
+    .eq("instance_id", inst.id);
+  const disarmed = new Set<string>(
+    (armedRows ?? []).filter((r: any) => r.armed === false).map((r: any) => r.camera as string),
+  );
+
   const evUrl = `${base}/api/events?after=${sinceSec}&limit=100&include_thumbnails=0`;
   const events = await fetchJson<FrigateEvent[]>(evUrl, inst.api_key);
+
 
   let insertedEvents = 0;
   let insertedMedia = 0;
