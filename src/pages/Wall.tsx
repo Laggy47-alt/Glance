@@ -270,6 +270,7 @@ const Wall = () => {
     const freshOnes: Alert[] = [];
     for (const m of store.media) {
       if (m.kind !== "clip") continue;
+      if (m.archived) continue;
       const key = `m:${m.id}`;
       if (seenRef.current.has(key)) continue;
       // Skip muted NVR (by source or instance)
