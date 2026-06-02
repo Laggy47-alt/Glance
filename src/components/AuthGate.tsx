@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
  *  - Optional adminOnly flag.
  */
 export function AuthGate({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
-  const { session, profile, isAdmin, isCustomer, isSuperAdmin, isImpersonating, loading } = useAuth();
+  const { session, profile, isAdmin, isCustomer, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -28,15 +28,6 @@ export function AuthGate({ children, adminOnly = false }: { children: ReactNode;
     return <Navigate to="/change-password" replace />;
   }
 
-  // Super admin not impersonating: lock to /super (and password change)
-  if (isSuperAdmin && !isImpersonating) {
-    const allowed = ["/super", "/change-password"];
-    if (!allowed.some((p) => location.pathname === p || location.pathname.startsWith(p + "/"))) {
-      return <Navigate to="/super" replace />;
-    }
-    return <>{children}</>;
-  }
-
   // Customers are restricted to their own portal + password change.
   if (isCustomer && !isAdmin) {
     const allowed = ["/customer", "/change-password"];
@@ -51,3 +42,4 @@ export function AuthGate({ children, adminOnly = false }: { children: ReactNode;
 
   return <>{children}</>;
 }
+
