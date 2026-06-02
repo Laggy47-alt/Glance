@@ -277,14 +277,6 @@ class WebhookStore {
   }
 
   // ─── Sources ───
-  private requireOrg(): string {
-    if (!this.activeOrgId) {
-      throw new Error(
-        "No active organization selected. Pick an organization in the top-right switcher before creating items."
-      );
-    }
-    return this.activeOrgId;
-  }
   async createSource(input: { name: string; slug: string; color?: string }) {
     const secret = crypto.randomUUID().replace(/-/g, "");
     const { error } = await supabase.from("webhook_sources").insert({
@@ -292,10 +284,10 @@ class WebhookStore {
       slug: input.slug,
       color: input.color ?? "#06b6d4",
       secret,
-      organization_id: this.requireOrg(),
     });
     if (error) throw error;
   }
+
   async updateSource(id: string, patch: Partial<Pick<WebhookSource, "name" | "enabled" | "color" | "secret">>) {
     const { error } = await supabase.from("webhook_sources").update(patch).eq("id", id);
     if (error) throw error;
