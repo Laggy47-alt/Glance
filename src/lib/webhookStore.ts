@@ -47,6 +47,7 @@ export type MediaItem = {
   ts: string;
   instance_id?: string | null;
   frigate_event_id?: string | null;
+  archived?: boolean;
 };
 
 export type FrigateInstance = {
