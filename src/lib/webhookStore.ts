@@ -110,24 +110,16 @@ class WebhookStore {
   private channels: RealtimeChannel[] = [];
   private initialized = false;
 
-  setActiveOrg(orgId: string | null) {
-    if (this.activeOrgId === orgId) return;
-    this.activeOrgId = orgId;
-    // Drop any cached cross-org rows immediately so the UI doesn't flash stale data.
-    this.sources = [];
-    this.events = [];
-    this.rules = [];
-    this.media = [];
-    this.frigates = [];
-    this.loaded = false;
-    this.emit();
+  // Single-tenant: org scoping is a no-op. Kept for backwards compatibility
+  // with callers that still invoke setActiveOrg(...).
+  setActiveOrg(_orgId: string | null) {
     if (this.initialized) void this.refreshAll();
   }
 
-  private matchesOrg(row: any) {
-    if (!this.activeOrgId) return true;
-    return row?.organization_id === this.activeOrgId;
+  private matchesOrg(_row: unknown) {
+    return true;
   }
+
 
   subscribe(l: Listener) {
     this.listeners.add(l);
