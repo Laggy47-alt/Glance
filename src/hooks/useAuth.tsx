@@ -82,6 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Single-tenant: all data lives under one fixed org id (defaulted in DB too).
+  // We expose a stable activeOrg constant so every page that still reads
+  // `activeOrg.id` to scope queries keeps working without modification.
+  const SHARED_ORG = { id: "c093c027-920c-4e88-865a-fb17413b3b5a", slug: "abc-2026", name: "Glance" };
+
   const value = useMemo<AuthCtx>(() => ({
     session,
     user: session?.user ?? null,
@@ -89,8 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isSuperAdmin,
     isCustomer,
-    orgs: [],
-    activeOrg: null,
+    orgs: session ? [{ organization_id: SHARED_ORG.id, role: isAdmin ? "admin" : "customer", organization: SHARED_ORG }] : [],
+    activeOrg: session ? SHARED_ORG : null,
     setActiveOrgId: () => { /* no-op: single-tenant */ },
     impersonateOrg: () => { /* no-op: single-tenant */ },
     isImpersonating: false,
@@ -98,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut: async () => { await supabase.auth.signOut(); },
     refreshProfile: async () => { if (session?.user) await loadProfile(session.user.id); },
   }), [session, profile, isAdmin, isSuperAdmin, isCustomer, loading]);
+
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
