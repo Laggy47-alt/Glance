@@ -284,7 +284,7 @@ async function sendViaSmtp(s: Settings, opts: { from: string; to: string[]; repl
       html: opts.html,
     });
   } finally {
-    await client.close();
+    try { await client.close(); } catch { /* connection may have failed to open */ }
   }
 }
 
