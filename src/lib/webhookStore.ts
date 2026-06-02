@@ -175,17 +175,15 @@ class WebhookStore {
 
   private async pollIncremental() {
     if (!this.loaded) return;
-    const org = this.activeOrgId;
-    if (!org) return;
     const latestEventTs = this.events[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
     const latestMediaTs = this.media[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
     try {
       const [ev, md] = await Promise.all([
         supabase.from("webhook_events").select("*")
-          .eq("organization_id", org).gt("ts", latestEventTs)
+          .gt("ts", latestEventTs)
           .order("ts", { ascending: false }).limit(100),
         supabase.from("media_items").select("*")
-          .eq("organization_id", org).gt("ts", latestMediaTs)
+          .gt("ts", latestMediaTs)
           .order("ts", { ascending: false }).limit(100),
       ]);
       let changed = false;
@@ -211,14 +209,12 @@ class WebhookStore {
 
   async refreshAll() {
     try {
-      const org = this.activeOrgId;
-      const scope = <T>(q: any): any => org ? q.eq("organization_id", org) : q;
       const [s, e, r, m, f] = await Promise.all([
-        scope(supabase.from("webhook_sources").select("*").order("created_at", { ascending: true })),
-        scope(supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500)),
-        scope(supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true })),
-        scope(supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200)),
-        scope(supabase.from("frigate_instances").select("*").order("created_at", { ascending: true })),
+        supabase.from("webhook_sources").select("*").order("created_at", { ascending: true }),
+        supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500),
+        supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true }),
+        supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200),
+        supabase.from("frigate_instances").select("*").order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = (e.data ?? []) as WebhookEvent[];
@@ -232,6 +228,7 @@ class WebhookStore {
     }
     this.emit();
   }
+
 
   private subscribeRealtime() {
     const ch = supabase
