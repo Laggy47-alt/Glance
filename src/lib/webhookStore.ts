@@ -110,24 +110,16 @@ class WebhookStore {
   private channels: RealtimeChannel[] = [];
   private initialized = false;
 
-  setActiveOrg(orgId: string | null) {
-    if (this.activeOrgId === orgId) return;
-    this.activeOrgId = orgId;
-    // Drop any cached cross-org rows immediately so the UI doesn't flash stale data.
-    this.sources = [];
-    this.events = [];
-    this.rules = [];
-    this.media = [];
-    this.frigates = [];
-    this.loaded = false;
-    this.emit();
+  // Single-tenant: org scoping is a no-op. Kept for backwards compatibility
+  // with callers that still invoke setActiveOrg(...).
+  setActiveOrg(_orgId: string | null) {
     if (this.initialized) void this.refreshAll();
   }
 
-  private matchesOrg(row: any) {
-    if (!this.activeOrgId) return true;
-    return row?.organization_id === this.activeOrgId;
+  private matchesOrg(_row: unknown) {
+    return true;
   }
+
 
   subscribe(l: Listener) {
     this.listeners.add(l);
@@ -183,17 +175,15 @@ class WebhookStore {
 
   private async pollIncremental() {
     if (!this.loaded) return;
-    const org = this.activeOrgId;
-    if (!org) return;
     const latestEventTs = this.events[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
     const latestMediaTs = this.media[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
     try {
       const [ev, md] = await Promise.all([
         supabase.from("webhook_events").select("*")
-          .eq("organization_id", org).gt("ts", latestEventTs)
+          .gt("ts", latestEventTs)
           .order("ts", { ascending: false }).limit(100),
         supabase.from("media_items").select("*")
-          .eq("organization_id", org).gt("ts", latestMediaTs)
+          .gt("ts", latestMediaTs)
           .order("ts", { ascending: false }).limit(100),
       ]);
       let changed = false;
@@ -219,14 +209,12 @@ class WebhookStore {
 
   async refreshAll() {
     try {
-      const org = this.activeOrgId;
-      const scope = <T>(q: any): any => org ? q.eq("organization_id", org) : q;
       const [s, e, r, m, f] = await Promise.all([
-        scope(supabase.from("webhook_sources").select("*").order("created_at", { ascending: true })),
-        scope(supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500)),
-        scope(supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true })),
-        scope(supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200)),
-        scope(supabase.from("frigate_instances").select("*").order("created_at", { ascending: true })),
+        supabase.from("webhook_sources").select("*").order("created_at", { ascending: true }),
+        supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500),
+        supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true }),
+        supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200),
+        supabase.from("frigate_instances").select("*").order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = (e.data ?? []) as WebhookEvent[];
@@ -240,6 +228,7 @@ class WebhookStore {
     }
     this.emit();
   }
+
 
   private subscribeRealtime() {
     const ch = supabase
@@ -288,14 +277,6 @@ class WebhookStore {
   }
 
   // ─── Sources ───
-  private requireOrg(): string {
-    if (!this.activeOrgId) {
-      throw new Error(
-        "No active organization selected. Pick an organization in the top-right switcher before creating items."
-      );
-    }
-    return this.activeOrgId;
-  }
   async createSource(input: { name: string; slug: string; color?: string }) {
     const secret = crypto.randomUUID().replace(/-/g, "");
     const { error } = await supabase.from("webhook_sources").insert({
@@ -303,10 +284,10 @@ class WebhookStore {
       slug: input.slug,
       color: input.color ?? "#06b6d4",
       secret,
-      organization_id: this.requireOrg(),
     });
     if (error) throw error;
   }
+
   async updateSource(id: string, patch: Partial<Pick<WebhookSource, "name" | "enabled" | "color" | "secret">>) {
     const { error } = await supabase.from("webhook_sources").update(patch).eq("id", id);
     if (error) throw error;
@@ -337,7 +318,7 @@ class WebhookStore {
   // ─── Rules ───
   async addRule(pattern: string, source_id: string | null = null) {
     const { error } = await supabase.from("auto_read_rules").insert({
-      pattern, source_id, enabled: true, organization_id: this.requireOrg(),
+      pattern, source_id, enabled: true,
     });
     if (error) throw error;
   }
@@ -355,14 +336,12 @@ class WebhookStore {
     const secret = crypto.randomUUID().replace(/-/g, "");
     const color = input.color ?? "#3b82f6";
 
-    const orgId = this.requireOrg();
     // Paired webhook source so push notifications and polled events share the same source view
     const { data: src, error: srcErr } = await supabase.from("webhook_sources").insert({
       name: `Frigate · ${input.name}`,
       slug,
       color,
       secret,
-      organization_id: orgId,
     }).select("id").single();
     if (srcErr) throw srcErr;
 
@@ -377,13 +356,13 @@ class WebhookStore {
       mute_enabled: true,
       mute_start: "06:00:00",
       mute_end: "17:30:00",
-      organization_id: orgId,
     });
     if (error) {
       await supabase.from("webhook_sources").delete().eq("id", src.id);
       throw error;
     }
   }
+
   async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local" | "mute_enabled" | "mute_start" | "mute_end" | "offline_alert_enabled" | "offline_alert_minutes" | "offline_alert_recipients">>) {
     const cleaned = {
       ...patch,
