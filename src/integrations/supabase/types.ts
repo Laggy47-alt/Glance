@@ -42,15 +42,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "app_settings_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       auto_read_rules: {
         Row: {
@@ -78,13 +70,6 @@ export type Database = {
           source_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "auto_read_rules_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "auto_read_rules_source_id_fkey"
             columns: ["source_id"]
@@ -137,15 +122,7 @@ export type Database = {
           resolved_by?: string | null
           status?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "callout_requests_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       callout_settings: {
         Row: {
@@ -169,15 +146,7 @@ export type Database = {
           subject?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "callout_settings_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       camera_arm_audit: {
         Row: {
@@ -216,15 +185,7 @@ export type Database = {
           source?: string
           ts?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "camera_arm_audit_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       camera_arm_schedule_runs: {
         Row: {
@@ -248,15 +209,7 @@ export type Database = {
           last_run_at?: string
           organization_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "camera_arm_schedule_runs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       camera_arm_schedules: {
         Row: {
@@ -298,15 +251,7 @@ export type Database = {
           updated_by?: string | null
           weekday?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "camera_arm_schedules_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       camera_armed_state: {
         Row: {
@@ -336,15 +281,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "camera_armed_state_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       camera_offline_alerts: {
         Row: {
@@ -401,15 +338,7 @@ export type Database = {
           organization_id?: string
           since?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "camera_status_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       customer_camera_assignments: {
         Row: {
@@ -439,15 +368,7 @@ export type Database = {
           organization_id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "customer_camera_assignments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       customer_nvr_assignments: {
         Row: {
@@ -474,15 +395,7 @@ export type Database = {
           organization_id?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "customer_nvr_assignments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       customer_offline_instructions: {
         Row: {
@@ -515,15 +428,7 @@ export type Database = {
           updated_by?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "customer_offline_instructions_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       daily_report_configs: {
         Row: {
@@ -576,13 +481,6 @@ export type Database = {
             referencedRelation: "frigate_instances"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "daily_report_configs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
         ]
       }
       daily_report_runs: {
@@ -625,13 +523,6 @@ export type Database = {
             columns: ["config_id"]
             isOneToOne: false
             referencedRelation: "daily_report_configs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "daily_report_runs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -682,15 +573,7 @@ export type Database = {
           smtp_username?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "daily_report_settings_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       event_audit_log: {
         Row: {
@@ -723,15 +606,7 @@ export type Database = {
           organization_id?: string | null
           ts?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "event_audit_log_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       frigate_instances: {
         Row: {
@@ -803,15 +678,7 @@ export type Database = {
           poll_interval_seconds?: number
           source_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "frigate_instances_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       media_items: {
         Row: {
@@ -862,13 +729,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "media_items_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "media_items_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
@@ -913,13 +773,6 @@ export type Database = {
             referencedRelation: "media_items"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "media_tags_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
         ]
       }
       offline_instruction_acks: {
@@ -950,15 +803,7 @@ export type Database = {
           since?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "offline_instruction_acks_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       organization_members: {
         Row: {
@@ -982,15 +827,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["org_member_role"]
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "organization_members_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       organizations: {
         Row: {
@@ -1116,15 +953,7 @@ export type Database = {
           status?: string
           subject?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "super_callout_requests_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -1201,13 +1030,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "webhook_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "webhook_events_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
@@ -1247,15 +1069,7 @@ export type Database = {
           secret?: string
           slug?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "webhook_sources_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
