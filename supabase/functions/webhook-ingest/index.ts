@@ -161,6 +161,19 @@ Deno.serve(async (req) => {
         .eq("source_id", source.id)
         .maybeSingle();
 
+      // Skip ingest if this camera is currently disarmed (schedule or manual)
+      if (inst && camera) {
+        const { data: armRow } = await supabase
+          .from("camera_armed_state")
+          .select("armed")
+          .eq("instance_id", inst.id)
+          .eq("camera", camera)
+          .maybeSingle();
+        if (armRow && armRow.armed === false) {
+          return json({ ok: true, skipped: "disarmed", camera, instance_id: inst.id });
+        }
+      }
+
       if (inst && eid) {
         // If the payload references snapshot/clip via Frigate paths, rewrite as proxy paths
         for (const k of [...SNAPSHOT_KEYS, ...CLIP_KEYS]) {
