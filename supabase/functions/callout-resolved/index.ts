@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
         html,
       });
     } finally {
-      await client.close();
+      try { await client.close(); } catch { /* connection may have failed to open */ }
     }
 
     return new Response(JSON.stringify({ ok: true, recipient }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

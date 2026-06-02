@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
         html,
       });
     } finally {
-      await client.close();
+      try { await client.close(); } catch { /* connection may have failed to open */ }
     }
 
 
