@@ -2,15 +2,13 @@ import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { pingSupabase, hasOfflineSession } from "@/lib/offlineMode";
 
-const SKIP_PATHS = ["/offline"];
-const CHECK_INTERVAL_MS = 20_000;
-const FAILURES_BEFORE_REDIRECT = 2;
+const SKIP_PATHS = ["/offline", "/login"];
+const CHECK_INTERVAL_MS = 30_000;
+// Far less aggressive: only fall back to /offline after 4 consecutive failures
+// (~2 minutes of total unreachability), and never auto-redirect once a user is
+// signed in — interactive errors are easier to debug than a forced offline page.
+const FAILURES_BEFORE_REDIRECT = 4;
 
-/**
- * Watches Supabase reachability in the background. When the backend is
- * unreachable for 2 consecutive probes, redirects the user to /offline so the
- * platform owner can still sign in with emergency diagnostics credentials.
- */
 export function BackendWatchdog() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,7 +18,7 @@ export function BackendWatchdog() {
     let cancelled = false;
     const check = async () => {
       if (SKIP_PATHS.includes(location.pathname)) return;
-      const r = await pingSupabase(6_000);
+      const r = await pingSupabase(8_000);
       if (cancelled) return;
       if (r.ok) {
         failures.current = 0;
