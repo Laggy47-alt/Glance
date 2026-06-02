@@ -116,8 +116,18 @@ Deno.serve(async (req) => {
 
     if (!inst.offline_alert_enabled) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
-    const due = states.filter((s) => !s.online && (now - new Date(s.since).getTime()) >= thresholdMs);
+    let due = states.filter((s) => !s.online && (now - new Date(s.since).getTime()) >= thresholdMs);
     if (!due.length) { results.push({ instance: inst.name, alerted: 0 }); continue; }
+
+    // Skip disarmed cameras — don't email when a schedule has them off.
+    const { data: armedRows } = await supabase
+      .from("camera_armed_state")
+      .select("camera, armed")
+      .eq("instance_id", inst.id)
+      .in("camera", due.map((d) => d.camera));
+    const disarmed = new Set<string>((armedRows ?? []).filter((r: any) => r.armed === false).map((r: any) => r.camera));
+    if (disarmed.size) due = due.filter((d) => !disarmed.has(d.camera));
+    if (!due.length) { results.push({ instance: inst.name, alerted: 0, skipped_disarmed: disarmed.size }); continue; }
 
     // Skip ones already alerted for this streak
     const { data: existingAlerts } = await supabase
