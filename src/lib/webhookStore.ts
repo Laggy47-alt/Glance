@@ -352,7 +352,7 @@ class WebhookStore {
       api_key: input.api_key || null,
       color,
       is_local: input.is_local ?? false,
-      poll_enabled: input.is_local ? false : true,
+      poll_enabled: false,
       mute_enabled: true,
       mute_start: "06:00:00",
       mute_end: "17:30:00",
