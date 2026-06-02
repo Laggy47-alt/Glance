@@ -121,8 +121,11 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   for (const ev of events) {
     const startMs = Math.floor((ev.start_time ?? 0) * 1000);
     if (startMs > maxStart) maxStart = startMs;
+    // Skip disarmed cameras — still advance maxStart so we don't re-scan them.
+    if (disarmed.has(ev.camera)) continue;
     const score = ev.top_score ?? ev.score ?? null;
     const topic = `frigate/${ev.camera}/${ev.label}`;
+
 
     const { data: inserted, error: insErr } = await supabase
       .from("webhook_events")
@@ -198,6 +201,8 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
     for (const rv of reviews) {
       const startMs = Math.floor((rv.start_time ?? 0) * 1000);
       if (startMs > maxStart) maxStart = startMs;
+      if (disarmed.has(rv.camera)) continue;
+
       const labels = rv.data?.objects?.join(",") ?? rv.data?.detections?.join(",") ?? null;
       const topic = `frigate/${rv.camera}/review/${rv.severity}`;
       const fid = `review-${rv.id}`;
