@@ -100,8 +100,19 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   const sinceSec = Math.floor(sinceMs / 1000);
   const orgId = inst.organization_id;
 
+  // Skip ingesting events for cameras that are currently disarmed
+  // (set by the arm-scheduler based on the user's schedules).
+  const { data: armedRows } = await supabase
+    .from("camera_armed_state")
+    .select("camera, armed")
+    .eq("instance_id", inst.id);
+  const disarmed = new Set<string>(
+    (armedRows ?? []).filter((r: any) => r.armed === false).map((r: any) => r.camera as string),
+  );
+
   const evUrl = `${base}/api/events?after=${sinceSec}&limit=100&include_thumbnails=0`;
   const events = await fetchJson<FrigateEvent[]>(evUrl, inst.api_key);
+
 
   let insertedEvents = 0;
   let insertedMedia = 0;
@@ -110,8 +121,11 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   for (const ev of events) {
     const startMs = Math.floor((ev.start_time ?? 0) * 1000);
     if (startMs > maxStart) maxStart = startMs;
+    // Skip disarmed cameras — still advance maxStart so we don't re-scan them.
+    if (disarmed.has(ev.camera)) continue;
     const score = ev.top_score ?? ev.score ?? null;
     const topic = `frigate/${ev.camera}/${ev.label}`;
+
 
     const { data: inserted, error: insErr } = await supabase
       .from("webhook_events")
@@ -187,6 +201,8 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
     for (const rv of reviews) {
       const startMs = Math.floor((rv.start_time ?? 0) * 1000);
       if (startMs > maxStart) maxStart = startMs;
+      if (disarmed.has(rv.camera)) continue;
+
       const labels = rv.data?.objects?.join(",") ?? rv.data?.detections?.join(",") ?? null;
       const topic = `frigate/${rv.camera}/review/${rv.severity}`;
       const fid = `review-${rv.id}`;
