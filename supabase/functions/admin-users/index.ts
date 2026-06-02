@@ -172,8 +172,10 @@ async function ensureBootstrapOrg(a: ReturnType<typeof admin>): Promise<string> 
   if (byId) {
     const { data: slugOwner } = await a.from("organizations").select("id").eq("slug", ABC_ORG_SLUG).maybeSingle();
     const slugOwnerId = (slugOwner as { id?: string } | null)?.id;
-    const patch = slugOwnerId && slugOwnerId !== ABC_ORG_ID ? { name: ABC_ORG_NAME } : { slug: ABC_ORG_SLUG, name: ABC_ORG_NAME };
-    await a.from("organizations").update(patch).eq("id", ABC_ORG_ID);
+    if (slugOwnerId && slugOwnerId !== ABC_ORG_ID) {
+      await a.from("organizations").update({ slug: `${ABC_ORG_SLUG}-old-${slugOwnerId.slice(0, 8)}` }).eq("id", slugOwnerId);
+    }
+    await a.from("organizations").update({ slug: ABC_ORG_SLUG, name: ABC_ORG_NAME }).eq("id", ABC_ORG_ID);
     return ABC_ORG_ID;
   }
   const { data: bySlug } = await a.from("organizations").select("id").eq("slug", ABC_ORG_SLUG).maybeSingle();
@@ -482,10 +484,11 @@ Deno.serve(async (req) => {
       const contact_email_raw = String(body.contact_email ?? "").trim();
       const contact_email = contact_email_raw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact_email_raw) ? contact_email_raw : null;
 
-      const email = buildEmail(username, org.slug);
+      const orgSlug = org.id === ABC_ORG_ID ? ABC_ORG_SLUG : org.slug;
+      const email = buildEmail(username, orgSlug);
       const { data: created, error } = await a.auth.admin.createUser({
         email, password, email_confirm: true,
-        user_metadata: { username, display_name, must_change_password: true, org_slug: org.slug },
+        user_metadata: { username, display_name, must_change_password: true, org_slug: orgSlug },
       });
       if (error) return json({ ok: false, error: error.message }, 400);
       const newId = created.user!.id;

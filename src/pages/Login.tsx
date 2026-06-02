@@ -47,13 +47,15 @@ const Login = () => {
   }
 
   const attemptSignIn = async (u: string, p: string) => {
-    // Try ABC first, then fall back to the legacy "super" slug for upgraded installs.
-    let { error: err } = await signInWithUsername(u, p, ORG_SLUG);
-    if (err) {
-      const fallback = await signInWithUsername(u, p, "super");
-      err = fallback.error ?? null;
+    // Try ABC first, then known legacy/fallback slugs from upgraded self-host installs.
+    const slugs = [ORG_SLUG, "abc-2026-canonical", "super"];
+    let lastError: { message: string } | null = null;
+    for (const slug of slugs) {
+      const { error: err } = await signInWithUsername(u, p, slug);
+      if (!err) return null;
+      lastError = err;
     }
-    return err;
+    return lastError;
   };
 
   const submit = async (e: React.FormEvent) => {
