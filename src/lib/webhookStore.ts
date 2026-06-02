@@ -318,7 +318,7 @@ class WebhookStore {
   // ─── Rules ───
   async addRule(pattern: string, source_id: string | null = null) {
     const { error } = await supabase.from("auto_read_rules").insert({
-      pattern, source_id, enabled: true, organization_id: this.requireOrg(),
+      pattern, source_id, enabled: true,
     });
     if (error) throw error;
   }
@@ -336,14 +336,12 @@ class WebhookStore {
     const secret = crypto.randomUUID().replace(/-/g, "");
     const color = input.color ?? "#3b82f6";
 
-    const orgId = this.requireOrg();
     // Paired webhook source so push notifications and polled events share the same source view
     const { data: src, error: srcErr } = await supabase.from("webhook_sources").insert({
       name: `Frigate · ${input.name}`,
       slug,
       color,
       secret,
-      organization_id: orgId,
     }).select("id").single();
     if (srcErr) throw srcErr;
 
@@ -358,13 +356,13 @@ class WebhookStore {
       mute_enabled: true,
       mute_start: "06:00:00",
       mute_end: "17:30:00",
-      organization_id: orgId,
     });
     if (error) {
       await supabase.from("webhook_sources").delete().eq("id", src.id);
       throw error;
     }
   }
+
   async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local" | "mute_enabled" | "mute_start" | "mute_end" | "offline_alert_enabled" | "offline_alert_minutes" | "offline_alert_recipients">>) {
     const cleaned = {
       ...patch,
