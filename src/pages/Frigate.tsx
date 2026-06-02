@@ -94,7 +94,7 @@ const Frigate = () => {
   return (
     <DashboardLayout
       title="Frigate NVR"
-      subtitle="Connect multiple Frigate instances — events stream in via push and polling"
+      subtitle="Connect multiple Frigate instances — events stream in via push (webhook)"
       actions={
         <div className="flex items-center gap-2">
           {store.frigates.length > 0 && (
