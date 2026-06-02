@@ -105,9 +105,44 @@ const Wall = () => {
 
   const activeFilterCount = cameraFilter.size + labelFilter.size;
 
-  // Push-only mode: Frigate posts events via webhook-ingest; no client-side
-  // polling of Frigate REST APIs. Realtime + DB safety-net handles updates.
-  void pollOwnerRef;
+  const pollableFrigates = useMemo(
+    () => store.frigates.filter((f) => f.enabled && f.poll_enabled && !f.is_local),
+    [store.frigates]
+  );
+  const pollableSignature = useMemo(
+    () => pollableFrigates.map((f) => `${f.id}:${f.poll_interval_seconds}`).join("|"),
+    [pollableFrigates]
+  );
+
+  useEffect(() => {
+    if (!store.loaded || pollableFrigates.length === 0) return;
+    let stopped = false;
+    let running = false;
+    const owner = pollOwnerRef.current;
+    const minInterval = Math.min(...pollableFrigates.map((f) => Math.max(5, f.poll_interval_seconds || 10))) * 1000;
+    const intervalMs = Math.max(5_000, Math.min(minInterval, 15_000));
+
+    const poll = async () => {
+      if (stopped || running || document.visibilityState !== "visible") return;
+      if (!claimLiveWallPollLock(owner)) return;
+      running = true;
+      try {
+        await Promise.allSettled(pollableFrigates.map((f) => store.pollFrigateNow(f.id)));
+        if (!stopped) await store.refreshAll();
+      } finally {
+        running = false;
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), intervalMs);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      releaseLiveWallPollLock(owner);
+    };
+  }, [store, store.loaded, pollableFrigates, pollableSignature]);
+
 
   // Helper: find best media match for an event (frigate_event_id, then event_id, then camera+time window)
   const findMedia = (e: WebhookEvent, kind: "snapshot" | "clip") => {
