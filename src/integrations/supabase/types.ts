@@ -682,6 +682,7 @@ export type Database = {
       }
       media_items: {
         Row: {
+          archived: boolean
           camera: string | null
           event_id: string | null
           frigate_event_id: string | null
@@ -695,6 +696,7 @@ export type Database = {
           url: string
         }
         Insert: {
+          archived?: boolean
           camera?: string | null
           event_id?: string | null
           frigate_event_id?: string | null
@@ -708,6 +710,7 @@ export type Database = {
           url: string
         }
         Update: {
+          archived?: boolean
           camera?: string | null
           event_id?: string | null
           frigate_event_id?: string | null
