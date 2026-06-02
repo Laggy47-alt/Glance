@@ -270,6 +270,7 @@ const Wall = () => {
     const freshOnes: Alert[] = [];
     for (const m of store.media) {
       if (m.kind !== "clip") continue;
+      if (m.archived) continue;
       const key = `m:${m.id}`;
       if (seenRef.current.has(key)) continue;
       // Skip muted NVR (by source or instance)
@@ -361,6 +362,11 @@ const Wall = () => {
     if (a.event) {
       await supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", a.event.id);
     }
+    // For media-only alerts (no backing event), persist ACK on the media row
+    // so other operators' walls also drop it via realtime.
+    if (!a.event && a.clip) {
+      await supabase.from("media_items").update({ archived: true }).eq("id", a.clip.id);
+    }
   };
 
   // Dismiss = ACK. Operators must explicitly acknowledge alerts; there is
@@ -371,12 +377,19 @@ const Wall = () => {
   // Sync ACKs across users: if an event becomes archived in the store
   // (e.g. another user pressed ACK), remove it from this user's wall too.
   useEffect(() => {
-    const archivedIds = new Set(
+    const archivedEventIds = new Set(
       store.events.filter((e) => e.archived).map((e) => e.id)
     );
-    if (!archivedIds.size) return;
-    setAlerts((prev) => prev.filter((a) => !(a.event && archivedIds.has(a.event.id))));
-  }, [store.events]);
+    const archivedMediaIds = new Set(
+      store.media.filter((m) => m.archived).map((m) => m.id)
+    );
+    if (!archivedEventIds.size && !archivedMediaIds.size) return;
+    setAlerts((prev) => prev.filter((a) => {
+      if (a.event && archivedEventIds.has(a.event.id)) return false;
+      if (!a.event && a.clip && archivedMediaIds.has(a.clip.id)) return false;
+      return true;
+    }));
+  }, [store.events, store.media]);
 
   // Per-camera follow-up: when a new alert arrives for the same camera within
   // CAMERA_FOLLOWUP_MS, the previous un-ACKed alert for that camera is

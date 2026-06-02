@@ -47,6 +47,7 @@ export type MediaItem = {
   ts: string;
   instance_id?: string | null;
   frigate_event_id?: string | null;
+  archived?: boolean;
 };
 
 export type FrigateInstance = {
@@ -261,6 +262,7 @@ class WebhookStore {
         const row = (p.new ?? p.old) as MediaItem;
         if (!this.matchesOrg(row)) return;
         if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 200);
+        else if (p.eventType === "UPDATE") this.media = this.media.map((x) => x.id === (p.new as MediaItem).id ? (p.new as MediaItem) : x);
         else if (p.eventType === "DELETE") this.media = this.media.filter((x) => x.id !== (p.old as MediaItem).id);
         this.emit();
       })
