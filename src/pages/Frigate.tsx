@@ -94,7 +94,7 @@ const Frigate = () => {
   return (
     <DashboardLayout
       title="Frigate NVR"
-      subtitle="Connect multiple Frigate instances — events stream in via push (webhook)"
+      subtitle="Connect multiple Frigate instances — events stream in via push and polling"
       actions={
         <div className="flex items-center gap-2">
           {store.frigates.length > 0 && (
@@ -216,18 +216,34 @@ const Frigate = () => {
 
                     <div className="grid sm:grid-cols-3 gap-3 text-xs">
                       <div className="space-y-1">
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Mode</Label>
-                        <p className="tabular-nums">Push (webhook)</p>
+                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Last poll</Label>
+                        <p className="tabular-nums">{f.last_polled_at ? new Date(f.last_polled_at).toLocaleString() : "—"}</p>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Last event</Label>
                         <p className="tabular-nums">{f.last_event_ts ? new Date(f.last_event_ts).toLocaleString() : "—"}</p>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Last poll</Label>
-                        <p className="tabular-nums text-muted-foreground">{f.last_polled_at ? new Date(f.last_polled_at).toLocaleString() : "—"}</p>
+                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Polling</Label>
+                        <div className="flex items-center gap-2">
+                          <Switch checked={f.poll_enabled} onCheckedChange={(v) => store.updateFrigate(f.id, { poll_enabled: v })} />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={3600}
+                            value={f.poll_interval_seconds}
+                            onChange={(e) => {
+                              const n = Math.max(1, Math.min(3600, Math.round(Number(e.target.value) || 0)));
+                              if (n !== f.poll_interval_seconds) store.updateFrigate(f.id, { poll_interval_seconds: n });
+                            }}
+                            className="h-7 w-16 bg-secondary border-border text-xs tabular-nums"
+                            disabled={!f.poll_enabled}
+                          />
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">sec</span>
+                        </div>
                       </div>
                     </div>
+
 
 
                     <NvrSchedulesPanel inst={f} />
