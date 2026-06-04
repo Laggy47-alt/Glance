@@ -27,12 +27,11 @@ type Alert = {
 
 const LIVE_WALL_POLL_LOCK_KEY = "abc-glance.live-wall-poll-lock";
 const LIVE_WALL_POLL_LOCK_TTL_MS = 20_000;
-const LIVE_ALERT_WINDOW_MS = 5_000;
-
-function isWithinLiveAlertWindow(ts: string) {
-  const ms = new Date(ts).getTime();
-  return Number.isFinite(ms) && ms >= Date.now() - LIVE_ALERT_WINDOW_MS;
-}
+// Grace window applied around the wall's mount time. Any alert whose ts is
+// older than (mountedAt - grace) is treated as historical backfill and
+// suppressed. Anything ingested after mount surfaces regardless of how late
+// Frigate published the event.
+const LIVE_ALERT_MOUNT_GRACE_MS = 30_000;
 
 function claimLiveWallPollLock(owner: string) {
   try {
@@ -204,7 +203,8 @@ const Wall = () => {
       if (e.archived || e.read) continue;
       const key = e.id;
       if (seenRef.current.has(key)) continue;
-      if (!isWithinLiveAlertWindow(e.ts)) { seenRef.current.add(key); continue; }
+      const eMs = new Date(e.ts).getTime();
+      if (!Number.isFinite(eMs) || eMs < mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) { seenRef.current.add(key); continue; }
       // Skip alerts whose NVR is currently muted on schedule
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
       // Skip alerts for cameras that are currently disarmed
@@ -232,7 +232,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (new Date(e.ts).getTime() >= mountedAtRef.current - LIVE_ALERT_WINDOW_MS) freshOnes.push(alert);
+      if (eMs >= mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
@@ -269,7 +269,8 @@ const Wall = () => {
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
       // Skip cameras that are currently disarmed
       if (isCameraDisarmed(m.source_id, m.instance_id, m.camera)) { seenRef.current.add(key); continue; }
-      if (!isWithinLiveAlertWindow(m.ts)) { seenRef.current.add(key); continue; }
+      const mMsFloor = new Date(m.ts).getTime();
+      if (!Number.isFinite(mMsFloor) || mMsFloor < mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) { seenRef.current.add(key); continue; }
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
@@ -306,7 +307,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (mMs >= mountedAtRef.current - LIVE_ALERT_WINDOW_MS) freshOnes.push(alert);
+      if (mMs >= mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
