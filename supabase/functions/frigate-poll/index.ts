@@ -96,7 +96,13 @@ Deno.serve(async (req) => {
 
 async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateInstance) {
   const base = trimUrl(inst.base_url);
-  const sinceMs = inst.last_event_ts ? new Date(inst.last_event_ts).getTime() : Date.now() - 24 * 3600 * 1000;
+  // First-time poll: start from "now" (minus a small overlap) so we never
+  // back-fill historical events from the NVR. Subsequent polls use the
+  // last_event_ts cursor for true incremental ingestion.
+  const nowMs = Date.now();
+  const sinceMs = inst.last_event_ts
+    ? new Date(inst.last_event_ts).getTime()
+    : nowMs - 10 * 1000;
   const sinceSec = Math.floor(sinceMs / 1000);
   const orgId = inst.organization_id;
 
