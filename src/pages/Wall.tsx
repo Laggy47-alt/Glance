@@ -271,14 +271,25 @@ const Wall = () => {
       if (isCameraDisarmed(m.source_id, m.instance_id, m.camera)) { seenRef.current.add(key); continue; }
       const mMsFloor = new Date(m.ts).getTime();
       if (!Number.isFinite(mMsFloor) || mMsFloor < mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) { seenRef.current.add(key); continue; }
-      const alreadyCovered = [...seenRef.current].some((k) => {
-        const ev = store.events.find((e) => e.id === k);
-        if (!ev) return false;
+      // Dedupe against any event row that represents the same Frigate alert,
+      // not just events we've already surfaced. Otherwise a clip + event pair
+      // ingested in the same poll renders as two cards.
+      const alreadyCovered = store.events.some((ev) => {
         if (ev.frigate_event_id && m.frigate_event_id && ev.frigate_event_id === m.frigate_event_id) return true;
         if (m.event_id && m.event_id === ev.id) return true;
         return false;
       });
       if (alreadyCovered) { seenRef.current.add(key); continue; }
+      // Dedupe against another clip for the same Frigate event id already
+      // surfaced this session (snapshot + clip arriving as two media rows).
+      if (m.frigate_event_id) {
+        const dupMedia = [...seenRef.current].some((k) => {
+          if (!k.startsWith("m:")) return false;
+          const other = store.media.find((x) => `m:${x.id}` === k);
+          return !!(other && other.frigate_event_id === m.frigate_event_id);
+        });
+        if (dupMedia) { seenRef.current.add(key); continue; }
+      }
       seenRef.current.add(key);
       const snapshot = store.media.find((x) =>
         x.kind === "snapshot" &&
