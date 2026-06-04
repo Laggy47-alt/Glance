@@ -269,7 +269,7 @@ const Wall = () => {
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
       // Skip cameras that are currently disarmed
       if (isCameraDisarmed(m.source_id, m.instance_id, m.camera)) { seenRef.current.add(key); continue; }
-      // Persist standalone clip alerts until ACKed (no staleness drop).
+      if (!isWithinLiveAlertWindow(m.ts)) { seenRef.current.add(key); continue; }
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
@@ -306,7 +306,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (mMs >= mountedAtRef.current - 5_000) freshOnes.push(alert);
+      if (mMs >= mountedAtRef.current - LIVE_ALERT_WINDOW_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
