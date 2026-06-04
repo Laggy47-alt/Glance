@@ -23,6 +23,10 @@ function jsonResponse(body: Record<string, unknown>, status: number) {
   });
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -35,7 +39,11 @@ Deno.serve(async (req) => {
       return new Response("Bad path", { status: 400, headers: corsHeaders });
     }
     const instanceId = segs[fpIdx + 1];
+    if (instanceId === "health") return jsonResponse({ ok: true, service: "frigate-proxy" }, 200);
+    if (!isUuid(instanceId)) return jsonResponse({ error: "invalid_instance_id" }, 400);
+
     const rest = segs.slice(fpIdx + 2).join("/");
+    if (!rest) return jsonResponse({ error: "missing_upstream_path" }, 400);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
