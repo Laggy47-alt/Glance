@@ -96,11 +96,10 @@ export function isFrigateMutedNow(
 }
 
 type Listener = () => void;
-const LIVE_EVENT_WINDOW_MS = 5_000;
-
-function liveCutoffIso() {
-  return new Date(Date.now() - LIVE_EVENT_WINDOW_MS).toISOString();
-}
+// Grace buffer applied to the live cursor on each poll so an event whose
+// start_time is slightly earlier than `cursor` (e.g. Frigate published it a
+// few seconds before the poller picked it up) still surfaces.
+const LIVE_CURSOR_GRACE_MS = 30_000;
 
 class WebhookStore {
   sources: WebhookSource[] = [];
