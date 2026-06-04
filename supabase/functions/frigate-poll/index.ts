@@ -59,7 +59,11 @@ function proxyUrl(instanceId: string, path: string) {
   return `/${instanceId}${path.startsWith("/") ? path : "/" + path}`;
 }
 
-const LIVE_EVENT_WINDOW_MS = 5 * 1000;
+// Maximum age of a Frigate event we will ingest. Generous enough to cover
+// poll-interval jitter and brief poller outages, but small enough that a
+// freshly-enabled instance does not backfill days of history. The Wall
+// applies its own mount-time floor so reloads still ignore older rows.
+const MAX_EVENT_AGE_MS = 5 * 60 * 1000;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
