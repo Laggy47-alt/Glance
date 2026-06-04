@@ -220,17 +220,11 @@ class WebhookStore {
 
   async refreshAll() {
     try {
-      const liveCutoff = liveCutoffIso();
       const [s, e, r, m, f] = await Promise.all([
         supabase.from("webhook_sources").select("*").order("created_at", { ascending: true }),
-        supabase.from("webhook_events").select("*")
-          .eq("read", false)
-          .gt("ts", liveCutoff)
-          .order("ts", { ascending: false }).limit(100),
+        supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500),
         supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true }),
-        supabase.from("media_items").select("*")
-          .gt("ts", liveCutoff)
-          .order("ts", { ascending: false }).limit(100),
+        supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200),
         supabase.from("frigate_instances").select("*").order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
