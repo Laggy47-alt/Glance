@@ -27,6 +27,12 @@ type Alert = {
 
 const LIVE_WALL_POLL_LOCK_KEY = "abc-glance.live-wall-poll-lock";
 const LIVE_WALL_POLL_LOCK_TTL_MS = 20_000;
+const LIVE_ALERT_WINDOW_MS = 5_000;
+
+function isWithinLiveAlertWindow(ts: string) {
+  const ms = new Date(ts).getTime();
+  return Number.isFinite(ms) && ms >= Date.now() - LIVE_ALERT_WINDOW_MS;
+}
 
 function claimLiveWallPollLock(owner: string) {
   try {
@@ -65,19 +71,15 @@ const Wall = () => {
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
-    store.events.forEach((e) => e.camera && set.add(e.camera));
-    store.media.forEach((m) => m.camera && set.add(m.camera));
+    alerts.forEach((a) => a.camera && set.add(a.camera));
     return Array.from(set).sort();
-  }, [store.events, store.media]);
+  }, [alerts]);
 
   const availableLabels = useMemo(() => {
     const set = new Set<string>();
-    store.events.forEach((e) => {
-      const l = e.label ?? e.kind;
-      if (l) set.add(l);
-    });
+    alerts.forEach((a) => a.label && set.add(a.label));
     return Array.from(set).sort();
-  }, [store.events]);
+  }, [alerts]);
 
   const matchesFilter = (camera: string, label: string) => {
     if (cameraFilter.size > 0 && !cameraFilter.has(camera)) return false;
@@ -191,23 +193,22 @@ const Wall = () => {
     return disarmedKeys.has(`${inst.id}::${camera}`);
   };
 
-  // Build alerts from incoming events. Pair media as it arrives.
-  // Alerts persist for any un-archived event so they survive navigation away from the Wall.
+  // Build alerts only from live events. Once shown, unacknowledged alerts stay
+  // on this wall until an operator ACKs them; reloads must not backfill history.
   useEffect(() => {
     if (!store.loaded) return;
     if (!disarmedLoaded) return;
     const newOnes: Alert[] = [];
     const freshOnes: Alert[] = [];
     for (const e of store.events) {
-      if (e.archived) continue;
+      if (e.archived || e.read) continue;
       const key = e.id;
       if (seenRef.current.has(key)) continue;
+      if (!isWithinLiveAlertWindow(e.ts)) { seenRef.current.add(key); continue; }
       // Skip alerts whose NVR is currently muted on schedule
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
       // Skip alerts for cameras that are currently disarmed
       if (isCameraDisarmed(e.source_id, null, e.camera)) { seenRef.current.add(key); continue; }
-      // Show ALL un-archived events, even ones that pre-date this Wall session.
-      // Alerts must persist until an operator ACKs them (archives in DB).
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
@@ -231,7 +232,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (new Date(e.ts).getTime() >= mountedAtRef.current - 5_000) freshOnes.push(alert);
+      if (new Date(e.ts).getTime() >= mountedAtRef.current - LIVE_ALERT_WINDOW_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
@@ -268,7 +269,7 @@ const Wall = () => {
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
       // Skip cameras that are currently disarmed
       if (isCameraDisarmed(m.source_id, m.instance_id, m.camera)) { seenRef.current.add(key); continue; }
-      // Persist standalone clip alerts until ACKed (no staleness drop).
+      if (!isWithinLiveAlertWindow(m.ts)) { seenRef.current.add(key); continue; }
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
@@ -305,7 +306,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (mMs >= mountedAtRef.current - 5_000) freshOnes.push(alert);
+      if (mMs >= mountedAtRef.current - LIVE_ALERT_WINDOW_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));

@@ -98,6 +98,10 @@ export function isFrigateMutedNow(
 type Listener = () => void;
 const LIVE_EVENT_WINDOW_MS = 5_000;
 
+function liveCutoffIso() {
+  return new Date(Date.now() - LIVE_EVENT_WINDOW_MS).toISOString();
+}
+
 class WebhookStore {
   sources: WebhookSource[] = [];
   events: WebhookEvent[] = [];
@@ -177,10 +181,11 @@ class WebhookStore {
 
   private async pollIncremental() {
     if (!this.loaded) return;
-    const liveCutoff = new Date(Date.now() - LIVE_EVENT_WINDOW_MS).toISOString();
+    const liveCutoff = liveCutoffIso();
     try {
       const [ev, md] = await Promise.all([
         supabase.from("webhook_events").select("*")
+          .eq("read", false)
           .gt("ts", liveCutoff)
           .order("ts", { ascending: false }).limit(100),
         supabase.from("media_items").select("*")
