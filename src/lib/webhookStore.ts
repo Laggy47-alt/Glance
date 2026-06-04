@@ -184,24 +184,33 @@ class WebhookStore {
 
   private async pollIncremental() {
     if (!this.loaded) return;
-    const liveCutoff = liveCutoffIso();
+    if (this.liveCursorMs === null) {
+      // First poll after init: anchor cursor at "now" so we don't replay
+      // any historical events that were already in the database.
+      this.liveCursorMs = Date.now();
+    }
+    const cursorIso = new Date(this.liveCursorMs - LIVE_CURSOR_GRACE_MS).toISOString();
     try {
       const [ev, md] = await Promise.all([
         supabase.from("webhook_events").select("*")
-          .eq("read", false)
-          .gt("ts", liveCutoff)
+          .gt("ts", cursorIso)
           .order("ts", { ascending: false }).limit(100),
         supabase.from("media_items").select("*")
-          .gt("ts", liveCutoff)
+          .gt("ts", cursorIso)
           .order("ts", { ascending: false }).limit(100),
       ]);
       let changed = false;
+      let maxSeen = this.liveCursorMs;
       if (ev.data && ev.data.length) {
         const existing = new Set(this.events.map((e) => e.id));
         const fresh = (ev.data as WebhookEvent[]).filter((e) => !existing.has(e.id));
         if (fresh.length) {
           this.events = [...fresh, ...this.events].slice(0, 500);
           changed = true;
+        }
+        for (const e of ev.data as WebhookEvent[]) {
+          const t = new Date(e.ts).getTime();
+          if (Number.isFinite(t) && t > maxSeen) maxSeen = t;
         }
       }
       if (md.data && md.data.length) {
@@ -211,7 +220,13 @@ class WebhookStore {
           this.media = [...fresh, ...this.media].slice(0, 200);
           changed = true;
         }
+        for (const m of md.data as MediaItem[]) {
+          const t = new Date(m.ts).getTime();
+          if (Number.isFinite(t) && t > maxSeen) maxSeen = t;
+        }
       }
+      // Advance cursor so the next poll only considers newer rows.
+      this.liveCursorMs = maxSeen;
       if (changed) this.emit();
     } catch { /* noop — next tick retries */ }
   }
