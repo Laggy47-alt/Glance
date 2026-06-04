@@ -269,7 +269,8 @@ const Wall = () => {
       if (isSourceMuted(m.source_id, m.instance_id)) { seenRef.current.add(key); continue; }
       // Skip cameras that are currently disarmed
       if (isCameraDisarmed(m.source_id, m.instance_id, m.camera)) { seenRef.current.add(key); continue; }
-      if (!isWithinLiveAlertWindow(m.ts)) { seenRef.current.add(key); continue; }
+      const mMsFloor = new Date(m.ts).getTime();
+      if (!Number.isFinite(mMsFloor) || mMsFloor < mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) { seenRef.current.add(key); continue; }
       const alreadyCovered = [...seenRef.current].some((k) => {
         const ev = store.events.find((e) => e.id === k);
         if (!ev) return false;
