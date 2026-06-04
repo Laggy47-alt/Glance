@@ -3,7 +3,8 @@
 // e.g.  /frigate-proxy/abc123/api/events/<eid>/snapshot.jpg
 //       /frigate-proxy/abc123/api/<camera>/latest.jpg
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+// No external imports: avoid cold-start fetches that can blow the
+// self-hosted edge-runtime wall-clock budget. We talk to PostgREST directly.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
