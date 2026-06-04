@@ -203,7 +203,8 @@ const Wall = () => {
       if (e.archived || e.read) continue;
       const key = e.id;
       if (seenRef.current.has(key)) continue;
-      if (!isWithinLiveAlertWindow(e.ts)) { seenRef.current.add(key); continue; }
+      const eMs = new Date(e.ts).getTime();
+      if (!Number.isFinite(eMs) || eMs < mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) { seenRef.current.add(key); continue; }
       // Skip alerts whose NVR is currently muted on schedule
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
       // Skip alerts for cameras that are currently disarmed
