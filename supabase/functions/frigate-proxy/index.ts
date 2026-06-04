@@ -73,15 +73,24 @@ Deno.serve(async (req) => {
     if (inst.api_key) upstreamHeaders["Authorization"] = `Bearer ${inst.api_key}`;
 
     let upstream: Response;
+    const controller = new AbortController();
+    // Must be lower than the edge-runtime wall-clock limit (~10s on self-hosted)
+    // so we always respond with proper CORS headers instead of being killed.
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
     try {
       upstream = await fetch(target, {
         method: req.method === "HEAD" ? "HEAD" : "GET",
         headers: upstreamHeaders,
-        signal: AbortSignal.timeout(15000),
+        signal: controller.signal,
       });
     } catch (e) {
-      const message = (e as Error).message || "Unable to reach the NVR.";
-      return jsonResponse({ error: "nvr_unreachable", message, target }, 502);
+      const aborted = (e as Error).name === "AbortError";
+      const message = aborted
+        ? "The NVR did not respond within 7s."
+        : (e as Error).message || "Unable to reach the NVR.";
+      return jsonResponse({ error: "nvr_unreachable", message, target }, aborted ? 504 : 502);
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     const upstreamContentType = upstream.headers.get("content-type") ?? "";
