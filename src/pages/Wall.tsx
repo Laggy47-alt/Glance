@@ -27,12 +27,11 @@ type Alert = {
 
 const LIVE_WALL_POLL_LOCK_KEY = "abc-glance.live-wall-poll-lock";
 const LIVE_WALL_POLL_LOCK_TTL_MS = 20_000;
-const LIVE_ALERT_WINDOW_MS = 5_000;
-
-function isWithinLiveAlertWindow(ts: string) {
-  const ms = new Date(ts).getTime();
-  return Number.isFinite(ms) && ms >= Date.now() - LIVE_ALERT_WINDOW_MS;
-}
+// Grace window applied around the wall's mount time. Any alert whose ts is
+// older than (mountedAt - grace) is treated as historical backfill and
+// suppressed. Anything ingested after mount surfaces regardless of how late
+// Frigate published the event.
+const LIVE_ALERT_MOUNT_GRACE_MS = 30_000;
 
 function claimLiveWallPollLock(owner: string) {
   try {
