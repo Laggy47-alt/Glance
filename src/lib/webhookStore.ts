@@ -96,6 +96,7 @@ export function isFrigateMutedNow(
 }
 
 type Listener = () => void;
+const LIVE_EVENT_WINDOW_MS = 5_000;
 
 class WebhookStore {
   sources: WebhookSource[] = [];
@@ -176,15 +177,14 @@ class WebhookStore {
 
   private async pollIncremental() {
     if (!this.loaded) return;
-    const latestEventTs = this.events[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
-    const latestMediaTs = this.media[0]?.ts ?? new Date(Date.now() - 60_000).toISOString();
+    const liveCutoff = new Date(Date.now() - LIVE_EVENT_WINDOW_MS).toISOString();
     try {
       const [ev, md] = await Promise.all([
         supabase.from("webhook_events").select("*")
-          .gt("ts", latestEventTs)
+          .gt("ts", liveCutoff)
           .order("ts", { ascending: false }).limit(100),
         supabase.from("media_items").select("*")
-          .gt("ts", latestMediaTs)
+          .gt("ts", liveCutoff)
           .order("ts", { ascending: false }).limit(100),
       ]);
       let changed = false;
@@ -206,6 +206,11 @@ class WebhookStore {
       }
       if (changed) this.emit();
     } catch { /* noop — next tick retries */ }
+  }
+
+  async refreshLiveWindow() {
+    if (!this.loaded) return;
+    await this.pollIncremental();
   }
 
   async refreshAll() {

@@ -59,18 +59,9 @@ const Wall = () => {
   const [auditFor, setAuditFor] = useState<Alert | null>(null);
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
   const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
-  const autoArchivedRef = useRef<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(new Set());
   const mountedAtRef = useRef<number>(Date.now());
   const pollOwnerRef = useRef<string>(`wall-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`);
-  // Per-camera follow-up window: if new motion fires on the SAME camera
-  // within this window, the previous un-ACKed alert for that camera is
-  // auto-ACKed (archived) and replaced by the newer one. Outside the window,
-  // alerts MUST be ACKed by an operator — they are never silently dismissed.
-  // Bundle window: events on the same camera within this window are shown as
-  // a single alert (the latest one). After this window of silence, the next
-  // event becomes a brand-new alert. Same rule for every camera.
-  const CAMERA_FOLLOWUP_MS = 10_000;
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
@@ -128,7 +119,7 @@ const Wall = () => {
       running = true;
       try {
         await Promise.allSettled(pollableFrigates.map((f) => store.pollFrigateNow(f.id)));
-        if (!stopped) await store.refreshAll();
+        if (!stopped) await store.refreshLiveWindow();
       } finally {
         running = false;
       }
@@ -390,46 +381,6 @@ const Wall = () => {
       return true;
     }));
   }, [store.events, store.media]);
-
-  // Per-camera follow-up: when a new alert arrives for the same camera within
-  // CAMERA_FOLLOWUP_MS, the previous un-ACKed alert for that camera is
-  // auto-ACKed and replaced by the newest one. Outside that window, alerts
-  // persist until an operator explicitly ACKs them.
-  useEffect(() => {
-    setAlerts((prev) => {
-      const byCamera = new Map<string, Alert[]>();
-      prev.forEach((a) => {
-        const arr = byCamera.get(a.camera) ?? [];
-        arr.push(a);
-        byCamera.set(a.camera, arr);
-      });
-      const drop = new Set<string>();
-      byCamera.forEach((arr) => {
-        if (arr.length < 2) return;
-        const sorted = [...arr].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
-        for (let i = 1; i < sorted.length; i++) {
-          const older = sorted[i];
-          const newer = sorted[i - 1];
-          if (new Date(newer.ts).getTime() - new Date(older.ts).getTime() < CAMERA_FOLLOWUP_MS) {
-            if (autoArchivedRef.current.has(older.key)) { drop.add(older.key); continue; }
-            autoArchivedRef.current.add(older.key);
-            void logAudit({
-              alert_key: older.key,
-              event_id: older.event?.id ?? null,
-              action: "ack",
-              note: `auto-acked: superseded by newer motion on ${older.camera} within ${Math.round(CAMERA_FOLLOWUP_MS / 1000)}s`,
-            });
-            if (older.event) {
-              void supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", older.event.id);
-            }
-            drop.add(older.key);
-          }
-        }
-      });
-      if (!drop.size) return prev;
-      return prev.filter((a) => !drop.has(a.key));
-    });
-  }, [alerts, CAMERA_FOLLOWUP_MS]);
 
   const recentCount = useMemo(
     () => store.events.filter((e) => !e.archived && Date.now() - new Date(e.ts).getTime() < 5 * 60_000).length,

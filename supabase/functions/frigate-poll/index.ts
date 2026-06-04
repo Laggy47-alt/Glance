@@ -59,6 +59,8 @@ function proxyUrl(instanceId: string, path: string) {
   return `/${instanceId}${path.startsWith("/") ? path : "/" + path}`;
 }
 
+const LIVE_EVENT_WINDOW_MS = 5 * 1000;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -96,13 +98,15 @@ Deno.serve(async (req) => {
 
 async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateInstance) {
   const base = trimUrl(inst.base_url);
-  // First-time poll: start from "now" (minus a small overlap) so we never
-  // back-fill historical events from the NVR. Subsequent polls use the
-  // last_event_ts cursor for true incremental ingestion.
+  // Live wall ingestion is intentionally NOT a catch-up job. Every poll only
+  // accepts events that started in the last 5 seconds so page reloads or stale
+  // cursors can never back-fill old NVR history into the shared operator wall.
   const nowMs = Date.now();
+  const windowStartMs = nowMs - LIVE_EVENT_WINDOW_MS;
+  const cursorMs = inst.last_event_ts ? new Date(inst.last_event_ts).getTime() : null;
   const sinceMs = inst.last_event_ts
-    ? new Date(inst.last_event_ts).getTime()
-    : nowMs - 10 * 1000;
+    ? Math.max(cursorMs ?? windowStartMs, windowStartMs)
+    : windowStartMs;
   const sinceSec = Math.floor(sinceMs / 1000);
   const orgId = inst.organization_id;
 
@@ -127,6 +131,7 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   for (const ev of events) {
     const startMs = Math.floor((ev.start_time ?? 0) * 1000);
     if (startMs > maxStart) maxStart = startMs;
+    if (startMs < windowStartMs) continue;
     // Skip disarmed cameras — still advance maxStart so we don't re-scan them.
     if (disarmed.has(ev.camera)) continue;
     const score = ev.top_score ?? ev.score ?? null;
@@ -207,6 +212,7 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
     for (const rv of reviews) {
       const startMs = Math.floor((rv.start_time ?? 0) * 1000);
       if (startMs > maxStart) maxStart = startMs;
+      if (startMs < windowStartMs) continue;
       if (disarmed.has(rv.camera)) continue;
 
       const labels = rv.data?.objects?.join(",") ?? rv.data?.detections?.join(",") ?? null;
