@@ -105,12 +105,14 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   // Live wall ingestion is intentionally NOT a catch-up job. Every poll only
   // accepts events that started in the last 5 seconds so page reloads or stale
   // cursors can never back-fill old NVR history into the shared operator wall.
+  // Catch-up window: bound by MAX_EVENT_AGE_MS so a long outage doesn't
+  // drag in days of history, but wide enough that normal poll jitter never
+  // drops a real event.
   const nowMs = Date.now();
-  const windowStartMs = nowMs - LIVE_EVENT_WINDOW_MS;
+  const maxAgeStartMs = nowMs - MAX_EVENT_AGE_MS;
   const cursorMs = inst.last_event_ts ? new Date(inst.last_event_ts).getTime() : null;
-  const sinceMs = inst.last_event_ts
-    ? Math.max(cursorMs ?? windowStartMs, windowStartMs)
-    : windowStartMs;
+  const sinceMs = cursorMs ? Math.max(cursorMs, maxAgeStartMs) : maxAgeStartMs;
+  const windowStartMs = maxAgeStartMs;
   const sinceSec = Math.floor(sinceMs / 1000);
   const orgId = inst.organization_id;
 
