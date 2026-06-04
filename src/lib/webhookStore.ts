@@ -114,6 +114,10 @@ class WebhookStore {
   private listeners = new Set<Listener>();
   private channels: RealtimeChannel[] = [];
   private initialized = false;
+  // Cursor used by pollIncremental — events with ts <= cursor are considered
+  // historical backlog and ignored. Initialized lazily on first poll so a
+  // fresh page load never floods the wall with historical events.
+  private liveCursorMs: number | null = null;
 
   // Single-tenant: org scoping is a no-op. Kept for backwards compatibility
   // with callers that still invoke setActiveOrg(...).
