@@ -3,7 +3,8 @@
 // e.g.  /frigate-proxy/abc123/api/events/<eid>/snapshot.jpg
 //       /frigate-proxy/abc123/api/<camera>/latest.jpg
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+// No external imports: avoid cold-start fetches that can blow the
+// self-hosted edge-runtime wall-clock budget. We talk to PostgREST directly.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,16 +52,35 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "proxy_not_configured", message: "Missing backend proxy secrets." }, 500);
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
-    const { data: inst, error } = await supabase
-      .from("frigate_instances")
-      .select("base_url, api_key, enabled")
-      .eq("id", instanceId)
-      .maybeSingle();
-
-    if (error) {
-      return jsonResponse({ error: "instance_lookup_failed", message: error.message }, 500);
+    let inst: { base_url: string; api_key: string | null; enabled: boolean } | null = null;
+    try {
+      const lookupCtrl = new AbortController();
+      const lookupTimer = setTimeout(() => lookupCtrl.abort(), 3000);
+      const lookupRes = await fetch(
+        `${supabaseUrl}/rest/v1/frigate_instances?id=eq.${encodeURIComponent(instanceId)}&select=base_url,api_key,enabled&limit=1`,
+        {
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            Accept: "application/json",
+          },
+          signal: lookupCtrl.signal,
+        },
+      ).finally(() => clearTimeout(lookupTimer));
+      if (!lookupRes.ok) {
+        const body = await lookupRes.text().catch(() => "");
+        return jsonResponse({ error: "instance_lookup_failed", status: lookupRes.status, message: body.slice(0, 300) }, 500);
+      }
+      const rows = (await lookupRes.json()) as Array<{ base_url: string; api_key: string | null; enabled: boolean }>;
+      inst = rows[0] ?? null;
+    } catch (e) {
+      const aborted = (e as Error).name === "AbortError";
+      return jsonResponse({
+        error: "instance_lookup_failed",
+        message: aborted ? "DB lookup timed out after 3s." : (e as Error).message,
+      }, 500);
     }
+
     if (!inst) return textResponse("Instance not found", 404);
     if (!inst.enabled) return textResponse("Instance disabled", 403);
 
