@@ -353,6 +353,89 @@ supabase functions deploy admin-users --no-verify-jwt
 
 ---
 
+## 7a. Scheduled jobs (pg_cron)
+
+Several edge functions are **expected to run on a schedule** — they are not
+triggered by user actions. Without these the app appears to work but:
+
+- NVR status stays **Pending** and no events are ever pulled (`frigate-poll`)
+- Camera arm/disarm schedules never fire (`arm-scheduler`)
+- "Camera offline" alerts and escalations never go out (`camera-watch`, `escalate-offline`)
+- Daily reports never send (`daily-report-send`)
+
+On Lovable Cloud these are pre-scheduled. **On self-hosted Supabase you must
+schedule them yourself** with `pg_cron` + `pg_net`. Run this once in psql
+against your self-hosted DB:
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- Replace these two values:
+--   <FUNCTIONS_URL>     e.g. https://supabase.example.com/functions/v1
+--   <SERVICE_ROLE_KEY>  the project's service_role JWT
+do $$
+declare
+  base text := '<FUNCTIONS_URL>';
+  key  text := '<SERVICE_ROLE_KEY>';
+begin
+  perform cron.unschedule(jobname) from cron.job
+   where jobname in ('frigate-poll','arm-scheduler','camera-watch',
+                     'escalate-offline','daily-report-send');
+
+  perform cron.schedule('frigate-poll', '* * * * *', format($f$
+    select net.http_post(url:=%L, headers:=jsonb_build_object(
+      'Authorization','Bearer %s','Content-Type','application/json'),
+      body:='{}'::jsonb) $f$, base||'/frigate-poll', key));
+
+  perform cron.schedule('arm-scheduler', '* * * * *', format($f$
+    select net.http_post(url:=%L, headers:=jsonb_build_object(
+      'Authorization','Bearer %s','Content-Type','application/json'),
+      body:='{}'::jsonb) $f$, base||'/arm-scheduler', key));
+
+  perform cron.schedule('camera-watch', '* * * * *', format($f$
+    select net.http_post(url:=%L, headers:=jsonb_build_object(
+      'Authorization','Bearer %s','Content-Type','application/json'),
+      body:='{}'::jsonb) $f$, base||'/camera-watch', key));
+
+  perform cron.schedule('escalate-offline', '*/5 * * * *', format($f$
+    select net.http_post(url:=%L, headers:=jsonb_build_object(
+      'Authorization','Bearer %s','Content-Type','application/json'),
+      body:='{}'::jsonb) $f$, base||'/escalate-offline', key));
+
+  perform cron.schedule('daily-report-send', '*/5 * * * *', format($f$
+    select net.http_post(url:=%L, headers:=jsonb_build_object(
+      'Authorization','Bearer %s','Content-Type','application/json'),
+      body:='{}'::jsonb) $f$, base||'/daily-report-send', key));
+end $$;
+
+select jobname, schedule, active from cron.job order by jobname;
+```
+
+### Sanity-check manually
+
+After adding an NVR, fire the poller once instead of waiting a minute:
+
+```bash
+curl -i -X POST \
+  -H "Authorization: Bearer <SERVICE_ROLE_KEY>" \
+  https://supabase.example.com/functions/v1/frigate-poll
+```
+
+The response includes per-instance `events` / `reviews` / `media` counts, or
+an `error` string if the Supabase host can't reach the NVR. After a successful
+run the **Frigate** page badge flips from **Pending** → **Healthy** and
+events start appearing.
+
+### Inspect cron history
+
+```sql
+select * from cron.job_run_details order by start_time desc limit 20;
+```
+
+---
+
+
 ## 8. Backups, upgrades, troubleshooting
 
 ### 8.1 Backups
