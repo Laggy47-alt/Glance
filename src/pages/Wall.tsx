@@ -56,17 +56,29 @@ function releaseLiveWallPollLock(owner: string) {
 
 
 
+// Module-level singletons so unacknowledged alerts and dedup state survive
+// in-app navigation (Wall unmount/remount). A full page reload still resets
+// these, which keeps the "no historical backfill on reload" behavior.
+const wallAlertsStore: { alerts: Alert[]; seen: Set<string>; mountedAt: number } = {
+  alerts: [],
+  seen: new Set<string>(),
+  mountedAt: Date.now(),
+};
+
 const Wall = () => {
   const store = useWebhookStore();
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>(wallAlertsStore.alerts);
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [auditFor, setAuditFor] = useState<Alert | null>(null);
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
   const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
-  const seenRef = useRef<Set<string>>(new Set());
-  const mountedAtRef = useRef<number>(Date.now());
+  const seenRef = useRef<Set<string>>(wallAlertsStore.seen);
+  const mountedAtRef = useRef<number>(wallAlertsStore.mountedAt);
   const pollOwnerRef = useRef<string>(`wall-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`);
+
+  // Keep the module-level mirror in sync so a remount restores current alerts.
+  useEffect(() => { wallAlertsStore.alerts = alerts; }, [alerts]);
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
