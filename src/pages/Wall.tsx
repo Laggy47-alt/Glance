@@ -201,7 +201,7 @@ const Wall = () => {
     const newOnes: Alert[] = [];
     const freshOnes: Alert[] = [];
     for (const e of store.events) {
-      if (e.archived) continue;
+      if (e.archived || e.read) continue;
       const key = e.id;
       if (seenRef.current.has(key)) continue;
       if (!isWithinLiveAlertWindow(e.ts)) { seenRef.current.add(key); continue; }
