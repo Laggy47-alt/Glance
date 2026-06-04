@@ -307,7 +307,7 @@ const Wall = () => {
         receivedAt: Date.now(),
       };
       newOnes.push(alert);
-      if (mMs >= mountedAtRef.current - LIVE_ALERT_WINDOW_MS) freshOnes.push(alert);
+      if (mMs >= mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
