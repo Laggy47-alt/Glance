@@ -455,8 +455,9 @@ const Wall = () => {
   const archive = async (a: Alert) => {
     setAlerts((prev) => prev.filter((x) => x.key !== a.key));
     void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "ack" });
-    if (a.event) {
-      await supabase.from("webhook_events").update({ archived: true, read: true }).eq("id", a.event.id);
+    const eventIds = Array.from(new Set([...(a.eventIds ?? []), a.event?.id].filter((id): id is string => !!id)));
+    if (eventIds.length) {
+      await supabase.from("webhook_events").update({ archived: true, read: true }).in("id", eventIds);
     }
     // For media-only alerts (no backing event), persist ACK on the media row
     // so other operators' walls also drop it via realtime.
@@ -482,6 +483,7 @@ const Wall = () => {
     if (!archivedEventIds.size && !archivedMediaIds.size) return;
     setAlerts((prev) => prev.filter((a) => {
       if (a.event && archivedEventIds.has(a.event.id)) return false;
+      if ((a.eventIds ?? []).some((id) => archivedEventIds.has(id))) return false;
       if (!a.event && a.clip && archivedMediaIds.has(a.clip.id)) return false;
       return true;
     }));
