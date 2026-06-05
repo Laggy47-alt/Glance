@@ -313,6 +313,7 @@ const Wall = () => {
       const alert: Alert = {
         key,
         event: e,
+        eventIds: [e.id],
         clip,
         snapshot,
         camera,
@@ -326,7 +327,7 @@ const Wall = () => {
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
-      setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
+      setAlerts((prev) => prependUniqueIncidents(prev, newOnes));
       if (freshOnes.length && !muted) {
         try {
           const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -399,6 +400,7 @@ const Wall = () => {
       const alert: Alert = {
         key,
         event: null,
+        eventIds: [],
         clip: m,
         snapshot,
         camera,
@@ -412,7 +414,7 @@ const Wall = () => {
     }
     if (newOnes.length) {
       freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
-      setAlerts((prev) => [...newOnes, ...prev].slice(0, 200));
+      setAlerts((prev) => prependUniqueIncidents(prev, newOnes));
     }
   }, [store.media, store.events, store.loaded, disarmedLoaded, disarmedKeys]);
 
