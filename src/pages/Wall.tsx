@@ -16,6 +16,7 @@ import { AlertAuditDialog } from "@/components/AlertAuditDialog";
 type Alert = {
   key: string;
   event: WebhookEvent | null;
+  eventIds?: string[];
   clip?: MediaItem;
   snapshot?: MediaItem;
   camera: string;
@@ -64,6 +65,83 @@ const wallAlertsStore: { alerts: Alert[]; seen: Set<string>; mountedAt: number }
   seen: new Set<string>(),
   mountedAt: Date.now(),
 };
+
+const SAME_INCIDENT_WINDOW_MS = 15_000;
+
+function alertTimeMs(a: Alert) {
+  const ms = new Date(a.ts).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function alertSourceKey(a: Alert) {
+  return a.event?.source_id ?? a.clip?.source_id ?? a.snapshot?.source_id ?? "";
+}
+
+function alertInstanceKey(a: Alert) {
+  return a.clip?.instance_id ?? a.snapshot?.instance_id ?? "";
+}
+
+function alertFrigateIds(a: Alert) {
+  return [a.event?.frigate_event_id, a.clip?.frigate_event_id, a.snapshot?.frigate_event_id]
+    .filter((id): id is string => !!id);
+}
+
+function isSameIncident(a: Alert, b: Alert) {
+  if (a.key === b.key) return true;
+  if (a.event?.id && b.event?.id && a.event.id === b.event.id) return true;
+  if (a.event?.id && (b.clip?.event_id === a.event.id || b.snapshot?.event_id === a.event.id)) return true;
+  if (b.event?.id && (a.clip?.event_id === b.event.id || a.snapshot?.event_id === b.event.id)) return true;
+
+  const aFrigateIds = alertFrigateIds(a);
+  const bFrigateIds = new Set(alertFrigateIds(b));
+  if (aFrigateIds.some((id) => bFrigateIds.has(id))) return true;
+
+  if (!a.camera || a.camera !== b.camera) return false;
+  const aSource = alertSourceKey(a);
+  const bSource = alertSourceKey(b);
+  const aInstance = alertInstanceKey(a);
+  const bInstance = alertInstanceKey(b);
+  if (aSource && bSource && aSource !== bSource) return false;
+  if (aInstance && bInstance && aInstance !== bInstance) return false;
+  return Math.abs(alertTimeMs(a) - alertTimeMs(b)) <= SAME_INCIDENT_WINDOW_MS;
+}
+
+function mergeIncident(existing: Alert, incoming: Alert): Alert {
+  const eventIds = Array.from(new Set([
+    ...(existing.eventIds ?? []),
+    ...(incoming.eventIds ?? []),
+    existing.event?.id,
+    incoming.event?.id,
+  ].filter((id): id is string => !!id)));
+
+  return {
+    ...existing,
+    key: existing.event ? existing.key : incoming.event?.id ?? existing.key,
+    event: existing.event ?? incoming.event,
+    eventIds,
+    clip: existing.clip ?? incoming.clip,
+    snapshot: existing.snapshot ?? incoming.snapshot,
+    label: existing.label === "motion" ? incoming.label : existing.label,
+    site: existing.site === "Unknown site" ? incoming.site : existing.site,
+    receivedAt: Math.min(existing.receivedAt, incoming.receivedAt),
+  };
+}
+
+function prependUniqueIncidents(prev: Alert[], incoming: Alert[]) {
+  const next = [...prev];
+  const prepend: Alert[] = [];
+  for (const alert of incoming) {
+    const prevIdx = next.findIndex((x) => isSameIncident(x, alert));
+    if (prevIdx >= 0) {
+      next[prevIdx] = mergeIncident(next[prevIdx], alert);
+      continue;
+    }
+    const newIdx = prepend.findIndex((x) => isSameIncident(x, alert));
+    if (newIdx >= 0) prepend[newIdx] = mergeIncident(prepend[newIdx], alert);
+    else prepend.push(alert);
+  }
+  return [...prepend, ...next].slice(0, 200);
+}
 
 const Wall = () => {
   const store = useWebhookStore();
