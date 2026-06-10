@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MessageCircle, Save, Send, Plus, X, Server } from "lucide-react";
+import { MessageCircle, Save, Send, Plus, X, Server, Megaphone } from "lucide-react";
 import { toast } from "sonner";
+
+const isValidRecipient = (r: string) => /^\+?\d{6,}$/.test(r) || /@(g\.us|s\.whatsapp\.net|c\.us|broadcast)$/i.test(r);
 
 type WAS = {
   id?: string;
