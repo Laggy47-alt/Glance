@@ -557,7 +557,13 @@ export default function WhatsAppAlerts() {
         </p>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Message</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Message</Label>
+              <Button size="sm" variant="ghost" type="button"
+                onClick={() => setCustomMsg(settings.daily_broadcast_template ?? DEFAULTS.daily_broadcast_template!)}>
+                Use welcome template
+              </Button>
+            </div>
             <Textarea rows={4} value={customMsg} onChange={(e) => setCustomMsg(e.target.value)}
               placeholder="Type the message to broadcast…"
               className="bg-secondary border-border text-sm" />
