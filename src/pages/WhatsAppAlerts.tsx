@@ -346,6 +346,28 @@ export default function WhatsAppAlerts() {
         </div>
       </Card>
 
+      <Card className="bg-gradient-card border-border shadow-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Megaphone className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Broadcast offline summary now</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Sends a single message listing every camera currently offline across all NVRs. Leave the recipient blank to use your default recipients, or enter one phone number (E.164) or WhatsApp group JID (e.g. <code className="font-mono">12345-67890@g.us</code>).
+        </p>
+        <div className="flex gap-2">
+          <Input value={broadcastTo} onChange={(e) => setBroadcastTo(e.target.value)}
+            placeholder="+27821234567  or  12345-67890@g.us"
+            className="bg-secondary border-border font-mono text-sm" />
+          <Button onClick={broadcastOffline} disabled={broadcasting}>
+            <Send className="h-3.5 w-3.5 mr-1" />{broadcasting ? "Sending…" : "Send now"}
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2">
+          Tip: to get a group JID, send a message in the group from the Mudslide host and run <code className="font-mono">mudslide groups</code>.
+        </p>
+      </Card>
+
+
       <Card className="bg-gradient-card border-border shadow-card p-5">
         <div className="flex items-center gap-2 mb-3">
           <Server className="h-4 w-4 text-primary" />
