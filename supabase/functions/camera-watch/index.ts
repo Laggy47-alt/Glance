@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: instances, error } = await supabase
     .from("frigate_instances")
-    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes")
+    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, multi_client, camera_whatsapp_recipients")
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
