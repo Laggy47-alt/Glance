@@ -2,6 +2,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useWebhookStore } from "@/hooks/useWebhookStore";
+import { fetchFrigateStats } from "@/lib/frigateStats";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +14,27 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MessageCircle, Save, Send, Plus, X, Server, Megaphone } from "lucide-react";
 import { toast } from "sonner";
+
+// Compute offline cameras live from Frigate /api/stats, same heuristic as NvrStatus page.
+function parseOfflineCams(stats: unknown): string[] {
+  if (!stats || typeof stats !== "object") return [];
+  const root = stats as Record<string, unknown>;
+  const cameras = (root.cameras && typeof root.cameras === "object" ? root.cameras : root) as Record<string, unknown>;
+  const reserved = new Set(["cpu_usages","gpu_usages","service","detectors","detection_fps","processes","bandwidth_usages","version"]);
+  const offline: string[] = [];
+  for (const [name, val] of Object.entries(cameras)) {
+    if (reserved.has(name)) continue;
+    if (!val || typeof val !== "object") continue;
+    const c = val as Record<string, any>;
+    const hasShape = "camera_fps" in c || "process_fps" in c || "detection_fps" in c || "pid" in c;
+    if (!hasShape) continue;
+    const fps = typeof c.camera_fps === "number" ? c.camera_fps : undefined;
+    const pid = typeof c.pid === "number" ? c.pid : undefined;
+    const online = (pid === undefined || pid > 0) && (fps === undefined || fps > 0);
+    if (!online) offline.push(name);
+  }
+  return offline.sort();
+}
 
 const isValidRecipient = (r: string) => /^\+?\d{6,}$/.test(r) || /@(g\.us|s\.whatsapp\.net|c\.us|broadcast)$/i.test(r);
 
