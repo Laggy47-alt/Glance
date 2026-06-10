@@ -131,8 +131,9 @@ export default function WhatsAppAlerts() {
   const [settings, setSettings] = useState<WAS>(DEFAULTS);
   const [nvrs, setNvrs] = useState<Nvr[]>([]);
   const [nvrCameras, setNvrCameras] = useState<Record<string, string[]>>({});
-  const [customMsg, setCustomMsg] = useState<Record<string, string>>({});
-  const [sendingCustom, setSendingCustom] = useState<string | null>(null);
+  const [customMsg, setCustomMsg] = useState("");
+  const [customSelected, setCustomSelected] = useState<Record<string, boolean>>({});
+  const [customSending, setCustomSending] = useState(false);
   const store = useWebhookStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
