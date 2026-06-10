@@ -427,6 +427,12 @@ export default function WhatsAppAlerts() {
               <div><div className="text-sm">Batch multiple cameras</div><div className="text-[11px] text-muted-foreground">Combine cameras of the same NVR into one message</div></div>
               <Switch checked={settings.batch_alerts} onCheckedChange={(v) => setSettings({ ...settings, batch_alerts: v })} />
             </div>
+            <div className="space-y-1.5 pt-2">
+              <Label className="text-xs">Reply footer</Label>
+              <Textarea rows={3} value={settings.reply_footer ?? ""} onChange={(e) => setSettings({ ...settings, reply_footer: e.target.value })}
+                className="bg-secondary border-border font-mono text-xs" />
+              <p className="text-[11px] text-muted-foreground">Appended to every outgoing WhatsApp message. Clients can reply to get in touch with the Technical Team.</p>
+            </div>
           </TabsContent>
 
           <TabsContent value="schedule" className="space-y-3 pt-4">
