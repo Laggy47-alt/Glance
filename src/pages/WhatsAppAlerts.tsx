@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MessageCircle, Save, Send, Plus, X, Server } from "lucide-react";
+import { MessageCircle, Save, Send, Plus, X, Server, Megaphone } from "lucide-react";
 import { toast } from "sonner";
+
+const isValidRecipient = (r: string) => /^\+?\d{6,}$/.test(r) || /@(g\.us|s\.whatsapp\.net|c\.us|broadcast)$/i.test(r);
 
 type WAS = {
   id?: string;
@@ -66,7 +68,7 @@ function RecipientList({ value, onChange, placeholder }: { value: string[]; onCh
   const [draft, setDraft] = useState("");
   const add = () => {
     const t = draft.trim();
-    if (!/^\+?\d{6,}$/.test(t)) { toast.error("Enter E.164 number, e.g. +27821234567"); return; }
+    if (!isValidRecipient(t)) { toast.error("Enter E.164 number (+27821234567) or group JID (12345-67890@g.us)"); return; }
     if (value.includes(t)) return;
     onChange([...value, t]); setDraft("");
   };
@@ -100,6 +102,9 @@ export default function WhatsAppAlerts() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testNum, setTestNum] = useState("");
+  const [broadcastTo, setBroadcastTo] = useState("");
+  const [broadcasting, setBroadcasting] = useState(false);
+
 
   useEffect(() => {
     if (!activeOrg?.id) return;
@@ -160,6 +165,58 @@ export default function WhatsAppAlerts() {
     if (error) { toast.error(error.message); return; }
     if ((data as any)?.errors?.length) { toast.error(JSON.stringify((data as any).errors)); return; }
     toast.success("Test message sent");
+  };
+
+  const broadcastOffline = async () => {
+    if (!activeOrg?.id) return;
+    const target = broadcastTo.trim();
+    const recipients = target ? [target] : settings.default_recipients;
+    if (!recipients.length) { toast.error("Add a recipient/group or set default recipients"); return; }
+    for (const r of recipients) {
+      if (!isValidRecipient(r)) { toast.error(`Invalid recipient: ${r}`); return; }
+    }
+    setBroadcasting(true);
+    try {
+      const { data: statuses, error: sErr } = await supabase
+        .from("camera_status")
+        .select("instance_id, camera, online, since")
+        .eq("organization_id", activeOrg.id)
+        .eq("online", false);
+      if (sErr) throw sErr;
+      const offline = statuses ?? [];
+      if (!offline.length) { toast.success("No cameras are currently offline"); setBroadcasting(false); return; }
+
+      const byInst = new Map<string, { name: string; cams: string[] }>();
+      const nvrMap = new Map(nvrs.map((n) => [n.id, n.name]));
+      const now = Date.now();
+      for (const row of offline as any[]) {
+        const name = nvrMap.get(row.instance_id) ?? row.instance_id;
+        const mins = Math.floor((now - new Date(row.since).getTime()) / 60_000);
+        if (!byInst.has(row.instance_id)) byInst.set(row.instance_id, { name, cams: [] });
+        byInst.get(row.instance_id)!.cams.push(`${row.camera} (offline ${mins}m)`);
+      }
+      const nvrsPayload = Array.from(byInst.values()).map((v) => ({
+        name: v.name, reachable: true, offlineCameras: v.cams,
+      }));
+
+      const { data, error } = await supabase.functions.invoke("escalate-offline-whatsapp", {
+        body: {
+          organization_id: activeOrg.id,
+          recipients,
+          nvrs: nvrsPayload,
+          minutes: 0,
+          test: true, // bypass quiet hours / rate limit for manual broadcast
+        },
+      });
+      if (error) throw error;
+      const errs = (data as any)?.errors ?? [];
+      if (errs.length) toast.error(errs.join("\n"));
+      else toast.success(`Sent summary of ${offline.length} offline camera(s) to ${recipients.length} recipient(s)`);
+    } catch (e: any) {
+      toast.error(e?.message ?? String(e));
+    } finally {
+      setBroadcasting(false);
+    }
   };
 
   if (loading) {
@@ -288,6 +345,28 @@ export default function WhatsAppAlerts() {
           <Button onClick={save} disabled={saving}><Save className="h-3.5 w-3.5 mr-1" />{saving ? "Saving…" : "Save settings"}</Button>
         </div>
       </Card>
+
+      <Card className="bg-gradient-card border-border shadow-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Megaphone className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Broadcast offline summary now</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Sends a single message listing every camera currently offline across all NVRs. Leave the recipient blank to use your default recipients, or enter one phone number (E.164) or WhatsApp group JID (e.g. <code className="font-mono">12345-67890@g.us</code>).
+        </p>
+        <div className="flex gap-2">
+          <Input value={broadcastTo} onChange={(e) => setBroadcastTo(e.target.value)}
+            placeholder="+27821234567  or  12345-67890@g.us"
+            className="bg-secondary border-border font-mono text-sm" />
+          <Button onClick={broadcastOffline} disabled={broadcasting}>
+            <Send className="h-3.5 w-3.5 mr-1" />{broadcasting ? "Sending…" : "Send now"}
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2">
+          Tip: to get a group JID, send a message in the group from the Mudslide host and run <code className="font-mono">mudslide groups</code>.
+        </p>
+      </Card>
+
 
       <Card className="bg-gradient-card border-border shadow-card p-5">
         <div className="flex items-center gap-2 mb-3">

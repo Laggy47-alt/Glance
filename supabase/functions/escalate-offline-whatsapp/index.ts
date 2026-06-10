@@ -101,7 +101,8 @@ Deno.serve(async (req) => {
     const recipients: string[] = Array.isArray(body?.recipients) && body.recipients.length
       ? body.recipients
       : (s.default_recipients ?? []);
-    const cleaned = recipients.map((r) => String(r).trim()).filter((r) => /^\+?\d{6,}$/.test(r));
+    const isValidRecipient = (r: string) => /^\+?\d{6,}$/.test(r) || /@(g\.us|s\.whatsapp\.net|c\.us|broadcast)$/i.test(r);
+    const cleaned = recipients.map((r) => String(r).trim()).filter(isValidRecipient);
     if (!cleaned.length) {
       return new Response(JSON.stringify({ error: "No valid E.164 recipients" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
