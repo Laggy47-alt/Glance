@@ -200,27 +200,29 @@ export default function WhatsAppAlerts() {
     }
     setBroadcasting(true);
     try {
-      const { data: statuses, error: sErr } = await supabase
-        .from("camera_status")
-        .select("instance_id, camera, online, since")
-        .eq("organization_id", activeOrg.id)
-        .eq("online", false);
-      if (sErr) throw sErr;
-      const offline = statuses ?? [];
-      if (!offline.length) { toast.success("No cameras are currently offline"); setBroadcasting(false); return; }
+      // Poll each enabled NVR live (same approach as the NVR Status page).
+      const enabledFrigates = store.frigates.filter((f) => f.enabled);
+      if (!enabledFrigates.length) { toast.error("No enabled NVRs to query"); setBroadcasting(false); return; }
 
-      const byInst = new Map<string, { name: string; cams: string[] }>();
-      const nvrMap = new Map(nvrs.map((n) => [n.id, n.name]));
-      const now = Date.now();
-      for (const row of offline as any[]) {
-        const name = nvrMap.get(row.instance_id) ?? row.instance_id;
-        const mins = Math.floor((now - new Date(row.since).getTime()) / 60_000);
-        if (!byInst.has(row.instance_id)) byInst.set(row.instance_id, { name, cams: [] });
-        byInst.get(row.instance_id)!.cams.push(`${row.camera} (offline ${mins}m)`);
-      }
-      const nvrsPayload = Array.from(byInst.values()).map((v) => ({
-        name: v.name, reachable: true, offlineCameras: v.cams,
+      const results = await Promise.all(enabledFrigates.map(async (f) => {
+        try {
+          const stats = await fetchFrigateStats(f);
+          return { name: f.name, reachable: true, offlineCameras: parseOfflineCams(stats) };
+        } catch {
+          return { name: f.name, reachable: false, offlineCameras: [] as string[] };
+        }
       }));
+
+      const totalOffline = results.reduce((a, r) => a + r.offlineCameras.length, 0);
+      const anyUnreachable = results.some((r) => !r.reachable);
+      if (totalOffline === 0 && !anyUnreachable) {
+        toast.success("No cameras are currently offline");
+        setBroadcasting(false);
+        return;
+      }
+
+      // Only include NVRs that have something to report.
+      const nvrsPayload = results.filter((r) => !r.reachable || r.offlineCameras.length > 0);
 
       const { data, error } = await supabase.functions.invoke("escalate-offline-whatsapp", {
         body: {
@@ -234,7 +236,7 @@ export default function WhatsAppAlerts() {
       if (error) throw error;
       const errs = (data as any)?.errors ?? [];
       if (errs.length) toast.error(errs.join("\n"));
-      else toast.success(`Sent summary of ${offline.length} offline camera(s) to ${recipients.length} recipient(s)`);
+      else toast.success(`Sent summary of ${totalOffline} offline camera(s) to ${recipients.length} recipient(s)`);
     } catch (e: any) {
       toast.error(e?.message ?? String(e));
     } finally {
