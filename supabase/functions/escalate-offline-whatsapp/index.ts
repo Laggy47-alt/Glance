@@ -124,6 +124,9 @@ Deno.serve(async (req) => {
       message = blocks.join("\n\n");
     }
     if (!message.trim()) message = "ABC Glance alert";
+    if (s.reply_footer) {
+      message = message.trim() + "\n\n" + s.reply_footer.trim();
+    }
 
     // Rate limit (global per org, last hour)
     if (!body?.test && s.max_alerts_per_hour > 0) {
