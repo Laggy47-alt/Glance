@@ -1141,6 +1141,7 @@ export type Database = {
           created_at: string
           daily_broadcast_enabled: boolean
           daily_broadcast_recipients: string[]
+          daily_broadcast_template: string | null
           daily_broadcast_time: string
           default_recipients: string[]
           enabled: boolean
@@ -1168,6 +1169,7 @@ export type Database = {
           created_at?: string
           daily_broadcast_enabled?: boolean
           daily_broadcast_recipients?: string[]
+          daily_broadcast_template?: string | null
           daily_broadcast_time?: string
           default_recipients?: string[]
           enabled?: boolean
@@ -1195,6 +1197,7 @@ export type Database = {
           created_at?: string
           daily_broadcast_enabled?: boolean
           daily_broadcast_recipients?: string[]
+          daily_broadcast_template?: string | null
           daily_broadcast_time?: string
           default_recipients?: string[]
           enabled?: boolean
