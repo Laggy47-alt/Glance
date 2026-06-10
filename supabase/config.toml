@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.daily-offline-broadcast]
 verify_jwt = false
+
+[functions.whatsapp-incoming]
+verify_jwt = false

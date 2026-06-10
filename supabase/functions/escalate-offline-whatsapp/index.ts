@@ -24,6 +24,7 @@ type Settings = {
   default_recipients: string[];
   alert_template: string;
   recovery_template: string;
+  reply_footer: string | null;
   quiet_hours_enabled: boolean;
   quiet_start: string | null;
   quiet_end: string | null;
