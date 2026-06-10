@@ -99,11 +99,12 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: instances, error } = await supabase
     .from("frigate_instances")
-    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients")
+    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes")
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   const results: any[] = [];
+
   for (const inst of (instances ?? []) as Instance[]) {
     const stats = await fetchStats(inst);
     if (!stats) { results.push({ instance: inst.name, reachable: false }); continue; }
@@ -118,10 +119,12 @@ Deno.serve(async (req) => {
         .eq("instance_id", inst.id).in("camera", onlineNames);
     }
 
-    if (!inst.offline_alert_enabled) { results.push({ instance: inst.name, alerted: 0 }); continue; }
+    if (!inst.offline_alert_enabled && !inst.whatsapp_alert_enabled) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
-    let due = states.filter((s) => !s.online && (now - new Date(s.since).getTime()) >= thresholdMs);
+    const waThresholdMs = Math.max(1, inst.whatsapp_alert_minutes ?? inst.offline_alert_minutes) * 60_000;
+    let due = states.filter((s) => !s.online && (now - new Date(s.since).getTime()) >= Math.min(thresholdMs, waThresholdMs));
     if (!due.length) { results.push({ instance: inst.name, alerted: 0 }); continue; }
+
 
     // Skip disarmed cameras — don't email when a schedule has them off.
     const { data: armedRows } = await supabase
