@@ -164,24 +164,42 @@ export default function WhatsAppAlerts() {
       setNvrs(list);
       setLoading(false);
 
-      // Defer the camera list fetch — it's only needed when a multi-client NVR is expanded,
-      // and pulling camera_status was blocking the initial render.
+      // Fetch live camera names per NVR from Frigate /api/stats (same path the broadcast uses),
+      // merged with anything previously seen in camera_status. Done after initial render so the
+      // page isn't blocked while NVRs are polled.
       if (list.length) {
+        const idByName = new Map(list.map((x) => [x.name, x.id]));
+        const reserved = new Set(["cpu_usages","gpu_usages","service","detectors","detection_fps","processes","bandwidth_usages","version"]);
+
+        // 1) live poll
+        const enabled = store.frigates.filter((f) => f.enabled && idByName.has(f.name));
+        const liveResults = await Promise.all(enabled.map(async (f) => {
+          try {
+            const stats: any = await fetchFrigateStats(f);
+            const root = (stats?.cameras && typeof stats.cameras === "object" ? stats.cameras : stats) as Record<string, unknown>;
+            const cams = Object.keys(root ?? {}).filter((k) => !reserved.has(k) && root[k] && typeof root[k] === "object");
+            return { id: idByName.get(f.name)!, cams };
+          } catch { return { id: idByName.get(f.name)!, cams: [] as string[] }; }
+        }));
+        if (cancelled) return;
+
+        // 2) fallback to camera_status for anything missing
         const { data: cs } = await supabase
           .from("camera_status")
           .select("instance_id, camera")
           .in("instance_id", list.map((x) => x.id));
         if (cancelled) return;
+
         const map: Record<string, string[]> = {};
-        for (const r of cs ?? []) {
-          (map[(r as any).instance_id] ??= []).push((r as any).camera);
-        }
+        for (const r of cs ?? []) (map[(r as any).instance_id] ??= []).push((r as any).camera);
+        for (const { id, cams } of liveResults) (map[id] ??= []).push(...cams);
         for (const k of Object.keys(map)) map[k] = Array.from(new Set(map[k])).sort();
         setNvrCameras(map);
       }
     })();
     return () => { cancelled = true; };
-  }, [activeOrg?.id]);
+  }, [activeOrg?.id, store.frigates.length]);
+
 
 
   const save = async () => {
