@@ -21,7 +21,11 @@ type Instance = {
   offline_alert_enabled: boolean;
   offline_alert_minutes: number;
   offline_alert_recipients: string[];
+  whatsapp_alert_enabled: boolean;
+  whatsapp_recipients: string[];
+  whatsapp_alert_minutes: number | null;
 };
+
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
 
@@ -95,11 +99,12 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: instances, error } = await supabase
     .from("frigate_instances")
-    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients")
+    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes")
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   const results: any[] = [];
+
   for (const inst of (instances ?? []) as Instance[]) {
     const stats = await fetchStats(inst);
     if (!stats) { results.push({ instance: inst.name, reachable: false }); continue; }
@@ -114,10 +119,12 @@ Deno.serve(async (req) => {
         .eq("instance_id", inst.id).in("camera", onlineNames);
     }
 
-    if (!inst.offline_alert_enabled) { results.push({ instance: inst.name, alerted: 0 }); continue; }
+    if (!inst.offline_alert_enabled && !inst.whatsapp_alert_enabled) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
-    let due = states.filter((s) => !s.online && (now - new Date(s.since).getTime()) >= thresholdMs);
+    const waThresholdMs = Math.max(1, inst.whatsapp_alert_minutes ?? inst.offline_alert_minutes) * 60_000;
+    let due = states.filter((s) => !s.online && (now - new Date(s.since).getTime()) >= Math.min(thresholdMs, waThresholdMs));
     if (!due.length) { results.push({ instance: inst.name, alerted: 0 }); continue; }
+
 
     // Skip disarmed cameras — don't email when a schedule has them off.
     const { data: armedRows } = await supabase
@@ -139,43 +146,66 @@ Deno.serve(async (req) => {
     const toAlert = due.filter((d) => !alreadyKey.has(`${d.camera}|${new Date(d.since).toISOString()}`));
     if (!toAlert.length) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
-    const recipients = await recipientsForInstance(supabase, inst);
-    if (!recipients.length) {
+    const recipients = inst.offline_alert_enabled ? await recipientsForInstance(supabase, inst) : [];
+    const waRecipients = inst.whatsapp_alert_enabled
+      ? (inst.whatsapp_recipients ?? []).map((r: string) => r.trim()).filter((r: string) => /^\+?\d{6,}$/.test(r))
+      : [];
+
+    if (inst.offline_alert_enabled && !recipients.length && !inst.whatsapp_alert_enabled) {
       results.push({ instance: inst.name, alerted: 0, error: "no recipients" });
       continue;
     }
 
-    try {
-      const escalateUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline`;
-      const minsList = toAlert.map((d) => {
-        const mins = Math.floor((now - new Date(d.since).getTime()) / 60_000);
-        return `${d.camera} (offline ${mins}m)`;
-      });
-      const res = await fetch(escalateUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
-        body: JSON.stringify({
-          recipients,
-          organization_id: inst.organization_id,
-          subject: `[Alert] ${toAlert.length} camera${toAlert.length === 1 ? "" : "s"} offline on ${inst.name}`,
-          note: `Cameras have been offline for at least ${inst.offline_alert_minutes} minute${inst.offline_alert_minutes === 1 ? "" : "s"}.`,
-          nvrs: [{ name: inst.name, reachable: true, offlineCameras: minsList }],
-        }),
-      });
-      if (!res.ok) throw new Error(`escalate-offline ${res.status}: ${await res.text()}`);
-      await supabase.from("camera_offline_alerts").insert(
-        toAlert.map((d) => ({
-          organization_id: inst.organization_id,
-          instance_id: inst.id, camera: d.camera, since: d.since,
-        })),
-      );
-      results.push({ instance: inst.name, alerted: toAlert.length, recipients });
-    } catch (e: any) {
-      results.push({ instance: inst.name, alerted: 0, error: String(e?.message ?? e) });
+    const minsList = toAlert.map((d) => {
+      const mins = Math.floor((now - new Date(d.since).getTime()) / 60_000);
+      return `${d.camera} (offline ${mins}m)`;
+    });
+    const channelResults: Record<string, any> = {};
+
+    if (inst.offline_alert_enabled && recipients.length) {
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({
+            recipients,
+            organization_id: inst.organization_id,
+            subject: `[Alert] ${toAlert.length} camera${toAlert.length === 1 ? "" : "s"} offline on ${inst.name}`,
+            note: `Cameras have been offline for at least ${inst.offline_alert_minutes} minute${inst.offline_alert_minutes === 1 ? "" : "s"}.`,
+            nvrs: [{ name: inst.name, reachable: true, offlineCameras: minsList }],
+          }),
+        });
+        if (!res.ok) throw new Error(`escalate-offline ${res.status}: ${await res.text()}`);
+        channelResults.email = recipients.length;
+      } catch (e: any) { channelResults.email_error = String(e?.message ?? e); }
     }
+
+    if (inst.whatsapp_alert_enabled) {
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({
+            organization_id: inst.organization_id,
+            recipients: waRecipients.length ? waRecipients : undefined,
+            minutes: inst.whatsapp_alert_minutes ?? inst.offline_alert_minutes,
+            nvrs: [{ name: inst.name, reachable: true, offlineCameras: minsList }],
+          }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(`whatsapp ${res.status}: ${JSON.stringify(j)}`);
+        channelResults.whatsapp = j;
+      } catch (e: any) { channelResults.whatsapp_error = String(e?.message ?? e); }
+    }
+
+    await supabase.from("camera_offline_alerts").insert(
+      toAlert.map((d) => ({
+        organization_id: inst.organization_id,
+        instance_id: inst.id, camera: d.camera, since: d.since,
+      })),
+    );
+    results.push({ instance: inst.name, alerted: toAlert.length, ...channelResults });
+
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
