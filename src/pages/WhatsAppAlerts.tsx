@@ -130,6 +130,9 @@ export default function WhatsAppAlerts() {
   const { activeOrg } = useAuth();
   const [settings, setSettings] = useState<WAS>(DEFAULTS);
   const [nvrs, setNvrs] = useState<Nvr[]>([]);
+  const [nvrCameras, setNvrCameras] = useState<Record<string, string[]>>({});
+  const [customMsg, setCustomMsg] = useState<Record<string, string>>({});
+  const [sendingCustom, setSendingCustom] = useState<string | null>(null);
   const store = useWebhookStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -148,10 +151,28 @@ export default function WhatsAppAlerts() {
       if (s) setSettings({ ...DEFAULTS, ...(s as any) });
       const { data: n } = await supabase
         .from("frigate_instances")
-        .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes")
+        .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients")
         .eq("organization_id", activeOrg.id)
         .order("name");
-      setNvrs((n ?? []) as Nvr[]);
+      const list = ((n ?? []) as any[]).map((x) => ({
+        ...x,
+        camera_whatsapp_recipients: (x.camera_whatsapp_recipients ?? {}) as Record<string, string[]>,
+      })) as Nvr[];
+      setNvrs(list);
+
+      // Load camera names per NVR from camera_status (used to populate per-camera recipient editor).
+      if (list.length) {
+        const { data: cs } = await supabase
+          .from("camera_status")
+          .select("instance_id, camera")
+          .in("instance_id", list.map((x) => x.id));
+        const map: Record<string, string[]> = {};
+        for (const r of cs ?? []) {
+          (map[(r as any).instance_id] ??= []).push((r as any).camera);
+        }
+        for (const k of Object.keys(map)) map[k] = Array.from(new Set(map[k])).sort();
+        setNvrCameras(map);
+      }
       setLoading(false);
     })();
   }, [activeOrg?.id]);
@@ -176,10 +197,39 @@ export default function WhatsAppAlerts() {
         whatsapp_alert_enabled: n.whatsapp_alert_enabled,
         whatsapp_recipients: n.whatsapp_recipients,
         whatsapp_alert_minutes: n.whatsapp_alert_minutes,
+        multi_client: n.multi_client,
+        camera_whatsapp_recipients: n.camera_whatsapp_recipients,
       })
       .eq("id", n.id);
     if (error) { toast.error(error.message); return; }
     toast.success(`Saved ${n.name}`);
+  };
+
+  const sendCustomToNvr = async (n: Nvr) => {
+    if (!activeOrg?.id) return;
+    const msg = (customMsg[n.id] ?? "").trim();
+    if (!msg) { toast.error("Type a message first"); return; }
+    const recips = (n.whatsapp_recipients ?? []).filter(isValidRecipient);
+    if (!recips.length) { toast.error("This NVR has no WhatsApp recipients"); return; }
+    setSendingCustom(n.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("escalate-offline-whatsapp", {
+        body: {
+          organization_id: activeOrg.id,
+          recipients: recips,
+          message: msg,
+          test: true, // bypass quiet hours / rate limit for manual broadcasts
+        },
+      });
+      if (error) throw error;
+      const errs = (data as any)?.errors ?? [];
+      if (errs.length) toast.error(errs.join("\n"));
+      else toast.success(`Sent to ${recips.length} recipient(s) on ${n.name}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? String(e));
+    } finally {
+      setSendingCustom(null);
+    }
   };
 
   const sendTest = async () => {
