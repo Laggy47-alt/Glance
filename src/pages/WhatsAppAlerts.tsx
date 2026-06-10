@@ -144,29 +144,34 @@ export default function WhatsAppAlerts() {
 
   useEffect(() => {
     if (!activeOrg?.id) return;
+    let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data: s } = await supabase
-        .from("whatsapp_settings").select("*")
-        .eq("organization_id", activeOrg.id).maybeSingle();
+      const [{ data: s }, { data: n }] = await Promise.all([
+        supabase.from("whatsapp_settings").select("*")
+          .eq("organization_id", activeOrg.id).maybeSingle(),
+        supabase.from("frigate_instances")
+          .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients")
+          .eq("organization_id", activeOrg.id)
+          .order("name"),
+      ]);
+      if (cancelled) return;
       if (s) setSettings({ ...DEFAULTS, ...(s as any) });
-      const { data: n } = await supabase
-        .from("frigate_instances")
-        .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients")
-        .eq("organization_id", activeOrg.id)
-        .order("name");
       const list = ((n ?? []) as any[]).map((x) => ({
         ...x,
         camera_whatsapp_recipients: (x.camera_whatsapp_recipients ?? {}) as Record<string, string[]>,
       })) as Nvr[];
       setNvrs(list);
+      setLoading(false);
 
-      // Load camera names per NVR from camera_status (used to populate per-camera recipient editor).
+      // Defer the camera list fetch — it's only needed when a multi-client NVR is expanded,
+      // and pulling camera_status was blocking the initial render.
       if (list.length) {
         const { data: cs } = await supabase
           .from("camera_status")
           .select("instance_id, camera")
           .in("instance_id", list.map((x) => x.id));
+        if (cancelled) return;
         const map: Record<string, string[]> = {};
         for (const r of cs ?? []) {
           (map[(r as any).instance_id] ??= []).push((r as any).camera);
@@ -174,9 +179,10 @@ export default function WhatsAppAlerts() {
         for (const k of Object.keys(map)) map[k] = Array.from(new Set(map[k])).sort();
         setNvrCameras(map);
       }
-      setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [activeOrg?.id]);
+
 
   const save = async () => {
     if (!activeOrg?.id) return;
