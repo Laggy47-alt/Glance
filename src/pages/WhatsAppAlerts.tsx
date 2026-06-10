@@ -131,8 +131,9 @@ export default function WhatsAppAlerts() {
   const [settings, setSettings] = useState<WAS>(DEFAULTS);
   const [nvrs, setNvrs] = useState<Nvr[]>([]);
   const [nvrCameras, setNvrCameras] = useState<Record<string, string[]>>({});
-  const [customMsg, setCustomMsg] = useState<Record<string, string>>({});
-  const [sendingCustom, setSendingCustom] = useState<string | null>(null);
+  const [customMsg, setCustomMsg] = useState("");
+  const [customSelected, setCustomSelected] = useState<Record<string, boolean>>({});
+  const [customSending, setCustomSending] = useState(false);
   const store = useWebhookStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -205,16 +206,21 @@ export default function WhatsAppAlerts() {
     toast.success(`Saved ${n.name}`);
   };
 
-  const sendCustomToNvr = async (n: Nvr) => {
+  const sendCustomBroadcast = async () => {
     if (!activeOrg?.id) return;
-    const msg = (customMsg[n.id] ?? "").trim();
+    const msg = customMsg.trim();
     if (!msg) { toast.error("Type a message first"); return; }
-    const recips = (n.whatsapp_recipients ?? []).filter(isValidRecipient);
-    if (!recips.length) { toast.error("This NVR has no WhatsApp recipients"); return; }
-    setSendingCustom(n.id);
+    const chosen = nvrs.filter((n) => customSelected[n.id]);
+    if (!chosen.length) { toast.error("Select at least one NVR"); return; }
+    const recips = Array.from(new Set(
+      chosen.flatMap((n) => (n.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isValidRecipient))
+    ));
+    if (!recips.length) { toast.error("Selected NVRs have no WhatsApp recipients"); return; }
+    setCustomSending(true);
     try {
-      // Format to match the offline-alert look: bold NVR header, then the message body.
-      const formatted = `🚨 *${n.name}*\n${msg}`;
+      // Format to match the offline-alert look.
+      const header = chosen.length === 1 ? `🚨 *${chosen[0].name}*` : `🚨 *Broadcast*`;
+      const formatted = `${header}\n${msg}`;
       const { data, error } = await supabase.functions.invoke("escalate-offline-whatsapp", {
         body: {
           organization_id: activeOrg.id,
@@ -226,11 +232,11 @@ export default function WhatsAppAlerts() {
       if (error) throw error;
       const errs = (data as any)?.errors ?? [];
       if (errs.length) toast.error(errs.join("\n"));
-      else { toast.success(`Sent to ${recips.length} recipient(s) on ${n.name}`); setCustomMsg({ ...customMsg, [n.id]: "" }); }
+      else { toast.success(`Sent to ${recips.length} recipient(s)`); setCustomMsg(""); }
     } catch (e: any) {
       toast.error(e?.message ?? String(e));
     } finally {
-      setSendingCustom(null);
+      setCustomSending(false);
     }
   };
 
@@ -493,6 +499,62 @@ export default function WhatsAppAlerts() {
         </p>
       </Card>
 
+      <Card className="bg-gradient-card border-border shadow-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Megaphone className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Broadcast message</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          One-time custom message sent to every WhatsApp recipient on the NVRs you select. Formatted to match the offline-alert style. Quiet hours and rate limits are bypassed.
+        </p>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Message</Label>
+            <Textarea rows={4} value={customMsg} onChange={(e) => setCustomMsg(e.target.value)}
+              placeholder="Type the message to broadcast…"
+              className="bg-secondary border-border text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Send to recipients of these NVRs</Label>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" type="button"
+                  onClick={() => setCustomSelected(Object.fromEntries(nvrs.map((n) => [n.id, true])))}>
+                  Select all
+                </Button>
+                <Button size="sm" variant="ghost" type="button"
+                  onClick={() => setCustomSelected({})}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-md border border-border p-2 grid sm:grid-cols-2 gap-1.5 max-h-56 overflow-auto">
+              {nvrs.length === 0 && <span className="text-xs text-muted-foreground italic">No NVRs configured.</span>}
+              {nvrs.map((n) => {
+                const count = (n.whatsapp_recipients ?? []).filter(isValidRecipient).length;
+                return (
+                  <label key={n.id} className="flex items-center gap-2 text-sm px-1.5 py-1 rounded hover:bg-secondary cursor-pointer">
+                    <input type="checkbox" className="accent-primary"
+                      checked={!!customSelected[n.id]}
+                      onChange={(e) => setCustomSelected({ ...customSelected, [n.id]: e.target.checked })} />
+                    <span className="flex-1 truncate">{n.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{count} recipient{count === 1 ? "" : "s"}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={sendCustomBroadcast} disabled={customSending}>
+              <Send className="h-3.5 w-3.5 mr-1" />{customSending ? "Sending…" : "Send broadcast"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+
+
+
 
       <Card className="bg-gradient-card border-border shadow-card p-5">
         <div className="flex items-center gap-2 mb-3">
@@ -558,24 +620,6 @@ export default function WhatsAppAlerts() {
                 </div>
               )}
 
-              {/* Custom message broadcast to this NVR's recipients */}
-              <div className="rounded-md border border-border p-3 space-y-2">
-                <div className="text-xs font-medium flex items-center gap-2">
-                  <Megaphone className="h-3.5 w-3.5 text-primary" />
-                  Custom broadcast to NVR recipients
-                </div>
-                <Textarea rows={2} value={customMsg[n.id] ?? ""}
-                  onChange={(e) => setCustomMsg({ ...customMsg, [n.id]: e.target.value })}
-                  placeholder="Type a message to send to all this NVR's WhatsApp recipients…"
-                  className="bg-secondary border-border text-sm" />
-                <div className="flex justify-end">
-                  <Button size="sm" variant="secondary"
-                    onClick={() => sendCustomToNvr(n)}
-                    disabled={sendingCustom === n.id}>
-                    <Send className="h-3.5 w-3.5 mr-1" />{sendingCustom === n.id ? "Sending…" : `Send to ${(n.whatsapp_recipients ?? []).length} recipient(s)`}
-                  </Button>
-                </div>
-              </div>
 
               <div className="flex justify-end">
                 <Button size="sm" variant="secondary" onClick={() => saveNvr(n)}><Save className="h-3.5 w-3.5 mr-1" />Save</Button>
