@@ -57,6 +57,9 @@ type WAS = {
   max_alerts_per_hour: number;
   cooldown_minutes: number;
   last_sent_at: string | null;
+  daily_broadcast_enabled: boolean;
+  daily_broadcast_recipients: string[];
+  daily_broadcast_time: string;
 };
 
 type Nvr = {
@@ -85,6 +88,9 @@ const DEFAULTS: WAS = {
   max_alerts_per_hour: 30,
   cooldown_minutes: 0,
   last_sent_at: null,
+  daily_broadcast_enabled: false,
+  daily_broadcast_recipients: [],
+  daily_broadcast_time: "08:00",
 };
 
 function RecipientList({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
