@@ -63,6 +63,7 @@ type WAS = {
   daily_broadcast_enabled: boolean;
   daily_broadcast_recipients: string[];
   daily_broadcast_time: string;
+  daily_broadcast_template: string | null;
 };
 
 type Nvr = {
@@ -84,7 +85,7 @@ const DEFAULTS: WAS = {
   default_recipients: [],
   alert_template: "🚨 *{{nvr}}* — {{count}} camera(s) offline ≥ {{minutes}}m:\n{{cameras}}",
   recovery_template: "✅ *{{nvr}}* — {{camera}} back online",
-  reply_footer: "Reply to this message to get in touch with our Technical Team 👨‍💻\nWe'll get back to you as soon as possible! 🚀",
+  reply_footer: "Need help? Just reply to this message and our Technical Team will assist you! 👨‍💻🚀",
   send_recovery: true,
   include_nvr_unreachable: true,
   batch_alerts: true,
@@ -98,6 +99,12 @@ const DEFAULTS: WAS = {
   daily_broadcast_enabled: false,
   daily_broadcast_recipients: [],
   daily_broadcast_time: "08:00",
+  daily_broadcast_template:
+    "Hey there! 👋😊\n\n" +
+    "I'm Glance, your friendly ABC CCTV sidekick! 🛡️🤖\n\n" +
+    "Keep an eye out for my updates — I'll ping you whenever something needs attention onsite. 🔔🔧\n\n" +
+    "Need technical assistance? Just reply to this message and our team will be in touch! 👨‍💻🚀\n\n" +
+    "Cheers for now! 🎉👍",
 };
 
 function RecipientList({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
@@ -404,6 +411,12 @@ export default function WhatsAppAlerts() {
 
           <TabsContent value="templates" className="space-y-3 pt-4">
             <div className="space-y-1.5">
+              <Label className="text-xs">Daily broadcast / welcome template</Label>
+              <Textarea rows={6} value={settings.daily_broadcast_template ?? ""} onChange={(e) => setSettings({ ...settings, daily_broadcast_template: e.target.value })}
+                className="bg-secondary border-border text-sm" />
+              <p className="text-[11px] text-muted-foreground">Used for scheduled welcome / check-in broadcasts. Sent as-is (no variables).</p>
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-xs">Alert template</Label>
               <Textarea rows={4} value={settings.alert_template} onChange={(e) => setSettings({ ...settings, alert_template: e.target.value })}
                 className="bg-secondary border-border font-mono text-xs" />
@@ -544,7 +557,13 @@ export default function WhatsAppAlerts() {
         </p>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Message</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Message</Label>
+              <Button size="sm" variant="ghost" type="button"
+                onClick={() => setCustomMsg(settings.daily_broadcast_template ?? DEFAULTS.daily_broadcast_template!)}>
+                Use welcome template
+              </Button>
+            </div>
             <Textarea rows={4} value={customMsg} onChange={(e) => setCustomMsg(e.target.value)}
               placeholder="Type the message to broadcast…"
               className="bg-secondary border-border text-sm" />
