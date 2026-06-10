@@ -411,6 +411,12 @@ export default function WhatsAppAlerts() {
 
           <TabsContent value="templates" className="space-y-3 pt-4">
             <div className="space-y-1.5">
+              <Label className="text-xs">Daily broadcast / welcome template</Label>
+              <Textarea rows={6} value={settings.daily_broadcast_template ?? ""} onChange={(e) => setSettings({ ...settings, daily_broadcast_template: e.target.value })}
+                className="bg-secondary border-border text-sm" />
+              <p className="text-[11px] text-muted-foreground">Used for scheduled welcome / check-in broadcasts. Sent as-is (no variables).</p>
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-xs">Alert template</Label>
               <Textarea rows={4} value={settings.alert_template} onChange={(e) => setSettings({ ...settings, alert_template: e.target.value })}
                 className="bg-secondary border-border font-mono text-xs" />
