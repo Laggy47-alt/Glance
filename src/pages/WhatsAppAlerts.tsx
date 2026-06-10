@@ -69,6 +69,8 @@ type Nvr = {
   whatsapp_recipients: string[];
   whatsapp_alert_minutes: number | null;
   offline_alert_minutes: number;
+  multi_client: boolean;
+  camera_whatsapp_recipients: Record<string, string[]>;
 };
 
 const DEFAULTS: WAS = {
