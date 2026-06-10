@@ -558,24 +558,6 @@ export default function WhatsAppAlerts() {
                 </div>
               )}
 
-              {/* Custom message broadcast to this NVR's recipients */}
-              <div className="rounded-md border border-border p-3 space-y-2">
-                <div className="text-xs font-medium flex items-center gap-2">
-                  <Megaphone className="h-3.5 w-3.5 text-primary" />
-                  Custom broadcast to NVR recipients
-                </div>
-                <Textarea rows={2} value={customMsg[n.id] ?? ""}
-                  onChange={(e) => setCustomMsg({ ...customMsg, [n.id]: e.target.value })}
-                  placeholder="Type a message to send to all this NVR's WhatsApp recipients…"
-                  className="bg-secondary border-border text-sm" />
-                <div className="flex justify-end">
-                  <Button size="sm" variant="secondary"
-                    onClick={() => sendCustomToNvr(n)}
-                    disabled={sendingCustom === n.id}>
-                    <Send className="h-3.5 w-3.5 mr-1" />{sendingCustom === n.id ? "Sending…" : `Send to ${(n.whatsapp_recipients ?? []).length} recipient(s)`}
-                  </Button>
-                </div>
-              </div>
 
               <div className="flex justify-end">
                 <Button size="sm" variant="secondary" onClick={() => saveNvr(n)}><Save className="h-3.5 w-3.5 mr-1" />Save</Button>
