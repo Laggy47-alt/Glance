@@ -631,6 +631,9 @@ export type Database = {
           poll_enabled: boolean
           poll_interval_seconds: number
           source_id: string
+          whatsapp_alert_enabled: boolean
+          whatsapp_alert_minutes: number | null
+          whatsapp_recipients: string[]
         }
         Insert: {
           api_key?: string | null
@@ -654,6 +657,9 @@ export type Database = {
           poll_enabled?: boolean
           poll_interval_seconds?: number
           source_id: string
+          whatsapp_alert_enabled?: boolean
+          whatsapp_alert_minutes?: number | null
+          whatsapp_recipients?: string[]
         }
         Update: {
           api_key?: string | null
@@ -677,6 +683,9 @@ export type Database = {
           poll_enabled?: boolean
           poll_interval_seconds?: number
           source_id?: string
+          whatsapp_alert_enabled?: boolean
+          whatsapp_alert_minutes?: number | null
+          whatsapp_recipients?: string[]
         }
         Relationships: []
       }
@@ -1071,6 +1080,75 @@ export type Database = {
           organization_id?: string
           secret?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      whatsapp_settings: {
+        Row: {
+          alert_template: string
+          batch_alerts: boolean
+          cooldown_minutes: number
+          created_at: string
+          default_recipients: string[]
+          enabled: boolean
+          id: string
+          include_nvr_unreachable: boolean
+          last_sent_at: string | null
+          max_alerts_per_hour: number
+          mudslide_token: string | null
+          mudslide_url: string | null
+          organization_id: string
+          quiet_end: string | null
+          quiet_hours_enabled: boolean
+          quiet_start: string | null
+          quiet_timezone: string
+          recovery_template: string
+          send_recovery: boolean
+          updated_at: string
+        }
+        Insert: {
+          alert_template?: string
+          batch_alerts?: boolean
+          cooldown_minutes?: number
+          created_at?: string
+          default_recipients?: string[]
+          enabled?: boolean
+          id?: string
+          include_nvr_unreachable?: boolean
+          last_sent_at?: string | null
+          max_alerts_per_hour?: number
+          mudslide_token?: string | null
+          mudslide_url?: string | null
+          organization_id: string
+          quiet_end?: string | null
+          quiet_hours_enabled?: boolean
+          quiet_start?: string | null
+          quiet_timezone?: string
+          recovery_template?: string
+          send_recovery?: boolean
+          updated_at?: string
+        }
+        Update: {
+          alert_template?: string
+          batch_alerts?: boolean
+          cooldown_minutes?: number
+          created_at?: string
+          default_recipients?: string[]
+          enabled?: boolean
+          id?: string
+          include_nvr_unreachable?: boolean
+          last_sent_at?: string | null
+          max_alerts_per_hour?: number
+          mudslide_token?: string | null
+          mudslide_url?: string | null
+          organization_id?: string
+          quiet_end?: string | null
+          quiet_hours_enabled?: boolean
+          quiet_start?: string | null
+          quiet_timezone?: string
+          recovery_template?: string
+          send_recovery?: boolean
+          updated_at?: string
         }
         Relationships: []
       }
