@@ -203,19 +203,24 @@ export default function WhatsAppAlerts() {
     try {
       // Poll each enabled NVR live (same approach as the NVR Status page).
       const enabledFrigates = store.frigates.filter((f) => f.enabled);
+      console.log("[broadcast] enabled NVRs:", enabledFrigates.map((f) => ({ id: f.id, name: f.name, base_url: f.base_url, is_local: f.is_local })));
       if (!enabledFrigates.length) { toast.error("No enabled NVRs to query"); setBroadcasting(false); return; }
 
       const results = await Promise.all(enabledFrigates.map(async (f) => {
         try {
           const stats = await fetchFrigateStats(f);
-          return { name: f.name, reachable: true, offlineCameras: parseOfflineCams(stats) };
-        } catch {
+          const offlineCameras = parseOfflineCams(stats);
+          console.log(`[broadcast] ${f.name} stats keys:`, Object.keys((stats as any) ?? {}), "→ offline:", offlineCameras);
+          return { name: f.name, reachable: true, offlineCameras };
+        } catch (e) {
+          console.warn(`[broadcast] ${f.name} unreachable:`, e);
           return { name: f.name, reachable: false, offlineCameras: [] as string[] };
         }
       }));
 
       const totalOffline = results.reduce((a, r) => a + r.offlineCameras.length, 0);
       const anyUnreachable = results.some((r) => !r.reachable);
+      console.log("[broadcast] results:", results, "totalOffline:", totalOffline, "anyUnreachable:", anyUnreachable);
       if (totalOffline === 0 && !anyUnreachable) {
         toast.success("No cameras are currently offline");
         setBroadcasting(false);
