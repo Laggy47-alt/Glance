@@ -612,6 +612,7 @@ export type Database = {
         Row: {
           api_key: string | null
           base_url: string
+          camera_whatsapp_recipients: Json
           color: string
           created_at: string
           enabled: boolean
@@ -620,6 +621,7 @@ export type Database = {
           last_error: string | null
           last_event_ts: string | null
           last_polled_at: string | null
+          multi_client: boolean
           mute_enabled: boolean
           mute_end: string | null
           mute_start: string | null
@@ -638,6 +640,7 @@ export type Database = {
         Insert: {
           api_key?: string | null
           base_url: string
+          camera_whatsapp_recipients?: Json
           color?: string
           created_at?: string
           enabled?: boolean
@@ -646,6 +649,7 @@ export type Database = {
           last_error?: string | null
           last_event_ts?: string | null
           last_polled_at?: string | null
+          multi_client?: boolean
           mute_enabled?: boolean
           mute_end?: string | null
           mute_start?: string | null
@@ -664,6 +668,7 @@ export type Database = {
         Update: {
           api_key?: string | null
           base_url?: string
+          camera_whatsapp_recipients?: Json
           color?: string
           created_at?: string
           enabled?: boolean
@@ -672,6 +677,7 @@ export type Database = {
           last_error?: string | null
           last_event_ts?: string | null
           last_polled_at?: string | null
+          multi_client?: boolean
           mute_enabled?: boolean
           mute_end?: string | null
           mute_start?: string | null
