@@ -435,6 +435,146 @@ select * from cron.job_run_details order by start_time desc limit 20;
 
 ---
 
+## 7b. WhatsApp alerts via Mudslide (optional)
+
+Run [Mudslide](https://github.com/robvanbentem/mudslide) on your Linux server to
+send offline-NVR / offline-camera alerts to WhatsApp **without** Twilio or Meta
+Business approval. Mudslide is a thin HTTP wrapper around `whatsapp-web.js` —
+you scan a QR code once, and it keeps a WhatsApp Web session alive that the
+`escalate-offline-whatsapp` edge function POSTs to.
+
+> Unofficial transport (uses WhatsApp Web under the hood). Fine for a handful
+> of alerts per day from a dedicated number. Don't blast high volume — numbers
+> can get banned. Use Twilio/Meta if you need guaranteed delivery at scale.
+
+### 7b.1 Install Mudslide
+
+On the same server (or any reachable Linux box):
+
+```bash
+sudo npm i -g mudslide
+mudslide login         # scan the QR with the WhatsApp account that will send alerts
+mudslide me            # confirms which account is logged in
+```
+
+The session is stored under `~/.mudslide/` — back this directory up so a
+server rebuild doesn't force a new QR scan.
+
+### 7b.2 Run it as a systemd service
+
+`/etc/systemd/system/mudslide.service`:
+
+```ini
+[Unit]
+Description=Mudslide WhatsApp daemon
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/mudslide daemon --port 3000
+Restart=always
+User=root
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now mudslide
+sudo systemctl status mudslide
+```
+
+Mudslide is now listening on `127.0.0.1:3000`. Don't expose port 3000 directly —
+it has no auth of its own.
+
+### 7b.3 Put it behind NGINX + a bearer token
+
+Pick a random token (`openssl rand -hex 32`) — this is what the edge function
+will send in `Authorization: Bearer ...`.
+
+`/etc/nginx/sites-available/mudslide.conf`:
+
+```nginx
+server {
+    listen 80;
+    server_name wa.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name wa.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/wa.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/wa.example.com/privkey.pem;
+
+    # Require the bearer token on every request
+    if ($http_authorization != "Bearer REPLACE_WITH_LONG_RANDOM_TOKEN") {
+        return 401;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_read_timeout 30s;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/mudslide.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d wa.example.com --redirect --agree-tos -m ops@example.com
+```
+
+Test from anywhere:
+
+```bash
+curl -i -X POST https://wa.example.com/send-message \
+  -H "Authorization: Bearer REPLACE_WITH_LONG_RANDOM_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"recipient":"+27821234567","message":"Mudslide test from ABC Glance"}'
+```
+
+You should receive the WhatsApp message within a couple of seconds.
+
+### 7b.4 Wire it into Supabase
+
+Add two function secrets in your hosted Supabase project (Project Settings →
+Edge Functions → Secrets), or via CLI:
+
+```bash
+supabase secrets set \
+  MUDSLIDE_URL=https://wa.example.com \
+  MUDSLIDE_TOKEN=REPLACE_WITH_LONG_RANDOM_TOKEN
+```
+
+| Secret | Purpose |
+|--------|---------|
+| `MUDSLIDE_URL` | Public HTTPS URL of your Mudslide proxy (no trailing slash) |
+| `MUDSLIDE_TOKEN` | The bearer token you put in the NGINX `if` check |
+
+Once these are set and the `escalate-offline-whatsapp` function + NVR UI toggle
+have been deployed (shipped with the repo when the WhatsApp feature lands), the
+`camera-watch` cron job will fan out offline alerts to both email and WhatsApp
+without sending duplicates — dedupe still goes through `camera_offline_alerts`.
+
+### 7b.5 Operational tips
+
+- Use a **dedicated** WhatsApp number for alerts. Don't reuse a personal one.
+- Recipients must be in **E.164** format (e.g. `+27821234567`).
+- If the session drops (long server downtime, phone logged out), run
+  `mudslide login` again on the server to re-scan.
+- Tail logs while debugging: `journalctl -u mudslide -f`.
+- Back up `~/.mudslide/` along with your DB dumps.
+
+---
+
+
+
+
 
 ## 8. Backups, upgrades, troubleshooting
 
@@ -510,3 +650,5 @@ supabase functions deploy admin-users --no-verify-jwt
 - [ ] NGINX site enabled, TLS issued
 - [ ] First‑run admin created at `/login`
 - [ ] `EMERGENCY_PASS` rotated, backup strategy in place
+- [ ] (Optional) Mudslide installed + behind NGINX, `MUDSLIDE_URL` / `MUDSLIDE_TOKEN` secrets set
+
