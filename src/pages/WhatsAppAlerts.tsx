@@ -12,8 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MessageCircle, Save, Send, Plus, X, Server, Megaphone } from "lucide-react";
+import { MessageCircle, Save, Send, Plus, X, Server, Megaphone, Inbox } from "lucide-react";
 import { toast } from "sonner";
+import WhatsAppInbox from "@/components/WhatsAppInbox";
 
 // Compute offline cameras live from Frigate /api/stats, same heuristic as NvrStatus page.
 function parseOfflineCams(stats: unknown): string[] {
