@@ -63,6 +63,7 @@ type WAS = {
   daily_broadcast_enabled: boolean;
   daily_broadcast_recipients: string[];
   daily_broadcast_time: string;
+  daily_broadcast_template: string | null;
 };
 
 type Nvr = {
