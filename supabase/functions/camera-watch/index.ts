@@ -24,7 +24,12 @@ type Instance = {
   whatsapp_alert_enabled: boolean;
   whatsapp_recipients: string[];
   whatsapp_alert_minutes: number | null;
+  multi_client: boolean;
+  camera_whatsapp_recipients: Record<string, string[]> | null;
 };
+
+const isWaRecipient = (r: string) =>
+  /^\+?\d{6,}$/.test(r) || /@(g\.us|s\.whatsapp\.net|c\.us|broadcast)$/i.test(r);
 
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
