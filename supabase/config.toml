@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.escalate-offline-whatsapp]
 verify_jwt = false
+
+[functions.daily-offline-broadcast]
+verify_jwt = false

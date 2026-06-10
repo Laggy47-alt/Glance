@@ -57,6 +57,9 @@ type WAS = {
   max_alerts_per_hour: number;
   cooldown_minutes: number;
   last_sent_at: string | null;
+  daily_broadcast_enabled: boolean;
+  daily_broadcast_recipients: string[];
+  daily_broadcast_time: string;
 };
 
 type Nvr = {
@@ -85,6 +88,9 @@ const DEFAULTS: WAS = {
   max_alerts_per_hour: 30,
   cooldown_minutes: 0,
   last_sent_at: null,
+  daily_broadcast_enabled: false,
+  daily_broadcast_recipients: [],
+  daily_broadcast_time: "08:00",
 };
 
 function RecipientList({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
@@ -374,6 +380,41 @@ export default function WhatsAppAlerts() {
 
         <div className="flex justify-end pt-4">
           <Button onClick={save} disabled={saving}><Save className="h-3.5 w-3.5 mr-1" />{saving ? "Saving…" : "Save settings"}</Button>
+        </div>
+      </Card>
+
+      <Card className="bg-gradient-card border-border shadow-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Megaphone className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Scheduled daily broadcast</h3>
+          <div className="ml-auto flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground">Enabled</Label>
+            <Switch checked={settings.daily_broadcast_enabled}
+              onCheckedChange={(v) => setSettings({ ...settings, daily_broadcast_enabled: v })} />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Once per day at the time below (in the timezone on the Schedule tab), a summary of every currently-offline camera is sent to the recipients/group below.
+        </p>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Send at (HH:MM, {settings.quiet_timezone})</Label>
+            <Input type="time" value={settings.daily_broadcast_time}
+              onChange={(e) => setSettings({ ...settings, daily_broadcast_time: e.target.value || "08:00" })}
+              className="bg-secondary border-border w-40" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Recipients / group(s)</Label>
+            <RecipientList value={settings.daily_broadcast_recipients}
+              onChange={(v) => setSettings({ ...settings, daily_broadcast_recipients: v })}
+              placeholder="+27821234567 or 12345-67890@g.us" />
+            <p className="text-[11px] text-muted-foreground">If empty, the global default recipients are used.</p>
+          </div>
+        </div>
+        <div className="flex justify-end pt-3">
+          <Button size="sm" onClick={save} disabled={saving}>
+            <Save className="h-3.5 w-3.5 mr-1" />{saving ? "Saving…" : "Save daily broadcast"}
+          </Button>
         </div>
       </Card>
 
