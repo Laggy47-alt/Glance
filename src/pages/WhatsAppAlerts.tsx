@@ -45,9 +45,11 @@ type WAS = {
   enabled: boolean;
   mudslide_url: string | null;
   mudslide_token: string | null;
+  incoming_webhook_secret: string | null;
   default_recipients: string[];
   alert_template: string;
   recovery_template: string;
+  reply_footer: string | null;
   send_recovery: boolean;
   include_nvr_unreachable: boolean;
   batch_alerts: boolean;
