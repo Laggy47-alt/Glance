@@ -637,6 +637,76 @@ supabase functions deploy admin-users --no-verify-jwt
 
 ---
 
+## Appendix B — Pushing migrations to a self-hosted Supabase Docker instance
+
+If you are running **your own Supabase** in Docker (not Supabase Cloud), the
+standard `supabase db push` command won't work because the CLI is linked to a
+hosted project. Instead you apply migrations directly to the Postgres container.
+
+### B.1 Why `psql` to port 5432 fails
+
+Supavisor (the connection pooler) listens on host port `5432` and requires a
+tenant identifier. Connecting directly gives:
+
+```
+FATAL: (ENOIDENTIFIER) no tenant identifier provided
+```
+
+Postgres itself runs inside the `supabase-db` container on port `5432`, but that
+port is **not published to the host** — only to the Docker network.
+
+### B.2 Apply all migrations in order
+
+```bash
+cd /srv/abc-glance/app/supabase/migrations
+for f in $(ls *.sql | sort); do
+  echo "Applying $f..."
+  docker exec -i supabase-db psql -U postgres -d postgres < "$f" || break
+done
+```
+
+The `|| break` stops on the first error so you can review it. Remove it if you
+want to skip past "already exists" messages from partially applied migrations.
+
+### B.3 Apply a single migration
+
+```bash
+docker exec -i supabase-db psql -U postgres -d postgres \
+  < supabase/migrations/YOUR_MIGRATION_FILE.sql
+```
+
+### B.4 Verify containers
+
+```bash
+docker ps | grep -E "supabase-db|supabase-pooler"
+```
+
+You should see:
+
+- `supabase-pooler` — maps ports `5432` and `6543` to the host
+- `supabase-db` — internal port `5432` only (use `docker exec`)
+
+### B.5 Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `FATAL: password authentication failed` | Check `-U postgres`; set `PGPASSWORD` from your `.env` if needed |
+| `relation ... already exists` | Migration already applied — safe to ignore |
+| Container not found | Run `docker ps` to confirm the exact name (`supabase-db` vs `supabase-db-1`) |
+
+### B.6 Fresh-install shortcut
+
+If the database has **never been initialized**, you can drop `.sql` files into
+the init directory before first start:
+
+```bash
+cp supabase/migrations/*.sql /path/to/supabase/volumes/db/init/
+```
+
+Once Postgres has started, use the `docker exec` method above instead.
+
+---
+
 ## Appendix A — Minimal checklist
 
 - [ ] Supabase Cloud project created; project ref, anon key, service_role key noted
