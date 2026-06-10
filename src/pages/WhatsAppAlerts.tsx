@@ -69,6 +69,8 @@ type Nvr = {
   whatsapp_recipients: string[];
   whatsapp_alert_minutes: number | null;
   offline_alert_minutes: number;
+  multi_client: boolean;
+  camera_whatsapp_recipients: Record<string, string[]>;
 };
 
 const DEFAULTS: WAS = {
@@ -128,6 +130,9 @@ export default function WhatsAppAlerts() {
   const { activeOrg } = useAuth();
   const [settings, setSettings] = useState<WAS>(DEFAULTS);
   const [nvrs, setNvrs] = useState<Nvr[]>([]);
+  const [nvrCameras, setNvrCameras] = useState<Record<string, string[]>>({});
+  const [customMsg, setCustomMsg] = useState<Record<string, string>>({});
+  const [sendingCustom, setSendingCustom] = useState<string | null>(null);
   const store = useWebhookStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -146,10 +151,28 @@ export default function WhatsAppAlerts() {
       if (s) setSettings({ ...DEFAULTS, ...(s as any) });
       const { data: n } = await supabase
         .from("frigate_instances")
-        .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes")
+        .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients")
         .eq("organization_id", activeOrg.id)
         .order("name");
-      setNvrs((n ?? []) as Nvr[]);
+      const list = ((n ?? []) as any[]).map((x) => ({
+        ...x,
+        camera_whatsapp_recipients: (x.camera_whatsapp_recipients ?? {}) as Record<string, string[]>,
+      })) as Nvr[];
+      setNvrs(list);
+
+      // Load camera names per NVR from camera_status (used to populate per-camera recipient editor).
+      if (list.length) {
+        const { data: cs } = await supabase
+          .from("camera_status")
+          .select("instance_id, camera")
+          .in("instance_id", list.map((x) => x.id));
+        const map: Record<string, string[]> = {};
+        for (const r of cs ?? []) {
+          (map[(r as any).instance_id] ??= []).push((r as any).camera);
+        }
+        for (const k of Object.keys(map)) map[k] = Array.from(new Set(map[k])).sort();
+        setNvrCameras(map);
+      }
       setLoading(false);
     })();
   }, [activeOrg?.id]);
@@ -174,10 +197,39 @@ export default function WhatsAppAlerts() {
         whatsapp_alert_enabled: n.whatsapp_alert_enabled,
         whatsapp_recipients: n.whatsapp_recipients,
         whatsapp_alert_minutes: n.whatsapp_alert_minutes,
+        multi_client: n.multi_client,
+        camera_whatsapp_recipients: n.camera_whatsapp_recipients,
       })
       .eq("id", n.id);
     if (error) { toast.error(error.message); return; }
     toast.success(`Saved ${n.name}`);
+  };
+
+  const sendCustomToNvr = async (n: Nvr) => {
+    if (!activeOrg?.id) return;
+    const msg = (customMsg[n.id] ?? "").trim();
+    if (!msg) { toast.error("Type a message first"); return; }
+    const recips = (n.whatsapp_recipients ?? []).filter(isValidRecipient);
+    if (!recips.length) { toast.error("This NVR has no WhatsApp recipients"); return; }
+    setSendingCustom(n.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("escalate-offline-whatsapp", {
+        body: {
+          organization_id: activeOrg.id,
+          recipients: recips,
+          message: msg,
+          test: true, // bypass quiet hours / rate limit for manual broadcasts
+        },
+      });
+      if (error) throw error;
+      const errs = (data as any)?.errors ?? [];
+      if (errs.length) toast.error(errs.join("\n"));
+      else toast.success(`Sent to ${recips.length} recipient(s) on ${n.name}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? String(e));
+    } finally {
+      setSendingCustom(null);
+    }
   };
 
   const sendTest = async () => {
@@ -469,6 +521,60 @@ export default function WhatsAppAlerts() {
                     className="bg-secondary border-border w-40" />
                 </div>
               </div>
+
+              {/* Multi-client per-camera routing */}
+              <div className="flex items-center justify-between rounded-md border border-border p-2.5">
+                <div>
+                  <div className="text-sm">Multi-client NVR</div>
+                  <div className="text-[11px] text-muted-foreground">Route each camera's offline alert to its own recipients (falls back to the NVR recipients above).</div>
+                </div>
+                <Switch checked={n.multi_client}
+                  onCheckedChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, multi_client: v } : x))} />
+              </div>
+
+              {n.multi_client && (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <div className="text-xs font-medium">Per-camera recipients</div>
+                  {(nvrCameras[n.id] ?? []).length === 0 && (
+                    <p className="text-[11px] text-muted-foreground italic">No cameras seen yet for this NVR. They'll appear here after the next status poll (max ~1 min).</p>
+                  )}
+                  <div className="space-y-2">
+                    {(nvrCameras[n.id] ?? []).map((cam) => (
+                      <div key={cam} className="grid md:grid-cols-[180px_1fr] gap-2 items-start">
+                        <div className="text-xs font-mono pt-2">{cam}</div>
+                        <RecipientList
+                          value={n.camera_whatsapp_recipients?.[cam] ?? []}
+                          onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? {
+                            ...x,
+                            camera_whatsapp_recipients: { ...(x.camera_whatsapp_recipients ?? {}), [cam]: v },
+                          } : x))}
+                          placeholder="+27821234567 or 12345-67890@g.us"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Custom message broadcast to this NVR's recipients */}
+              <div className="rounded-md border border-border p-3 space-y-2">
+                <div className="text-xs font-medium flex items-center gap-2">
+                  <Megaphone className="h-3.5 w-3.5 text-primary" />
+                  Custom broadcast to NVR recipients
+                </div>
+                <Textarea rows={2} value={customMsg[n.id] ?? ""}
+                  onChange={(e) => setCustomMsg({ ...customMsg, [n.id]: e.target.value })}
+                  placeholder="Type a message to send to all this NVR's WhatsApp recipients…"
+                  className="bg-secondary border-border text-sm" />
+                <div className="flex justify-end">
+                  <Button size="sm" variant="secondary"
+                    onClick={() => sendCustomToNvr(n)}
+                    disabled={sendingCustom === n.id}>
+                    <Send className="h-3.5 w-3.5 mr-1" />{sendingCustom === n.id ? "Sending…" : `Send to ${(n.whatsapp_recipients ?? []).length} recipient(s)`}
+                  </Button>
+                </div>
+              </div>
+
               <div className="flex justify-end">
                 <Button size="sm" variant="secondary" onClick={() => saveNvr(n)}><Save className="h-3.5 w-3.5 mr-1" />Save</Button>
               </div>
