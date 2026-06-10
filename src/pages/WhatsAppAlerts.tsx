@@ -68,7 +68,7 @@ function RecipientList({ value, onChange, placeholder }: { value: string[]; onCh
   const [draft, setDraft] = useState("");
   const add = () => {
     const t = draft.trim();
-    if (!/^\+?\d{6,}$/.test(t)) { toast.error("Enter E.164 number, e.g. +27821234567"); return; }
+    if (!isValidRecipient(t)) { toast.error("Enter E.164 number (+27821234567) or group JID (12345-67890@g.us)"); return; }
     if (value.includes(t)) return;
     onChange([...value, t]); setDraft("");
   };
