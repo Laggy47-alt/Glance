@@ -25,6 +25,8 @@ import Customization from "./pages/Customization.tsx";
 import NvrStatus from "./pages/NvrStatus.tsx";
 import CameraStatus from "./pages/CameraStatus.tsx";
 import DailyReports from "./pages/DailyReports.tsx";
+import WhatsAppAlerts from "./pages/WhatsAppAlerts.tsx";
+
 import Customer from "./pages/Customer.tsx";
 import CustomerEvents from "./pages/CustomerEvents.tsx";
 import CustomerInstructions from "./pages/CustomerInstructions.tsx";
@@ -79,6 +81,8 @@ const App = () => (
               <Route path="/users" element={protect(<Users />, true)} />
               <Route path="/customization" element={protect(<Customization />, true)} />
               <Route path="/daily-reports" element={protect(<DailyReports />, true)} />
+              <Route path="/whatsapp-alerts" element={protect(<WhatsAppAlerts />, true)} />
+
               <Route path="/callouts" element={protect(<Callouts />, true)} />
               <Route path="/request-support" element={protect(<RequestSupportCallout />, true)} />
               <Route path="/customer" element={protect(<Customer />)} />
