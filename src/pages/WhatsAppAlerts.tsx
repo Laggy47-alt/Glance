@@ -122,6 +122,7 @@ export default function WhatsAppAlerts() {
   const { activeOrg } = useAuth();
   const [settings, setSettings] = useState<WAS>(DEFAULTS);
   const [nvrs, setNvrs] = useState<Nvr[]>([]);
+  const store = useWebhookStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testNum, setTestNum] = useState("");
