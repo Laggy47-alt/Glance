@@ -521,6 +521,60 @@ export default function WhatsAppAlerts() {
                     className="bg-secondary border-border w-40" />
                 </div>
               </div>
+
+              {/* Multi-client per-camera routing */}
+              <div className="flex items-center justify-between rounded-md border border-border p-2.5">
+                <div>
+                  <div className="text-sm">Multi-client NVR</div>
+                  <div className="text-[11px] text-muted-foreground">Route each camera's offline alert to its own recipients (falls back to the NVR recipients above).</div>
+                </div>
+                <Switch checked={n.multi_client}
+                  onCheckedChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, multi_client: v } : x))} />
+              </div>
+
+              {n.multi_client && (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <div className="text-xs font-medium">Per-camera recipients</div>
+                  {(nvrCameras[n.id] ?? []).length === 0 && (
+                    <p className="text-[11px] text-muted-foreground italic">No cameras seen yet for this NVR. They'll appear here after the next status poll (max ~1 min).</p>
+                  )}
+                  <div className="space-y-2">
+                    {(nvrCameras[n.id] ?? []).map((cam) => (
+                      <div key={cam} className="grid md:grid-cols-[180px_1fr] gap-2 items-start">
+                        <div className="text-xs font-mono pt-2">{cam}</div>
+                        <RecipientList
+                          value={n.camera_whatsapp_recipients?.[cam] ?? []}
+                          onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? {
+                            ...x,
+                            camera_whatsapp_recipients: { ...(x.camera_whatsapp_recipients ?? {}), [cam]: v },
+                          } : x))}
+                          placeholder="+27821234567 or 12345-67890@g.us"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Custom message broadcast to this NVR's recipients */}
+              <div className="rounded-md border border-border p-3 space-y-2">
+                <div className="text-xs font-medium flex items-center gap-2">
+                  <Megaphone className="h-3.5 w-3.5 text-primary" />
+                  Custom broadcast to NVR recipients
+                </div>
+                <Textarea rows={2} value={customMsg[n.id] ?? ""}
+                  onChange={(e) => setCustomMsg({ ...customMsg, [n.id]: e.target.value })}
+                  placeholder="Type a message to send to all this NVR's WhatsApp recipients…"
+                  className="bg-secondary border-border text-sm" />
+                <div className="flex justify-end">
+                  <Button size="sm" variant="secondary"
+                    onClick={() => sendCustomToNvr(n)}
+                    disabled={sendingCustom === n.id}>
+                    <Send className="h-3.5 w-3.5 mr-1" />{sendingCustom === n.id ? "Sending…" : `Send to ${(n.whatsapp_recipients ?? []).length} recipient(s)`}
+                  </Button>
+                </div>
+              </div>
+
               <div className="flex justify-end">
                 <Button size="sm" variant="secondary" onClick={() => saveNvr(n)}><Save className="h-3.5 w-3.5 mr-1" />Save</Button>
               </div>
