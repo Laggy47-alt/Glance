@@ -21,7 +21,11 @@ type Instance = {
   offline_alert_enabled: boolean;
   offline_alert_minutes: number;
   offline_alert_recipients: string[];
+  whatsapp_alert_enabled: boolean;
+  whatsapp_recipients: string[];
+  whatsapp_alert_minutes: number | null;
 };
+
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
 

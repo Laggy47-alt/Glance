@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.camera-watch]
 verify_jwt = false
+
+[functions.escalate-offline-whatsapp]
+verify_jwt = false
