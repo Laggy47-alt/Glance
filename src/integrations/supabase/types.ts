@@ -1089,6 +1089,9 @@ export type Database = {
           batch_alerts: boolean
           cooldown_minutes: number
           created_at: string
+          daily_broadcast_enabled: boolean
+          daily_broadcast_recipients: string[]
+          daily_broadcast_time: string
           default_recipients: string[]
           enabled: boolean
           id: string
@@ -1111,6 +1114,9 @@ export type Database = {
           batch_alerts?: boolean
           cooldown_minutes?: number
           created_at?: string
+          daily_broadcast_enabled?: boolean
+          daily_broadcast_recipients?: string[]
+          daily_broadcast_time?: string
           default_recipients?: string[]
           enabled?: boolean
           id?: string
@@ -1133,6 +1139,9 @@ export type Database = {
           batch_alerts?: boolean
           cooldown_minutes?: number
           created_at?: string
+          daily_broadcast_enabled?: boolean
+          daily_broadcast_recipients?: string[]
+          daily_broadcast_time?: string
           default_recipients?: string[]
           enabled?: boolean
           id?: string
