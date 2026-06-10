@@ -102,6 +102,9 @@ export default function WhatsAppAlerts() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testNum, setTestNum] = useState("");
+  const [broadcastTo, setBroadcastTo] = useState("");
+  const [broadcasting, setBroadcasting] = useState(false);
+
 
   useEffect(() => {
     if (!activeOrg?.id) return;
