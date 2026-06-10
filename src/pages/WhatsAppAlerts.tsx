@@ -198,7 +198,8 @@ export default function WhatsAppAlerts() {
       }
     })();
     return () => { cancelled = true; };
-  }, [activeOrg?.id]);
+  }, [activeOrg?.id, store.frigates.length]);
+
 
 
   const save = async () => {
