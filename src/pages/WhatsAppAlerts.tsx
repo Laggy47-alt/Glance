@@ -85,7 +85,7 @@ const DEFAULTS: WAS = {
   default_recipients: [],
   alert_template: "🚨 *{{nvr}}* — {{count}} camera(s) offline ≥ {{minutes}}m:\n{{cameras}}",
   recovery_template: "✅ *{{nvr}}* — {{camera}} back online",
-  reply_footer: "Reply to this message to get in touch with our Technical Team 👨‍💻\nWe'll get back to you as soon as possible! 🚀",
+  reply_footer: "Need help? Just reply to this message and our Technical Team will assist you! 👨‍💻🚀",
   send_recovery: true,
   include_nvr_unreachable: true,
   batch_alerts: true,
@@ -99,6 +99,12 @@ const DEFAULTS: WAS = {
   daily_broadcast_enabled: false,
   daily_broadcast_recipients: [],
   daily_broadcast_time: "08:00",
+  daily_broadcast_template:
+    "Hey there! 👋😊\n\n" +
+    "I'm Glance, your friendly ABC CCTV sidekick! 🛡️🤖\n\n" +
+    "Keep an eye out for my updates — I'll ping you whenever something needs attention onsite. 🔔🔧\n\n" +
+    "Need technical assistance? Just reply to this message and our team will be in touch! 👨‍💻🚀\n\n" +
+    "Cheers for now! 🎉👍",
 };
 
 function RecipientList({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
