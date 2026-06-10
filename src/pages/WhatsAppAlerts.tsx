@@ -499,6 +499,62 @@ export default function WhatsAppAlerts() {
         </p>
       </Card>
 
+      <Card className="bg-gradient-card border-border shadow-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Megaphone className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Broadcast message</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          One-time custom message sent to every WhatsApp recipient on the NVRs you select. Formatted to match the offline-alert style. Quiet hours and rate limits are bypassed.
+        </p>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Message</Label>
+            <Textarea rows={4} value={customMsg} onChange={(e) => setCustomMsg(e.target.value)}
+              placeholder="Type the message to broadcast…"
+              className="bg-secondary border-border text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Send to recipients of these NVRs</Label>
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" type="button"
+                  onClick={() => setCustomSelected(Object.fromEntries(nvrs.map((n) => [n.id, true])))}>
+                  Select all
+                </Button>
+                <Button size="sm" variant="ghost" type="button"
+                  onClick={() => setCustomSelected({})}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-md border border-border p-2 grid sm:grid-cols-2 gap-1.5 max-h-56 overflow-auto">
+              {nvrs.length === 0 && <span className="text-xs text-muted-foreground italic">No NVRs configured.</span>}
+              {nvrs.map((n) => {
+                const count = (n.whatsapp_recipients ?? []).filter(isValidRecipient).length;
+                return (
+                  <label key={n.id} className="flex items-center gap-2 text-sm px-1.5 py-1 rounded hover:bg-secondary cursor-pointer">
+                    <input type="checkbox" className="accent-primary"
+                      checked={!!customSelected[n.id]}
+                      onChange={(e) => setCustomSelected({ ...customSelected, [n.id]: e.target.checked })} />
+                    <span className="flex-1 truncate">{n.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{count} recipient{count === 1 ? "" : "s"}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={sendCustomBroadcast} disabled={customSending}>
+              <Send className="h-3.5 w-3.5 mr-1" />{customSending ? "Sending…" : "Send broadcast"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+
+
+
 
       <Card className="bg-gradient-card border-border shadow-card p-5">
         <div className="flex items-center gap-2 mb-3">
