@@ -213,18 +213,20 @@ export default function WhatsAppAlerts() {
     if (!recips.length) { toast.error("This NVR has no WhatsApp recipients"); return; }
     setSendingCustom(n.id);
     try {
+      // Format to match the offline-alert look: bold NVR header, then the message body.
+      const formatted = `🚨 *${n.name}*\n${msg}`;
       const { data, error } = await supabase.functions.invoke("escalate-offline-whatsapp", {
         body: {
           organization_id: activeOrg.id,
           recipients: recips,
-          message: msg,
-          test: true, // bypass quiet hours / rate limit for manual broadcasts
+          message: formatted,
+          test: true, // one-time manual send: bypass quiet hours / rate limit, no schedule
         },
       });
       if (error) throw error;
       const errs = (data as any)?.errors ?? [];
       if (errs.length) toast.error(errs.join("\n"));
-      else toast.success(`Sent to ${recips.length} recipient(s) on ${n.name}`);
+      else { toast.success(`Sent to ${recips.length} recipient(s) on ${n.name}`); setCustomMsg({ ...customMsg, [n.id]: "" }); }
     } catch (e: any) {
       toast.error(e?.message ?? String(e));
     } finally {
