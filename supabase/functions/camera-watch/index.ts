@@ -152,19 +152,15 @@ Deno.serve(async (req) => {
     if (!toAlert.length) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
     const recipients = inst.offline_alert_enabled ? await recipientsForInstance(supabase, inst) : [];
-    const waRecipients = inst.whatsapp_alert_enabled
-      ? (inst.whatsapp_recipients ?? []).map((r: string) => r.trim()).filter((r: string) => /^\+?\d{6,}$/.test(r))
-      : [];
+    const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
 
     if (inst.offline_alert_enabled && !recipients.length && !inst.whatsapp_alert_enabled) {
       results.push({ instance: inst.name, alerted: 0, error: "no recipients" });
       continue;
     }
 
-    const minsList = toAlert.map((d) => {
-      const mins = Math.floor((now - new Date(d.since).getTime()) / 60_000);
-      return `${d.camera} (offline ${mins}m)`;
-    });
+    const minsFor = (since: string) => Math.floor((now - new Date(since).getTime()) / 60_000);
+    const minsList = toAlert.map((d) => `${d.camera} (offline ${minsFor(d.since)}m)`);
     const channelResults: Record<string, any> = {};
 
     if (inst.offline_alert_enabled && recipients.length) {
@@ -186,21 +182,44 @@ Deno.serve(async (req) => {
     }
 
     if (inst.whatsapp_alert_enabled) {
-      try {
-        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-          body: JSON.stringify({
-            organization_id: inst.organization_id,
-            recipients: waRecipients.length ? waRecipients : undefined,
-            minutes: inst.whatsapp_alert_minutes ?? inst.offline_alert_minutes,
-            nvrs: [{ name: inst.name, reachable: true, offlineCameras: minsList }],
-          }),
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(`whatsapp ${res.status}: ${JSON.stringify(j)}`);
-        channelResults.whatsapp = j;
-      } catch (e: any) { channelResults.whatsapp_error = String(e?.message ?? e); }
+      // Build recipient -> cameras buckets.
+      // Multi-client: route each camera to its per-camera recipients (fallback to NVR recipients if none).
+      // Single-client: one bucket using the NVR recipients.
+      const buckets = new Map<string, { recipients: string[]; cameras: typeof toAlert }>();
+      if (inst.multi_client) {
+        const map = (inst.camera_whatsapp_recipients ?? {}) as Record<string, string[]>;
+        for (const d of toAlert) {
+          const camRaw = (map[d.camera] ?? []).map((r) => r.trim()).filter(isWaRecipient);
+          const recips = camRaw.length ? camRaw : nvrWa;
+          if (!recips.length) continue;
+          const key = recips.slice().sort().join("|");
+          if (!buckets.has(key)) buckets.set(key, { recipients: recips, cameras: [] });
+          buckets.get(key)!.cameras.push(d);
+        }
+      } else if (nvrWa.length) {
+        buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: toAlert });
+      }
+
+      const waOut: any[] = [];
+      for (const { recipients: waRecipients, cameras } of buckets.values()) {
+        const list = cameras.map((d) => `${d.camera} (offline ${minsFor(d.since)}m)`);
+        try {
+          const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({
+              organization_id: inst.organization_id,
+              recipients: waRecipients,
+              minutes: inst.whatsapp_alert_minutes ?? inst.offline_alert_minutes,
+              nvrs: [{ name: inst.name, reachable: true, offlineCameras: list }],
+            }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(`whatsapp ${res.status}: ${JSON.stringify(j)}`);
+          waOut.push({ recipients: waRecipients.length, cameras: cameras.length, result: j });
+        } catch (e: any) { waOut.push({ recipients: waRecipients.length, cameras: cameras.length, error: String(e?.message ?? e) }); }
+      }
+      channelResults.whatsapp = waOut;
     }
 
     await supabase.from("camera_offline_alerts").insert(
