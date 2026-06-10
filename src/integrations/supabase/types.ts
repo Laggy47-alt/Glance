@@ -1089,6 +1089,50 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_incoming_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          message_id: string | null
+          notes: string | null
+          organization_id: string
+          read: boolean
+          sender: string
+          sender_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          message_id?: string | null
+          notes?: string | null
+          organization_id: string
+          read?: boolean
+          sender: string
+          sender_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          message_id?: string | null
+          notes?: string | null
+          organization_id?: string
+          read?: boolean
+          sender?: string
+          sender_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_incoming_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_settings: {
         Row: {
           alert_template: string
@@ -1102,6 +1146,7 @@ export type Database = {
           enabled: boolean
           id: string
           include_nvr_unreachable: boolean
+          incoming_webhook_secret: string | null
           last_sent_at: string | null
           max_alerts_per_hour: number
           mudslide_token: string | null
@@ -1112,6 +1157,7 @@ export type Database = {
           quiet_start: string | null
           quiet_timezone: string
           recovery_template: string
+          reply_footer: string | null
           send_recovery: boolean
           updated_at: string
         }
@@ -1127,6 +1173,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           include_nvr_unreachable?: boolean
+          incoming_webhook_secret?: string | null
           last_sent_at?: string | null
           max_alerts_per_hour?: number
           mudslide_token?: string | null
@@ -1137,6 +1184,7 @@ export type Database = {
           quiet_start?: string | null
           quiet_timezone?: string
           recovery_template?: string
+          reply_footer?: string | null
           send_recovery?: boolean
           updated_at?: string
         }
@@ -1152,6 +1200,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           include_nvr_unreachable?: boolean
+          incoming_webhook_secret?: string | null
           last_sent_at?: string | null
           max_alerts_per_hour?: number
           mudslide_token?: string | null
@@ -1162,6 +1211,7 @@ export type Database = {
           quiet_start?: string | null
           quiet_timezone?: string
           recovery_template?: string
+          reply_footer?: string | null
           send_recovery?: boolean
           updated_at?: string
         }

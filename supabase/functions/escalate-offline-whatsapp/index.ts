@@ -24,6 +24,7 @@ type Settings = {
   default_recipients: string[];
   alert_template: string;
   recovery_template: string;
+  reply_footer: string | null;
   quiet_hours_enabled: boolean;
   quiet_start: string | null;
   quiet_end: string | null;
@@ -123,6 +124,9 @@ Deno.serve(async (req) => {
       message = blocks.join("\n\n");
     }
     if (!message.trim()) message = "ABC Glance alert";
+    if (s.reply_footer) {
+      message = message.trim() + "\n\n" + s.reply_footer.trim();
+    }
 
     // Rate limit (global per org, last hour)
     if (!body?.test && s.max_alerts_per_hour > 0) {

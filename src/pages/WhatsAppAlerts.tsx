@@ -12,8 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MessageCircle, Save, Send, Plus, X, Server, Megaphone } from "lucide-react";
+import { MessageCircle, Save, Send, Plus, X, Server, Megaphone, Inbox } from "lucide-react";
 import { toast } from "sonner";
+import WhatsAppInbox from "@/components/WhatsAppInbox";
 
 // Compute offline cameras live from Frigate /api/stats, same heuristic as NvrStatus page.
 function parseOfflineCams(stats: unknown): string[] {
@@ -44,9 +45,11 @@ type WAS = {
   enabled: boolean;
   mudslide_url: string | null;
   mudslide_token: string | null;
+  incoming_webhook_secret: string | null;
   default_recipients: string[];
   alert_template: string;
   recovery_template: string;
+  reply_footer: string | null;
   send_recovery: boolean;
   include_nvr_unreachable: boolean;
   batch_alerts: boolean;
@@ -77,9 +80,11 @@ const DEFAULTS: WAS = {
   enabled: false,
   mudslide_url: "",
   mudslide_token: "",
+  incoming_webhook_secret: "",
   default_recipients: [],
   alert_template: "🚨 *{{nvr}}* — {{count}} camera(s) offline ≥ {{minutes}}m:\n{{cameras}}",
   recovery_template: "✅ *{{nvr}}* — {{camera}} back online",
+  reply_footer: "Reply to this message to get in touch with our Technical Team 👨‍💻\nWe'll get back to you as soon as possible! 🚀",
   send_recovery: true,
   include_nvr_unreachable: true,
   batch_alerts: true,
@@ -421,6 +426,12 @@ export default function WhatsAppAlerts() {
             <div className="flex items-center justify-between rounded-md border border-border p-2.5">
               <div><div className="text-sm">Batch multiple cameras</div><div className="text-[11px] text-muted-foreground">Combine cameras of the same NVR into one message</div></div>
               <Switch checked={settings.batch_alerts} onCheckedChange={(v) => setSettings({ ...settings, batch_alerts: v })} />
+            </div>
+            <div className="space-y-1.5 pt-2">
+              <Label className="text-xs">Reply footer</Label>
+              <Textarea rows={3} value={settings.reply_footer ?? ""} onChange={(e) => setSettings({ ...settings, reply_footer: e.target.value })}
+                className="bg-secondary border-border font-mono text-xs" />
+              <p className="text-[11px] text-muted-foreground">Appended to every outgoing WhatsApp message. Clients can reply to get in touch with the Technical Team.</p>
             </div>
           </TabsContent>
 
