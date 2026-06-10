@@ -206,16 +206,21 @@ export default function WhatsAppAlerts() {
     toast.success(`Saved ${n.name}`);
   };
 
-  const sendCustomToNvr = async (n: Nvr) => {
+  const sendCustomBroadcast = async () => {
     if (!activeOrg?.id) return;
-    const msg = (customMsg[n.id] ?? "").trim();
+    const msg = customMsg.trim();
     if (!msg) { toast.error("Type a message first"); return; }
-    const recips = (n.whatsapp_recipients ?? []).filter(isValidRecipient);
-    if (!recips.length) { toast.error("This NVR has no WhatsApp recipients"); return; }
-    setSendingCustom(n.id);
+    const chosen = nvrs.filter((n) => customSelected[n.id]);
+    if (!chosen.length) { toast.error("Select at least one NVR"); return; }
+    const recips = Array.from(new Set(
+      chosen.flatMap((n) => (n.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isValidRecipient))
+    ));
+    if (!recips.length) { toast.error("Selected NVRs have no WhatsApp recipients"); return; }
+    setCustomSending(true);
     try {
-      // Format to match the offline-alert look: bold NVR header, then the message body.
-      const formatted = `🚨 *${n.name}*\n${msg}`;
+      // Format to match the offline-alert look.
+      const header = chosen.length === 1 ? `🚨 *${chosen[0].name}*` : `🚨 *Broadcast*`;
+      const formatted = `${header}\n${msg}`;
       const { data, error } = await supabase.functions.invoke("escalate-offline-whatsapp", {
         body: {
           organization_id: activeOrg.id,
@@ -227,11 +232,11 @@ export default function WhatsAppAlerts() {
       if (error) throw error;
       const errs = (data as any)?.errors ?? [];
       if (errs.length) toast.error(errs.join("\n"));
-      else { toast.success(`Sent to ${recips.length} recipient(s) on ${n.name}`); setCustomMsg({ ...customMsg, [n.id]: "" }); }
+      else { toast.success(`Sent to ${recips.length} recipient(s)`); setCustomMsg(""); }
     } catch (e: any) {
       toast.error(e?.message ?? String(e));
     } finally {
-      setSendingCustom(null);
+      setCustomSending(false);
     }
   };
 
