@@ -650,3 +650,5 @@ supabase functions deploy admin-users --no-verify-jwt
 - [ ] NGINX site enabled, TLS issued
 - [ ] First‑run admin created at `/login`
 - [ ] `EMERGENCY_PASS` rotated, backup strategy in place
+- [ ] (Optional) Mudslide installed + behind NGINX, `MUDSLIDE_URL` / `MUDSLIDE_TOKEN` secrets set
+
