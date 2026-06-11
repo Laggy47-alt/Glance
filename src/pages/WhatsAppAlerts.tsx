@@ -295,6 +295,21 @@ export default function WhatsAppAlerts() {
     toast.success("Test message sent");
   };
 
+  const runHeartbeat = async () => {
+    if (!activeOrg?.id) return;
+    const { data, error } = await supabase.functions.invoke("whatsapp-heartbeat", { body: {} });
+    if (error) { toast.error(error.message); return; }
+    const mine = (data as any)?.results?.find((r: any) => r.organization_id === activeOrg.id);
+    if (mine?.ok) toast.success(`Heartbeat ok (${mine.status})`);
+    else if (mine) toast.error(`Heartbeat failed: ${mine.status}`);
+    else toast.success("Heartbeat ran");
+    // refresh row
+    const { data: row } = await supabase.from("whatsapp_settings")
+      .select("last_heartbeat_at, last_heartbeat_status")
+      .eq("organization_id", activeOrg.id).maybeSingle();
+    if (row) setSettings((s) => ({ ...s, last_heartbeat_at: (row as any).last_heartbeat_at, last_heartbeat_status: (row as any).last_heartbeat_status }));
+  };
+
   const broadcastOffline = async () => {
     if (!activeOrg?.id) return;
     const target = broadcastTo.trim();
