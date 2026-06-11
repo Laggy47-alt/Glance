@@ -670,6 +670,16 @@ export default function WhatsAppAlerts() {
                 </div>
               </div>
 
+              {/* Daily client report */}
+              <div className="flex items-center justify-between rounded-md border border-border p-2.5">
+                <div>
+                  <div className="text-sm">Send daily report to this NVR's recipients</div>
+                  <div className="text-[11px] text-muted-foreground">At the scheduled daily broadcast time, also send a summary (offline cameras for this NVR, or "all online") to the recipients above.</div>
+                </div>
+                <Switch checked={n.daily_broadcast_enabled}
+                  onCheckedChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, daily_broadcast_enabled: v } : x))} />
+              </div>
+
               {/* Multi-client per-camera routing */}
               <div className="flex items-center justify-between rounded-md border border-border p-2.5">
                 <div>
