@@ -35,22 +35,23 @@ async function tryReq(url: string, method: string, token: string | null) {
 
 async function pingMudslide(url: string, token: string | null) {
   const base = url.replace(/\/+$/, "");
-  // Mudslide exposes `me`. Try common variants (GET + POST, with/without trailing slash).
   const attempts: Array<[string, string]> = [
     ["/me", "GET"], ["/me", "POST"],
-    ["/me/", "GET"],
     ["/groups", "GET"], ["/contacts", "GET"],
-    ["/status", "GET"], ["/health", "GET"], ["/healthz", "GET"],
+    ["/status", "GET"], ["/health", "GET"],
     ["/", "GET"],
   ];
   let lastErr = "";
   for (const [ep, method] of attempts) {
     const r = await tryReq(base + ep, method, token);
-    if (r.ok) {
-      return { ok: true, status: r.status, endpoint: `${method} ${ep}`, body: r.body };
-    }
+    if (r.ok) return { ok: true, status: r.status, endpoint: `${method} ${ep}`, body: r.body };
     if (r.status === 401 || r.status === 403) {
-      return { ok: true, status: r.status, endpoint: `${method} ${ep}`, body: `auth-required ${r.body}` };
+      return { ok: true, status: r.status, endpoint: `${method} ${ep}`, body: `auth-required` };
+    }
+    // A JSON 404 like {"error":"not found"} still proves the HTTP server
+    // (and therefore the Mudslide process) is up and routing requests.
+    if (r.status === 404 && /\{.*\}/.test(r.body)) {
+      return { ok: true, status: r.status, endpoint: `${method} ${ep}`, body: `alive (404 json) ${r.body.slice(0, 120)}` };
     }
     lastErr = `${method} ${ep} -> ${r.status} ${r.body.slice(0, 100)}`;
   }
