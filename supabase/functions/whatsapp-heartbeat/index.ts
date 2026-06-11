@@ -16,8 +16,9 @@ const corsHeaders = {
 
 async function pingMudslide(url: string, token: string | null) {
   const base = url.replace(/\/+$/, "");
-  // Try /me first (returns the logged-in WhatsApp user), fall back to root.
-  const endpoints = ["/me", "/"];
+  // Mudslide HTTP API doesn't expose /me. Try known endpoints that confirm
+  // the session is connected; any 2xx response means the worker is alive.
+  const endpoints = ["/groups", "/contacts", "/status", "/health", "/healthz", "/"];
   let lastErr = "";
   for (const ep of endpoints) {
     try {
@@ -33,7 +34,11 @@ async function pingMudslide(url: string, token: string | null) {
       if (r.ok) {
         return { ok: true, status: r.status, endpoint: ep, body: text.slice(0, 300) };
       }
-      lastErr = `${ep} -> ${r.status} ${text.slice(0, 200)}`;
+      // 401/403 still means the server is up and listening
+      if (r.status === 401 || r.status === 403) {
+        return { ok: true, status: r.status, endpoint: ep, body: `auth-required ${text.slice(0, 200)}` };
+      }
+      lastErr = `${ep} -> ${r.status} ${text.slice(0, 120)}`;
     } catch (e) {
       lastErr = `${ep} -> ${(e as Error).message}`;
     }
