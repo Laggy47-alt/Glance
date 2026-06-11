@@ -7,7 +7,45 @@
 
 ## Chat Continuation Reference (for AI)
 
-**PROJECT CONTEXT:** ABC Glance running on self-hosted Docker Supabase (`/srv/supabase/`) with frontend at `/srv/abc-glance/`. Database is Postgres inside `supabase-db` container. Edge functions run in `supabase-edge-functions` container. Last work was on per-NVR WhatsApp daily broadcast reports (`daily-offline-broadcast` edge function + `daily_broadcast_enabled` toggle on `frigate_instances`).
+**PROJECT CONTEXT:** ABC Glance running on self-hosted Docker Supabase (`/srv/supabase/`) with frontend at `/srv/abc-glance/`. Database is Postgres inside `supabase-db` container. Edge functions run in `supabase-edge-functions` container.
+
+**Latest work (resume here):**
+- Removed the audit trail feature entirely (table `event_audit_log` dropped, UI/components gone).
+- Added per-NVR WhatsApp daily client reports (`frigate_instances.daily_broadcast_enabled` + `daily-offline-broadcast` edge function fans out per-NVR).
+- Added NVR-unreachable WhatsApp alerts in `camera-watch`: new columns `frigate_instances.nvr_unreachable_since` and `nvr_unreachable_alerted_since`. Fires one WhatsApp message past `whatsapp_alert_minutes` (falls back to `offline_alert_minutes`), gated by `whatsapp_settings.include_nvr_unreachable` + per-NVR `whatsapp_alert_enabled`. Clears on recovery.
+- Reworked the WhatsApp Alerts page to a two-pane layout (left sidebar nav, right content) with the inbox merged in.
+
+---
+
+## 0. After-Pull Sync Checklist (run this every time you `git pull`)
+
+```bash
+# 1. Frontend
+cd /srv/abc-glance/Glance       # or wherever your repo lives
+bun install
+bun run build
+
+# 2. New/changed DB columns (idempotent — safe to re-run)
+docker exec -i supabase-db psql -U postgres -d postgres <<'SQL'
+ALTER TABLE public.frigate_instances
+  ADD COLUMN IF NOT EXISTS daily_broadcast_enabled boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS nvr_unreachable_since timestamptz,
+  ADD COLUMN IF NOT EXISTS nvr_unreachable_alerted_since timestamptz;
+
+DROP TABLE IF EXISTS public.event_audit_log CASCADE;
+SQL
+
+# 3. Edge functions changed in the last batch
+supabase functions deploy camera-watch              --no-verify-jwt
+supabase functions deploy daily-offline-broadcast   --no-verify-jwt
+supabase functions deploy escalate-offline-whatsapp --no-verify-jwt
+supabase functions deploy whatsapp-heartbeat        --no-verify-jwt
+supabase functions deploy whatsapp-incoming        # JWT required ON
+supabase functions deploy admin-users               --no-verify-jwt
+
+# 4. Reload nginx if you changed nginx config
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ---
 
