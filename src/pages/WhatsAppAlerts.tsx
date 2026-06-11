@@ -77,6 +77,7 @@ type Nvr = {
   offline_alert_minutes: number;
   multi_client: boolean;
   camera_whatsapp_recipients: Record<string, string[]>;
+  daily_broadcast_enabled: boolean;
 };
 
 const DEFAULTS: WAS = {
