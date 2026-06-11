@@ -1,0 +1,1 @@
+ALTER TABLE public.frigate_instances ADD COLUMN IF NOT EXISTS daily_broadcast_enabled boolean NOT NULL DEFAULT false;

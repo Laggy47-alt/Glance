@@ -615,6 +615,7 @@ export type Database = {
           camera_whatsapp_recipients: Json
           color: string
           created_at: string
+          daily_broadcast_enabled: boolean
           enabled: boolean
           id: string
           is_local: boolean
@@ -643,6 +644,7 @@ export type Database = {
           camera_whatsapp_recipients?: Json
           color?: string
           created_at?: string
+          daily_broadcast_enabled?: boolean
           enabled?: boolean
           id?: string
           is_local?: boolean
@@ -671,6 +673,7 @@ export type Database = {
           camera_whatsapp_recipients?: Json
           color?: string
           created_at?: string
+          daily_broadcast_enabled?: boolean
           enabled?: boolean
           id?: string
           is_local?: boolean
