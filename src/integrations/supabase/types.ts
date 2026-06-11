@@ -1148,6 +1148,8 @@ export type Database = {
           id: string
           include_nvr_unreachable: boolean
           incoming_webhook_secret: string | null
+          last_heartbeat_at: string | null
+          last_heartbeat_status: string | null
           last_sent_at: string | null
           max_alerts_per_hour: number
           mudslide_token: string | null
@@ -1176,6 +1178,8 @@ export type Database = {
           id?: string
           include_nvr_unreachable?: boolean
           incoming_webhook_secret?: string | null
+          last_heartbeat_at?: string | null
+          last_heartbeat_status?: string | null
           last_sent_at?: string | null
           max_alerts_per_hour?: number
           mudslide_token?: string | null
@@ -1204,6 +1208,8 @@ export type Database = {
           id?: string
           include_nvr_unreachable?: boolean
           incoming_webhook_secret?: string | null
+          last_heartbeat_at?: string | null
+          last_heartbeat_status?: string | null
           last_sent_at?: string | null
           max_alerts_per_hour?: number
           mudslide_token?: string | null
