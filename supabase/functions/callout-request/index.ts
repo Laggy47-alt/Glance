@@ -29,15 +29,19 @@ Deno.serve(async (req) => {
 
 
     let settingsQ = supabase.from("callout_settings").select("*").limit(1);
-    let smtpQ = supabase.from("daily_report_settings").select("*").limit(1);
+    if (organization_id) settingsQ = settingsQ.eq("organization_id", organization_id);
+    const { data: settings } = await settingsQ.maybeSingle();
+
+    // SMTP: prefer org-matched row, fall back to any row that has a configured host.
+    let smtp: any = null;
     if (organization_id) {
-      settingsQ = settingsQ.eq("organization_id", organization_id);
-      smtpQ = smtpQ.eq("organization_id", organization_id);
+      const { data } = await supabase.from("daily_report_settings").select("*").eq("organization_id", organization_id).limit(1).maybeSingle();
+      smtp = data;
     }
-    const [{ data: settings }, { data: smtp }] = await Promise.all([
-      settingsQ.maybeSingle(),
-      smtpQ.maybeSingle(),
-    ]);
+    if (!smtp?.smtp_host) {
+      const { data } = await supabase.from("daily_report_settings").select("*").not("smtp_host", "is", null).limit(1).maybeSingle();
+      if (data) smtp = data;
+    }
 
     const recipients: string[] = (settings?.recipients ?? []).filter((r: string) => typeof r === "string" && r.includes("@"));
     if (!recipients.length) {
