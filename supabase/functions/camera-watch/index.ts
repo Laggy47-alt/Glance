@@ -106,15 +106,66 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: instances, error } = await supabase
     .from("frigate_instances")
-    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, multi_client, camera_whatsapp_recipients")
+    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, multi_client, camera_whatsapp_recipients, nvr_unreachable_since, nvr_unreachable_alerted_since")
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  // Fetch global WhatsApp settings (include_nvr_unreachable toggle) per org once.
+  const orgIds = Array.from(new Set((instances ?? []).map((i: any) => i.organization_id)));
+  const { data: waSettings } = orgIds.length
+    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable").in("organization_id", orgIds)
+    : { data: [] as any[] };
+  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean }>(
+    (waSettings ?? []).map((s: any) => [s.organization_id, { enabled: !!s.enabled, include_nvr_unreachable: !!s.include_nvr_unreachable }]),
+  );
 
   const results: any[] = [];
 
   for (const inst of (instances ?? []) as Instance[]) {
     const stats = await fetchStats(inst);
-    if (!stats) { results.push({ instance: inst.name, reachable: false }); continue; }
+    if (!stats) {
+      // NVR unreachable — set since timestamp, fire one WhatsApp alert past threshold.
+      const nowIso = new Date().toISOString();
+      const sinceIso = inst.nvr_unreachable_since ?? nowIso;
+      const mins = Math.floor((Date.now() - new Date(sinceIso).getTime()) / 60_000);
+      const thresholdMin = Math.max(1, inst.whatsapp_alert_minutes ?? inst.offline_alert_minutes);
+      const wa = waByOrg.get(inst.organization_id);
+      const shouldAlert =
+        wa?.enabled && wa.include_nvr_unreachable &&
+        inst.whatsapp_alert_enabled &&
+        mins >= thresholdMin &&
+        inst.nvr_unreachable_alerted_since !== sinceIso;
+
+      const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
+      let waResult: any = null;
+      if (shouldAlert && nvrWa.length) {
+        try {
+          const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({
+              organization_id: inst.organization_id,
+              recipients: nvrWa,
+              message: `🚨 *${inst.name}* — NVR UNREACHABLE for ${mins}m. Cameras cannot be polled.`,
+            }),
+          });
+          waResult = await res.json().catch(() => ({ status: res.status }));
+        } catch (e: any) { waResult = { error: String(e?.message ?? e) }; }
+      }
+
+      const patch: any = { nvr_unreachable_since: sinceIso };
+      if (shouldAlert) patch.nvr_unreachable_alerted_since = sinceIso;
+      await supabase.from("frigate_instances").update(patch).eq("id", inst.id);
+      results.push({ instance: inst.name, reachable: false, mins, alerted: shouldAlert, waResult });
+      continue;
+    }
+
+    // Reachable — clear unreachable markers if previously set.
+    if (inst.nvr_unreachable_since || inst.nvr_unreachable_alerted_since) {
+      await supabase.from("frigate_instances")
+        .update({ nvr_unreachable_since: null, nvr_unreachable_alerted_since: null })
+        .eq("id", inst.id);
+    }
     const states = await reconcile(supabase, inst.id, inst.organization_id, stats.online, stats.offline);
     const now = Date.now();
     const thresholdMs = Math.max(1, inst.offline_alert_minutes) * 60_000;
