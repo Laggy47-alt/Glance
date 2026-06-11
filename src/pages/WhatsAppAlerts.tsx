@@ -64,6 +64,8 @@ type WAS = {
   daily_broadcast_recipients: string[];
   daily_broadcast_time: string;
   daily_broadcast_template: string | null;
+  last_heartbeat_at?: string | null;
+  last_heartbeat_status?: string | null;
 };
 
 type Nvr = {
