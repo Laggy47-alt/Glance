@@ -594,6 +594,8 @@ export type Database = {
           mute_end: string | null
           mute_start: string | null
           name: string
+          nvr_unreachable_alerted_since: string | null
+          nvr_unreachable_since: string | null
           offline_alert_enabled: boolean
           offline_alert_minutes: number
           offline_alert_recipients: string[]
@@ -623,6 +625,8 @@ export type Database = {
           mute_end?: string | null
           mute_start?: string | null
           name: string
+          nvr_unreachable_alerted_since?: string | null
+          nvr_unreachable_since?: string | null
           offline_alert_enabled?: boolean
           offline_alert_minutes?: number
           offline_alert_recipients?: string[]
@@ -652,6 +656,8 @@ export type Database = {
           mute_end?: string | null
           mute_start?: string | null
           name?: string
+          nvr_unreachable_alerted_since?: string | null
+          nvr_unreachable_since?: string | null
           offline_alert_enabled?: boolean
           offline_alert_minutes?: number
           offline_alert_recipients?: string[]
