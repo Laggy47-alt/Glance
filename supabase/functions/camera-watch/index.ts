@@ -26,6 +26,8 @@ type Instance = {
   whatsapp_alert_minutes: number | null;
   multi_client: boolean;
   camera_whatsapp_recipients: Record<string, string[]> | null;
+  nvr_unreachable_since: string | null;
+  nvr_unreachable_alerted_since: string | null;
 };
 
 const isWaRecipient = (r: string) =>
