@@ -64,6 +64,8 @@ type WAS = {
   daily_broadcast_recipients: string[];
   daily_broadcast_time: string;
   daily_broadcast_template: string | null;
+  last_heartbeat_at?: string | null;
+  last_heartbeat_status?: string | null;
 };
 
 type Nvr = {
@@ -293,6 +295,21 @@ export default function WhatsAppAlerts() {
     toast.success("Test message sent");
   };
 
+  const runHeartbeat = async () => {
+    if (!activeOrg?.id) return;
+    const { data, error } = await supabase.functions.invoke("whatsapp-heartbeat", { body: {} });
+    if (error) { toast.error(error.message); return; }
+    const mine = (data as any)?.results?.find((r: any) => r.organization_id === activeOrg.id);
+    if (mine?.ok) toast.success(`Heartbeat ok (${mine.status})`);
+    else if (mine) toast.error(`Heartbeat failed: ${mine.status}`);
+    else toast.success("Heartbeat ran");
+    // refresh row
+    const { data: row } = await supabase.from("whatsapp_settings")
+      .select("last_heartbeat_at, last_heartbeat_status")
+      .eq("organization_id", activeOrg.id).maybeSingle();
+    if (row) setSettings((s) => ({ ...s, last_heartbeat_at: (row as any).last_heartbeat_at, last_heartbeat_status: (row as any).last_heartbeat_status }));
+  };
+
   const broadcastOffline = async () => {
     if (!activeOrg?.id) return;
     const target = broadcastTo.trim();
@@ -399,6 +416,17 @@ export default function WhatsAppAlerts() {
               <div className="flex gap-2">
                 <Input value={testNum} onChange={(e) => setTestNum(e.target.value)} placeholder="+27821234567" className="bg-secondary border-border" />
                 <Button size="sm" variant="secondary" onClick={sendTest}><Send className="h-3.5 w-3.5 mr-1" />Test</Button>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-border space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Session heartbeat</Label>
+                <Button size="sm" variant="secondary" onClick={runHeartbeat}>Ping now</Button>
+              </div>
+              <div className="text-[11px] text-muted-foreground space-y-0.5">
+                <div>Last ping: {settings.last_heartbeat_at ? new Date(settings.last_heartbeat_at).toLocaleString() : "never"}</div>
+                <div>Status: <span className={settings.last_heartbeat_status?.startsWith("ok") ? "text-emerald-500" : settings.last_heartbeat_status ? "text-red-500" : ""}>{settings.last_heartbeat_status ?? "—"}</span></div>
+                <div>Runs automatically every 5 minutes to keep the Mudslide WhatsApp session active and logged in.</div>
               </div>
             </div>
           </TabsContent>
