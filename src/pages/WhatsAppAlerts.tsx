@@ -403,6 +403,17 @@ export default function WhatsAppAlerts() {
                 <Button size="sm" variant="secondary" onClick={sendTest}><Send className="h-3.5 w-3.5 mr-1" />Test</Button>
               </div>
             </div>
+            <div className="pt-2 border-t border-border space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Session heartbeat</Label>
+                <Button size="sm" variant="secondary" onClick={runHeartbeat}>Ping now</Button>
+              </div>
+              <div className="text-[11px] text-muted-foreground space-y-0.5">
+                <div>Last ping: {settings.last_heartbeat_at ? new Date(settings.last_heartbeat_at).toLocaleString() : "never"}</div>
+                <div>Status: <span className={settings.last_heartbeat_status?.startsWith("ok") ? "text-emerald-500" : settings.last_heartbeat_status ? "text-red-500" : ""}>{settings.last_heartbeat_status ?? "—"}</span></div>
+                <div>Runs automatically every 5 minutes to keep the Mudslide WhatsApp session active and logged in.</div>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="recipients" className="space-y-3 pt-4">
