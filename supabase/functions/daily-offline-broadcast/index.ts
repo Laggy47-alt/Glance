@@ -43,11 +43,18 @@ Deno.serve(async (req) => {
     // Get NVRs for this org and their offline cameras
     const { data: insts } = await supabase
       .from("frigate_instances")
-      .select("id, name")
+      .select("id, name, daily_broadcast_enabled, whatsapp_recipients")
       .eq("organization_id", o.organization_id)
       .eq("enabled", true);
-    const instMap = new Map<string, string>((insts ?? []).map((i: any) => [i.id, i.name]));
+    const instMap = new Map<string, { name: string; daily: boolean; recipients: string[] }>(
+      (insts ?? []).map((i: any) => [i.id, {
+        name: i.name,
+        daily: !!i.daily_broadcast_enabled,
+        recipients: Array.isArray(i.whatsapp_recipients) ? i.whatsapp_recipients : [],
+      }]),
+    );
     const instIds = Array.from(instMap.keys());
+
 
     let nvrsPayload: Array<{ name: string; reachable: boolean; offlineCameras: string[] }> = [];
     if (instIds.length) {
