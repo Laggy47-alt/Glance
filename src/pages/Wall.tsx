@@ -4,14 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check, MessageSquare, PanelLeftClose, PanelLeftOpen, Tag as TagIcon } from "lucide-react";
+import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check, PanelLeftClose, PanelLeftOpen, Tag as TagIcon } from "lucide-react";
 import { resolveMediaUrl, type MediaItem, type WebhookEvent } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
-import { logAudit } from "@/lib/auditLog";
-import { AlertAuditDialog } from "@/components/AlertAuditDialog";
 
 type Alert = {
   key: string;
@@ -148,7 +146,7 @@ const Wall = () => {
   const [alerts, setAlerts] = useState<Alert[]>(wallAlertsStore.alerts);
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
-  const [auditFor, setAuditFor] = useState<Alert | null>(null);
+  
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
   const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
   const seenRef = useRef<Set<string>>(wallAlertsStore.seen);
@@ -326,7 +324,6 @@ const Wall = () => {
       if (eMs >= mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
-      freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => prependUniqueIncidents(prev, newOnes));
       if (freshOnes.length && !muted) {
         try {
@@ -413,7 +410,6 @@ const Wall = () => {
       if (mMs >= mountedAtRef.current - LIVE_ALERT_MOUNT_GRACE_MS) freshOnes.push(alert);
     }
     if (newOnes.length) {
-      freshOnes.forEach((a) => void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "created", note: `${a.label} · ${a.camera}` }));
       setAlerts((prev) => prependUniqueIncidents(prev, newOnes));
     }
   }, [store.media, store.events, store.loaded, disarmedLoaded, disarmedKeys]);
@@ -454,7 +450,6 @@ const Wall = () => {
 
   const archive = async (a: Alert) => {
     setAlerts((prev) => prev.filter((x) => x.key !== a.key));
-    void logAudit({ alert_key: a.key, event_id: a.event?.id ?? null, action: "ack" });
     const eventIds = Array.from(new Set([...(a.eventIds ?? []), a.event?.id].filter((id): id is string => !!id)));
     if (eventIds.length) {
       await supabase.from("webhook_events").update({ archived: true, read: true }).in("id", eventIds);
@@ -640,7 +635,6 @@ const Wall = () => {
                         index={i}
                         onArchive={() => archive(a)}
                         onDismiss={() => dismiss(a)}
-                        onComment={() => setAuditFor(a)}
                         onOpen={() => openMedia("clip")}
                         onTag={() => openMedia("snapshot")}
                       />
@@ -653,15 +647,6 @@ const Wall = () => {
         })()}
       </div>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
-      {auditFor && (
-        <AlertAuditDialog
-          open={!!auditFor}
-          onOpenChange={(v) => { if (!v) setAuditFor(null); }}
-          alertKey={auditFor.key}
-          eventId={auditFor.event?.id ?? null}
-          title={`${auditFor.label} · ${auditFor.camera}`}
-        />
-      )}
     </DashboardLayout>
   );
 };
@@ -671,7 +656,6 @@ function AlertCard({
   index,
   onArchive,
   onDismiss,
-  onComment,
   onOpen,
   onTag,
 }: {
@@ -679,7 +663,6 @@ function AlertCard({
   index: number;
   onArchive: () => void;
   onDismiss: () => void;
-  onComment: () => void;
   onOpen: () => void;
   onTag: () => void;
 }) {
@@ -762,15 +745,6 @@ function AlertCard({
             title="Add tag"
           >
             <TagIcon className="h-3 w-3" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onComment}
-            className="gap-1 h-7 px-2 text-[11px]"
-            title="Add comment / view audit trail"
-          >
-            <MessageSquare className="h-3 w-3" />
           </Button>
           <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
             <ArchiveIcon className="h-3 w-3" /> ACK
