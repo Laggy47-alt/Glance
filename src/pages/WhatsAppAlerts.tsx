@@ -239,6 +239,7 @@ export default function WhatsAppAlerts() {
         whatsapp_alert_minutes: n.whatsapp_alert_minutes,
         multi_client: n.multi_client,
         camera_whatsapp_recipients: n.camera_whatsapp_recipients,
+        daily_broadcast_enabled: n.daily_broadcast_enabled,
       })
       .eq("id", n.id);
     if (error) { toast.error(error.message); return; }
