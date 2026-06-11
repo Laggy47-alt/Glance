@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useState } from "react";
-import { Camera, Film, ImageOff, Play, Tag as TagIcon, Check } from "lucide-react";
+import { Camera, Film, ImageOff, Play, Tag as TagIcon } from "lucide-react";
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
 import { resolveMediaUrl } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,7 +22,7 @@ const Media = () => {
   const [filter, setFilter] = useState("");
   const [tagsByMedia, setTagsByMedia] = useState<Record<string, { id: string; tag: string; note: string | null }[]>>({});
   const [onlyTagged, setOnlyTagged] = useState(false);
-  const [acksByEvent, setAcksByEvent] = useState<Record<string, { actor: string | null; ts: string }>>({});
+  
 
   useEffect(() => {
     let active = true;
@@ -47,34 +47,6 @@ const Media = () => {
     return () => { active = false; supabase.removeChannel(ch); };
   }, [activeOrg?.id]);
 
-  // Load ack audit entries (latest per event_id)
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      if (!activeOrg?.id) { setAcksByEvent({}); return; }
-      const { data } = await supabase
-        .from("event_audit_log")
-        .select("event_id, actor, ts, action")
-        .eq("organization_id", activeOrg.id)
-        .eq("action", "ack")
-        .order("ts", { ascending: false })
-        .limit(2000);
-      if (!active) return;
-      const map: Record<string, { actor: string | null; ts: string }> = {};
-      (data ?? []).forEach((row: { event_id: string | null; actor: string | null; ts: string }) => {
-        if (row.event_id && !map[row.event_id]) {
-          map[row.event_id] = { actor: row.actor, ts: row.ts };
-        }
-      });
-      setAcksByEvent(map);
-    };
-    load();
-    const ch = supabase
-      .channel("audit-acks")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "event_audit_log", filter: "action=eq.ack" }, () => load())
-      .subscribe();
-    return () => { active = false; supabase.removeChannel(ch); };
-  }, [activeOrg?.id]);
 
   const items = useMemo(() => {
     return store.media
@@ -155,7 +127,6 @@ const Media = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {items.map((m) => {
             const tags = tagsByMedia[m.id] ?? [];
-            const ack = m.event_id ? acksByEvent[m.event_id] : undefined;
             const thumbnail =
               m.kind === "clip"
                 ? store.media.find((x) => x.kind === "snapshot" && (
@@ -191,17 +162,8 @@ const Media = () => {
                   {m.kind === "snapshot" ? <Camera className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
                   <span className="text-foreground/90 capitalize">{m.camera ?? "—"}</span>
                 </div>
-                {ack && (
-                  <div
-                    className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-success/90 text-success-foreground px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider shadow"
-                    title={`Acknowledged by ${ack.actor ?? "unknown"} at ${new Date(ack.ts).toLocaleString()}`}
-                  >
-                    <Check className="h-2.5 w-2.5" />
-                    <span className="normal-case tracking-normal">{ack.actor ?? "unknown"}</span>
-                  </div>
-                )}
                 <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur px-1.5 py-0.5 rounded text-[10px] text-foreground/80 tabular-nums">
-                  {ack ? new Date(ack.ts).toLocaleString() : new Date(m.ts).toLocaleTimeString()}
+                  {new Date(m.ts).toLocaleTimeString()}
                 </div>
                 {tags.length > 0 && (
                   <div className="absolute bottom-1.5 left-1.5 flex flex-wrap gap-0.5 max-w-[70%]">
