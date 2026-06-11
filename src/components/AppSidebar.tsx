@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Archive, Filter, Camera, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, LifeBuoy, AlertTriangle, MessageCircle } from "lucide-react";
+import { Activity, Filter, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, AlertTriangle, MessageCircle } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -13,13 +13,10 @@ const adminItems = [
   { to: "/frigate", label: "Frigate NVR", icon: Server },
   { to: "/nvr-status", label: "NVR Status", icon: HeartPulse },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
-  { to: "/cameras", label: "Cameras", icon: Camera },
   { to: "/media", label: "Media", icon: Film },
-  
-  { to: "/archive", label: "Archive", icon: Archive },
+
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
   { to: "/callouts", label: "Callout Requests", icon: Phone },
-  { to: "/request-support", label: "Request Callout (Admin)", icon: LifeBuoy },
   { to: "/daily-reports", label: "Daily Reports", icon: Mail },
   { to: "/whatsapp-alerts", label: "WhatsApp Alerts", icon: MessageCircle },
 
@@ -29,7 +26,6 @@ const adminItems = [
 const userItems = [
   { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
-  { to: "/cameras", label: "Cameras", icon: Camera },
   { to: "/media", label: "Media", icon: Film },
 ];
 
