@@ -43,11 +43,18 @@ Deno.serve(async (req) => {
     // Get NVRs for this org and their offline cameras
     const { data: insts } = await supabase
       .from("frigate_instances")
-      .select("id, name")
+      .select("id, name, daily_broadcast_enabled, whatsapp_recipients")
       .eq("organization_id", o.organization_id)
       .eq("enabled", true);
-    const instMap = new Map<string, string>((insts ?? []).map((i: any) => [i.id, i.name]));
+    const instMap = new Map<string, { name: string; daily: boolean; recipients: string[] }>(
+      (insts ?? []).map((i: any) => [i.id, {
+        name: i.name,
+        daily: !!i.daily_broadcast_enabled,
+        recipients: Array.isArray(i.whatsapp_recipients) ? i.whatsapp_recipients : [],
+      }]),
+    );
     const instIds = Array.from(instMap.keys());
+
 
     let nvrsPayload: Array<{ name: string; reachable: boolean; offlineCameras: string[] }> = [];
     if (instIds.length) {
@@ -72,15 +79,14 @@ Deno.serve(async (req) => {
         list.push(`${s.camera} (offline ${mins}m)`);
         grouped.set(s.instance_id, list);
       }
-      for (const [id, name] of instMap) {
+      for (const [id, info] of instMap) {
         const cams = grouped.get(id) ?? [];
-        if (cams.length) nvrsPayload.push({ name, reachable: true, offlineCameras: cams });
+        if (cams.length) nvrsPayload.push({ name: info.name, reachable: true, offlineCameras: cams });
       }
     }
 
     const recipients = (o.daily_broadcast_recipients?.length ? o.daily_broadcast_recipients : (o.default_recipients ?? []))
       .map((s: string) => String(s).trim()).filter(Boolean);
-    if (!recipients.length) { results.push({ org: o.organization_id, skipped: "no recipients" }); continue; }
 
     let message: string;
     if (!nvrsPayload.length) {
@@ -90,21 +96,48 @@ Deno.serve(async (req) => {
       message = `📋 Daily offline summary\n\n${blocks.join("\n\n")}`;
     }
 
-    try {
+    async function sendWA(toRecipients: string[], msg: string) {
       const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
         body: JSON.stringify({
           organization_id: o.organization_id,
-          recipients,
-          message,
+          recipients: toRecipients,
+          message: msg,
           test: true, // bypass quiet hours & rate limit for the scheduled daily run
         }),
       });
       const j = await r.json().catch(() => ({}));
-      results.push({ org: o.organization_id, sent: nvrsPayload.length, status: r.status, response: j });
-    } catch (e: any) {
-      results.push({ org: o.organization_id, error: String(e?.message ?? e) });
+      return { status: r.status, response: j };
+    }
+
+    // 1) Org-wide summary
+    if (recipients.length) {
+      try {
+        const out = await sendWA(recipients, message);
+        results.push({ org: o.organization_id, scope: "org", sent: nvrsPayload.length, ...out });
+      } catch (e: any) {
+        results.push({ org: o.organization_id, scope: "org", error: String(e?.message ?? e) });
+      }
+    } else {
+      results.push({ org: o.organization_id, scope: "org", skipped: "no recipients" });
+    }
+
+    // 2) Per-NVR client summaries (only NVRs with daily_broadcast_enabled + recipients)
+    for (const [, info] of instMap) {
+      if (!info.daily) continue;
+      const nvrRecips = (info.recipients ?? []).map((s) => String(s).trim()).filter(Boolean);
+      if (!nvrRecips.length) { results.push({ org: o.organization_id, nvr: info.name, skipped: "no recipients" }); continue; }
+      const cams = (nvrsPayload.find((n) => n.name === info.name)?.offlineCameras) ?? [];
+      const nvrMsg = cams.length
+        ? `📋 Daily offline summary\n\n🚨 *${info.name}* — ${cams.length} offline:\n${cams.map((c) => `• ${c}`).join("\n")}`
+        : `✅ Daily report — *${info.name}*: all cameras online.`;
+      try {
+        const out = await sendWA(nvrRecips, nvrMsg);
+        results.push({ org: o.organization_id, nvr: info.name, scope: "nvr", sent: cams.length, ...out });
+      } catch (e: any) {
+        results.push({ org: o.organization_id, nvr: info.name, scope: "nvr", error: String(e?.message ?? e) });
+      }
     }
   }
 

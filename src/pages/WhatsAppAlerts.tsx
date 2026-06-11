@@ -77,6 +77,7 @@ type Nvr = {
   offline_alert_minutes: number;
   multi_client: boolean;
   camera_whatsapp_recipients: Record<string, string[]>;
+  daily_broadcast_enabled: boolean;
 };
 
 const DEFAULTS: WAS = {
@@ -165,7 +166,7 @@ export default function WhatsAppAlerts() {
         supabase.from("whatsapp_settings").select("*")
           .eq("organization_id", activeOrg.id).maybeSingle(),
         supabase.from("frigate_instances")
-          .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients")
+          .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients, daily_broadcast_enabled")
           .eq("organization_id", activeOrg.id)
           .order("name"),
       ]);
@@ -238,6 +239,7 @@ export default function WhatsAppAlerts() {
         whatsapp_alert_minutes: n.whatsapp_alert_minutes,
         multi_client: n.multi_client,
         camera_whatsapp_recipients: n.camera_whatsapp_recipients,
+        daily_broadcast_enabled: n.daily_broadcast_enabled,
       })
       .eq("id", n.id);
     if (error) { toast.error(error.message); return; }
@@ -666,6 +668,16 @@ export default function WhatsAppAlerts() {
                     onChange={(e) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, whatsapp_alert_minutes: e.target.value === "" ? null : Number(e.target.value) } : x))}
                     className="bg-secondary border-border w-40" />
                 </div>
+              </div>
+
+              {/* Daily client report */}
+              <div className="flex items-center justify-between rounded-md border border-border p-2.5">
+                <div>
+                  <div className="text-sm">Send daily report to this NVR's recipients</div>
+                  <div className="text-[11px] text-muted-foreground">At the scheduled daily broadcast time, also send a summary (offline cameras for this NVR, or "all online") to the recipients above.</div>
+                </div>
+                <Switch checked={n.daily_broadcast_enabled}
+                  onCheckedChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, daily_broadcast_enabled: v } : x))} />
               </div>
 
               {/* Multi-client per-camera routing */}
