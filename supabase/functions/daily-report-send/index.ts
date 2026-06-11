@@ -307,14 +307,25 @@ Deno.serve(async (req) => {
 
   // Cache per-org SMTP settings
   const settingsCache = new Map<string, Settings>();
-  async function getSettingsForOrg(orgId: string): Promise<Settings> {
-    if (settingsCache.has(orgId)) return settingsCache.get(orgId)!;
-    const { data } = await supabase.from("daily_report_settings").select("*").eq("organization_id", orgId).limit(1).maybeSingle();
-    const s = (data ?? {
+  async function getSettingsForOrg(orgId: string | null | undefined): Promise<Settings> {
+    const key = orgId ?? "__any__";
+    if (settingsCache.has(key)) return settingsCache.get(key)!;
+    // Prefer the row matching this org, otherwise fall back to ANY configured row
+    // (covers self-hosted setups where settings/configs were created under different orgs or NULL).
+    let row: any = null;
+    if (orgId) {
+      const { data } = await supabase.from("daily_report_settings").select("*").eq("organization_id", orgId).limit(1).maybeSingle();
+      row = data;
+    }
+    if (!row?.smtp_host) {
+      const { data } = await supabase.from("daily_report_settings").select("*").not("smtp_host", "is", null).limit(1).maybeSingle();
+      if (data) row = data;
+    }
+    const s = (row ?? {
       from_name: "Glance", from_email: "noreply@example.com", reply_to: null,
       smtp_host: null, smtp_port: 587, smtp_username: null, smtp_password: null, smtp_secure: "starttls",
     }) as Settings;
-    settingsCache.set(orgId, s);
+    settingsCache.set(key, s);
     return s;
   }
 
