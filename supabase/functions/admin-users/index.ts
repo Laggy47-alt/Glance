@@ -421,7 +421,7 @@ Deno.serve(async (req) => {
       if ((org as any).slug === "super") return json({ ok: false, error: "cannot delete the super organization" }, 400);
 
       const orgScopedTables = [
-        "media_tags", "media_items", "event_audit_log",
+        "media_tags", "media_items",
         "webhook_events", "webhook_sources", "frigate_instances",
         "auto_read_rules", "camera_arm_audit", "camera_arm_schedule_runs",
         "camera_arm_schedules", "camera_armed_state", "camera_status",

@@ -16,7 +16,7 @@ const Index = lazy(() => import("./pages/Index.tsx"));
 const Sources = lazy(() => import("./pages/Sources.tsx"));
 const Frigate = lazy(() => import("./pages/Frigate.tsx"));
 const AutoRead = lazy(() => import("./pages/AutoRead.tsx"));
-const Audit = lazy(() => import("./pages/Audit.tsx"));
+
 const Media = lazy(() => import("./pages/Media.tsx"));
 const Wall = lazy(() => import("./pages/Wall.tsx"));
 const Login = lazy(() => import("./pages/Login.tsx"));
@@ -92,7 +92,7 @@ const App = () => (
                 <Route path="/wall" element={protect(<Wall />)} />
                 <Route path="/media" element={protect(<Media />)} />
                 <Route path="/auto-read" element={protect(<AutoRead />, true)} />
-                <Route path="/audit" element={protect(<Audit />, true)} />
+                
                 <Route path="/users" element={protect(<Users />, true)} />
                 <Route path="/customization" element={protect(<Customization />, true)} />
                 <Route path="/daily-reports" element={protect(<DailyReports />, true)} />
