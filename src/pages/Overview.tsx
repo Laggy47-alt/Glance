@@ -45,19 +45,11 @@ import {
   YAxis,
 } from "recharts";
 
-type AuditRow = {
-  id: string;
-  action: string;
-  actor: string | null;
-  ts: string;
-};
-
 type ViewerProfile = { user_id: string; username: string; display_name: string | null };
 
 const Overview = () => {
   const store = useWebhookStore();
   const { isAdmin, activeOrg } = useAuth();
-  const [audit, setAudit] = useState<AuditRow[]>([]);
   const [viewers, setViewers] = useState<{ list: ViewerProfile[] }>({ list: [] });
   const [positiveTags, setPositiveTags] = useState<{ created_by: string | null; created_at: string }[]>([]);
   const [resetting, setResetting] = useState(false);
@@ -133,36 +125,6 @@ const Overview = () => {
     return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, [activeOrg?.id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (!activeOrg?.id) { if (!cancelled) setAudit([]); return; }
-      const thirtyDays = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      const since = new Date(Math.max(thirtyDays, statsResetAt)).toISOString();
-      const { data } = await supabase
-        .from("event_audit_log")
-        .select("id, action, actor, ts")
-        .eq("organization_id", activeOrg.id)
-        .gte("ts", since)
-        .order("ts", { ascending: false })
-        .limit(5000);
-      if (!cancelled && data) setAudit(data as AuditRow[]);
-    };
-    void load();
-
-    const channel = supabase
-      .channel("audit_overview")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "event_audit_log" },
-        () => void load(),
-      )
-      .subscribe();
-    return () => {
-      cancelled = true;
-      void supabase.removeChannel(channel);
-    };
-  }, [statsResetAt, activeOrg?.id]);
 
   // Load "positive incident" media tags (for positive-incident counter per operator)
   useEffect(() => {
@@ -187,44 +149,27 @@ const Overview = () => {
     return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, [statsResetAt]);
 
-  // Operator stats — every viewer login is shown, even with zero activity.
-  // Audit rows are matched by the actor name *recorded at the time of the action*,
-  // so renaming a user or onboarding a new one never reassigns historical activity.
+  // Operators table: every viewer login, with their positive-incident tag count.
   const operators = useMemo(() => {
-    type Row = { actor: string; total: number; read: number; archived: number; positive: number; other: number; lastTs: number };
+    type Row = { actor: string; positive: number; lastTs: number };
     const map = new Map<string, Row>();
 
     const ensure = (key: string): Row => {
       let row = map.get(key);
       if (!row) {
-        row = { actor: key, total: 0, read: 0, archived: 0, positive: 0, other: 0, lastTs: 0 };
+        row = { actor: key, positive: 0, lastTs: 0 };
         map.set(key, row);
       }
       return row;
     };
 
-    // Seed with all current viewers so operators with 0 actions still appear
     for (const v of viewers.list) {
       ensure(v.display_name || v.username);
     }
 
-    // user_id → current display name (only used to credit positive-incident tags,
-    // which are stored by user_id rather than actor name).
     const idToCurrentKey = new Map<string, string>();
     for (const v of viewers.list) {
       idToCurrentKey.set(v.user_id, v.display_name || v.username);
-    }
-
-    for (const a of audit) {
-      const actor = (a.actor && a.actor.trim()) || "";
-      if (!actor) continue;
-      const row = ensure(actor);
-      row.total += 1;
-      if (a.action === "read" || a.action === "mark_read") row.read += 1;
-      else if (a.action === "archive" || a.action === "archived") row.archived += 1;
-      else row.other += 1;
-      const t = new Date(a.ts).getTime();
-      row.lastTs = Math.max(row.lastTs, t);
     }
 
     for (const tag of positiveTags) {
@@ -233,13 +178,12 @@ const Overview = () => {
       if (!key) continue;
       const row = ensure(key);
       row.positive += 1;
-      row.total += 1;
       const t = new Date(tag.created_at).getTime();
       row.lastTs = Math.max(row.lastTs, t);
     }
 
-    return [...map.values()].sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
-  }, [audit, viewers, positiveTags]);
+    return [...map.values()].sort((a, b) => b.positive - a.positive || a.actor.localeCompare(b.actor));
+  }, [viewers, positiveTags]);
 
   const totalOperators = operators.length;
 
@@ -443,11 +387,7 @@ const Overview = () => {
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
                   <th className="py-2 pr-4 font-medium">Operator</th>
-                  <th className="py-2 px-4 font-medium tabular-nums">Total</th>
-                  <th className="py-2 px-4 font-medium tabular-nums">Read</th>
-                  <th className="py-2 px-4 font-medium tabular-nums">Archived</th>
-                  <th className="py-2 px-4 font-medium tabular-nums">Positive</th>
-                  <th className="py-2 px-4 font-medium tabular-nums">Other</th>
+                  <th className="py-2 px-4 font-medium tabular-nums">Positive Incidents</th>
                   <th className="py-2 pl-4 font-medium tabular-nums">Last Action</th>
                 </tr>
               </thead>
@@ -455,11 +395,7 @@ const Overview = () => {
                 {operators.map((op) => (
                   <tr key={op.actor} className="border-b border-border/50 last:border-0">
                     <td className="py-2.5 pr-4 font-medium text-foreground">{op.actor}</td>
-                    <td className="py-2.5 px-4 tabular-nums text-foreground">{op.total}</td>
-                    <td className="py-2.5 px-4 tabular-nums text-muted-foreground">{op.read}</td>
-                    <td className="py-2.5 px-4 tabular-nums text-success">{op.archived}</td>
                     <td className="py-2.5 px-4 tabular-nums text-primary">{op.positive}</td>
-                    <td className="py-2.5 px-4 tabular-nums text-muted-foreground">{op.other}</td>
                     <td className="py-2.5 pl-4 tabular-nums text-muted-foreground text-xs">
                       {op.lastTs ? new Date(op.lastTs).toLocaleString() : "—"}
                     </td>

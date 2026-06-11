@@ -1,12 +1,11 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Film, Camera, Tag as TagIcon, X, Plus, Check, Clock, ImageOff } from "lucide-react";
+import { Film, Camera, Tag as TagIcon, X, Plus, ImageOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { formatDuration } from "@/lib/duration";
 
 export type LightboxItem = {
   kind: "snapshot" | "clip";
@@ -25,7 +24,6 @@ export type LightboxItem = {
 };
 
 type MediaTag = { id: string; tag: string; note: string | null };
-type AckInfo = { actor: string | null; ts: string; createdTs: string | null };
 
 const SUGGESTED_TAGS = ["positive incident", "false positive", "review", "important", "evidence"];
 
@@ -33,7 +31,6 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
   const [tags, setTags] = useState<MediaTag[]>([]);
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(false);
-  const [ack, setAck] = useState<AckInfo | null>(null);
 
   useEffect(() => {
     if (!item?.mediaId) { setTags([]); return; }
