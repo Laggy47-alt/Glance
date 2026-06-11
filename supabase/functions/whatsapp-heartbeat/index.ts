@@ -14,34 +14,45 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
+async function tryReq(url: string, method: string, token: string | null) {
+  try {
+    const r = await fetch(url, {
+      method,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Accept: "application/json",
+        ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+      },
+      body: method === "POST" ? "{}" : undefined,
+      signal: AbortSignal.timeout(10000),
+    });
+    const text = await r.text().catch(() => "");
+    return { status: r.status, ok: r.ok, body: text.slice(0, 300) };
+  } catch (e) {
+    return { status: 0, ok: false, body: (e as Error).message };
+  }
+}
+
 async function pingMudslide(url: string, token: string | null) {
   const base = url.replace(/\/+$/, "");
-  // Mudslide HTTP API doesn't expose /me. Try known endpoints that confirm
-  // the session is connected; any 2xx response means the worker is alive.
-  const endpoints = ["/groups", "/contacts", "/status", "/health", "/healthz", "/"];
+  // Mudslide exposes `me`. Try common variants (GET + POST, with/without trailing slash).
+  const attempts: Array<[string, string]> = [
+    ["/me", "GET"], ["/me", "POST"],
+    ["/me/", "GET"],
+    ["/groups", "GET"], ["/contacts", "GET"],
+    ["/status", "GET"], ["/health", "GET"], ["/healthz", "GET"],
+    ["/", "GET"],
+  ];
   let lastErr = "";
-  for (const ep of endpoints) {
-    try {
-      const r = await fetch(base + ep, {
-        method: "GET",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          Accept: "application/json",
-        },
-        signal: AbortSignal.timeout(10000),
-      });
-      const text = await r.text().catch(() => "");
-      if (r.ok) {
-        return { ok: true, status: r.status, endpoint: ep, body: text.slice(0, 300) };
-      }
-      // 401/403 still means the server is up and listening
-      if (r.status === 401 || r.status === 403) {
-        return { ok: true, status: r.status, endpoint: ep, body: `auth-required ${text.slice(0, 200)}` };
-      }
-      lastErr = `${ep} -> ${r.status} ${text.slice(0, 120)}`;
-    } catch (e) {
-      lastErr = `${ep} -> ${(e as Error).message}`;
+  for (const [ep, method] of attempts) {
+    const r = await tryReq(base + ep, method, token);
+    if (r.ok) {
+      return { ok: true, status: r.status, endpoint: `${method} ${ep}`, body: r.body };
     }
+    if (r.status === 401 || r.status === 403) {
+      return { ok: true, status: r.status, endpoint: `${method} ${ep}`, body: `auth-required ${r.body}` };
+    }
+    lastErr = `${method} ${ep} -> ${r.status} ${r.body.slice(0, 100)}`;
   }
   return { ok: false, status: 0, endpoint: null as string | null, body: lastErr };
 }
