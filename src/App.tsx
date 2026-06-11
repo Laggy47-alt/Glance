@@ -13,9 +13,7 @@ import Sources from "./pages/Sources.tsx";
 import Frigate from "./pages/Frigate.tsx";
 
 import AutoRead from "./pages/AutoRead.tsx";
-import Archive from "./pages/Archive.tsx";
 import Audit from "./pages/Audit.tsx";
-import Cameras from "./pages/Cameras.tsx";
 import Media from "./pages/Media.tsx";
 import Wall from "./pages/Wall.tsx";
 import Login from "./pages/Login.tsx";
@@ -32,7 +30,6 @@ import CustomerEvents from "./pages/CustomerEvents.tsx";
 import CustomerInstructions from "./pages/CustomerInstructions.tsx";
 import Callouts from "./pages/Callouts.tsx";
 import SuperAdmin from "./pages/SuperAdmin.tsx";
-import RequestSupportCallout from "./pages/RequestSupportCallout.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Demo from "./pages/Demo.tsx";
 import Offline from "./pages/Offline.tsx";
@@ -73,10 +70,8 @@ const App = () => (
               <Route path="/nvr-status" element={protect(<NvrStatus />, true)} />
               <Route path="/camera-status" element={protect(<CameraStatus />)} />
               <Route path="/wall" element={protect(<Wall />)} />
-              <Route path="/cameras" element={protect(<Cameras />)} />
               <Route path="/media" element={protect(<Media />)} />
               <Route path="/auto-read" element={protect(<AutoRead />, true)} />
-              <Route path="/archive" element={protect(<Archive />, true)} />
               <Route path="/audit" element={protect(<Audit />, true)} />
               <Route path="/users" element={protect(<Users />, true)} />
               <Route path="/customization" element={protect(<Customization />, true)} />
@@ -84,7 +79,6 @@ const App = () => (
               <Route path="/whatsapp-alerts" element={protect(<WhatsAppAlerts />, true)} />
 
               <Route path="/callouts" element={protect(<Callouts />, true)} />
-              <Route path="/request-support" element={protect(<RequestSupportCallout />, true)} />
               <Route path="/customer" element={protect(<Customer />)} />
               <Route path="/customer/events" element={protect(<CustomerEvents />)} />
               <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />
