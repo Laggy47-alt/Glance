@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
     if (!o.enabled || !o.daily_broadcast_enabled) continue;
     const [hh, mm] = String(o.daily_broadcast_time ?? "08:00").split(":").map(Number);
     const now = currentHM(o.quiet_timezone || "UTC");
-    if (!force && now.h !== hh) continue; // hourly cron — fire when hour matches
+    // Per-minute cron — fire when both hour and minute match the configured time
+    if (!force && (now.h !== hh || now.m !== mm)) continue;
 
     // Get NVRs for this org and their offline cameras
     const { data: insts } = await supabase
