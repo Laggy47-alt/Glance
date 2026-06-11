@@ -1,12 +1,11 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Film, Camera, Tag as TagIcon, X, Plus, Check, Clock, ImageOff } from "lucide-react";
+import { Film, Camera, Tag as TagIcon, X, Plus, ImageOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { formatDuration } from "@/lib/duration";
 
 export type LightboxItem = {
   kind: "snapshot" | "clip";
@@ -25,7 +24,6 @@ export type LightboxItem = {
 };
 
 type MediaTag = { id: string; tag: string; note: string | null };
-type AckInfo = { actor: string | null; ts: string; createdTs: string | null };
 
 const SUGGESTED_TAGS = ["positive incident", "false positive", "review", "important", "evidence"];
 
@@ -33,7 +31,6 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
   const [tags, setTags] = useState<MediaTag[]>([]);
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(false);
-  const [ack, setAck] = useState<AckInfo | null>(null);
 
   useEffect(() => {
     if (!item?.mediaId) { setTags([]); return; }
@@ -49,24 +46,6 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     return () => { active = false; };
   }, [item?.mediaId]);
 
-  // Load latest ACK + first 'created' for duration
-  useEffect(() => {
-    if (!item?.eventId) { setAck(null); return; }
-    let active = true;
-    (async () => {
-      const { data } = await supabase
-        .from("event_audit_log")
-        .select("action, actor, ts")
-        .eq("event_id", item.eventId!)
-        .in("action", ["ack", "created"])
-        .order("ts", { ascending: true });
-      if (!active) return;
-      const rows = (data ?? []) as { action: string; actor: string | null; ts: string }[];
-      const created = rows.find((r) => r.action === "created");
-      const ackRow = [...rows].reverse().find((r) => r.action === "ack");
-      setAck(ackRow ? { actor: ackRow.actor, ts: ackRow.ts, createdTs: created?.ts ?? null } : null);
-    })();
-  }, [item?.eventId]);
 
 
   const addTag = async (value: string) => {
@@ -162,25 +141,6 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                     <Plus className="h-3 w-3" /> Add
                   </Button>
                 </form>
-              </div>
-            )}
-            {ack && !item.readOnly && (
-              <div className="px-4 py-2.5 border-t border-border bg-success/10 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <div className="flex items-center gap-1.5 text-success font-semibold">
-                  <Check className="h-3.5 w-3.5" /> Acknowledged
-                </div>
-                <div className="text-foreground">
-                  by <span className="font-medium">{ack.actor ?? "unknown"}</span>
-                </div>
-                <div className="text-muted-foreground tabular-nums">
-                  {new Date(ack.ts).toLocaleString()}
-                </div>
-                {ack.createdTs && (
-                  <div className="flex items-center gap-1 text-muted-foreground ml-auto">
-                    <Clock className="h-3 w-3" />
-                    Response time: <span className="text-foreground font-medium">{formatDuration(new Date(ack.ts).getTime() - new Date(ack.createdTs).getTime())}</span>
-                  </div>
-                )}
               </div>
             )}
             <div className="px-4 py-2.5 text-xs text-muted-foreground border-t border-border flex justify-between items-center gap-3">

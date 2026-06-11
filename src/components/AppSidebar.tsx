@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Filter, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, ScrollText, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, AlertTriangle, MessageCircle } from "lucide-react";
+import { Activity, Filter, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, AlertTriangle, MessageCircle } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -15,7 +15,6 @@ const adminItems = [
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
   { to: "/media", label: "Media", icon: Film },
 
-  { to: "/audit", label: "Audit Trail", icon: ScrollText },
   { to: "/callouts", label: "Callout Requests", icon: Phone },
   { to: "/daily-reports", label: "Daily Reports", icon: Mail },
   { to: "/whatsapp-alerts", label: "WhatsApp Alerts", icon: MessageCircle },
