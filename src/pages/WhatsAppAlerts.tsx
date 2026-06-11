@@ -166,7 +166,7 @@ export default function WhatsAppAlerts() {
         supabase.from("whatsapp_settings").select("*")
           .eq("organization_id", activeOrg.id).maybeSingle(),
         supabase.from("frigate_instances")
-          .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients")
+          .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients, daily_broadcast_enabled")
           .eq("organization_id", activeOrg.id)
           .order("name"),
       ]);
