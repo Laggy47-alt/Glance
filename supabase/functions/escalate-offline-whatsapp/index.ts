@@ -58,19 +58,33 @@ function inQuietHours(s: Settings): boolean {
 
 async function sendViaMudslide(s: Settings, recipient: string, message: string) {
   const url = s.mudslide_url!.replace(/\/+$/, "") + "/send-message";
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(s.mudslide_token ? { "Authorization": `Bearer ${s.mudslide_token}` } : {}),
-    },
-    body: JSON.stringify({ recipient, message }),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`Mudslide ${r.status}: ${t.slice(0, 200)}`);
+  const headers = {
+    "Content-Type": "application/json",
+    ...(s.mudslide_token ? { "Authorization": `Bearer ${s.mudslide_token}` } : {}),
+  };
+  const body = JSON.stringify({ recipient, message });
+
+  let lastErr: unknown = null;
+  // 1 initial attempt + 1 retry after 2s for transient socket timeouts
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers,
+        body,
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        throw new Error(`Mudslide ${r.status}: ${t.slice(0, 200)}`);
+      }
+      return; // success
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) await new Promise((res) => setTimeout(res, 2000));
+    }
   }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 Deno.serve(async (req) => {
