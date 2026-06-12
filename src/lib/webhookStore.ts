@@ -119,15 +119,22 @@ class WebhookStore {
   // fresh page load never floods the wall with historical events.
   private liveCursorMs: number | null = null;
 
-  // Single-tenant: org scoping is a no-op. Kept for backwards compatibility
-  // with callers that still invoke setActiveOrg(...).
-  setActiveOrg(_orgId: string | null) {
+  // Set the active org so super-admin (who can see all orgs via RLS) only
+  // surfaces rows for the currently-selected org. Regular members never see
+  // other orgs anyway because RLS filters them out server-side.
+  setActiveOrg(orgId: string | null) {
+    if (this.activeOrgId === orgId) return;
+    this.activeOrgId = orgId;
     if (this.initialized) void this.refreshAll();
   }
 
-  private matchesOrg(_row: unknown) {
-    return true;
+  private matchesOrg(row: unknown) {
+    if (!this.activeOrgId) return true;
+    const org = (row as { organization_id?: string | null } | null)?.organization_id;
+    // Rows without org info (rare) are kept; otherwise must match active org.
+    return !org || org === this.activeOrgId;
   }
+
 
 
   subscribe(l: Listener) {
