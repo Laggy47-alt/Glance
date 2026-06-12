@@ -33,26 +33,30 @@ BEGIN;
 DO $$
 DECLARE
   default_org uuid;
+  org_count integer;
 BEGIN
+  SELECT count(*) INTO org_count FROM public.organizations;
   SELECT id INTO default_org FROM public.organizations ORDER BY created_at LIMIT 1;
   IF default_org IS NULL THEN
     RAISE EXCEPTION 'No organizations row exists; cannot backfill memberships.';
   END IF;
 
-  INSERT INTO public.organization_members (organization_id, user_id, role)
-  SELECT default_org,
-         ur.user_id,
-         CASE
-           WHEN bool_or(ur.role::text IN ('super_admin','admin')) THEN 'admin'::public.org_member_role
-           ELSE 'customer'::public.org_member_role
-         END
-    FROM public.user_roles ur
-   GROUP BY ur.user_id
-  ON CONFLICT (organization_id, user_id) DO UPDATE
-     SET role = CASE
-                  WHEN EXCLUDED.role = 'admin'::public.org_member_role THEN 'admin'::public.org_member_role
-                  ELSE public.organization_members.role
-                END;
+  IF org_count = 1 THEN
+    INSERT INTO public.organization_members (organization_id, user_id, role)
+    SELECT default_org,
+           ur.user_id,
+           CASE
+             WHEN bool_or(ur.role::text IN ('super_admin','admin')) THEN 'admin'::public.org_member_role
+             ELSE 'customer'::public.org_member_role
+           END
+      FROM public.user_roles ur
+     GROUP BY ur.user_id
+    ON CONFLICT (organization_id, user_id) DO UPDATE
+       SET role = CASE
+                    WHEN EXCLUDED.role = 'admin'::public.org_member_role THEN 'admin'::public.org_member_role
+                    ELSE public.organization_members.role
+                  END;
+  END IF;
 
   UPDATE public.media_items             SET organization_id = default_org WHERE organization_id IS NULL;
   UPDATE public.webhook_events          SET organization_id = default_org WHERE organization_id IS NULL;
