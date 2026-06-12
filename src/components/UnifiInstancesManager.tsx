@@ -213,22 +213,35 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
                     Rotate token
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  In UniFi: <span className="font-medium">Alarm Manager → Add Alarm → Send Webhook</span>. Use these values:
-                </p>
+                <ol className="text-[10px] text-muted-foreground space-y-0.5 list-decimal pl-4">
+                  <li>UniFi: <span className="font-medium">Alarm Manager → Add Alarm → Send Webhook</span></li>
+                  <li>Paste the URL below as <span className="font-medium">Delivery URL</span></li>
+                  <li>Open <span className="font-medium">Advanced Settings</span> and switch Method from GET to <span className="font-medium">POST</span></li>
+                  <li>Click <span className="font-medium">Test Alarm</span> — it should appear in UniFi Alerts</li>
+                </ol>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] text-muted-foreground">Delivery URL · Method: POST</Label>
+                  <Label className="text-[10px] text-muted-foreground">Delivery URL (token included)</Label>
                   <div className="flex gap-1.5">
-                    <Input readOnly value={webhookUrlFor(editingId)} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(webhookUrlFor(editingId), "URL")}>Copy</Button>
+                    <Input
+                      readOnly
+                      value={webhookUrlFor(editingId, editingSecret)}
+                      className="font-mono text-[11px] h-8"
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => copy(webhookUrlFor(editingId, editingSecret), "Webhook URL")}
+                    >
+                      Copy
+                    </Button>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] text-muted-foreground">Authentication: Bearer · Token</Label>
-                  <div className="flex gap-1.5">
-                    <Input readOnly value={editingSecret} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(editingSecret, "Token")}>Copy</Button>
-                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Keep this URL private — anyone with it can post alarms to your account.
+                    The endpoint must use HTTPS with a publicly-trusted certificate; UniFi silently drops self-signed certs.
+                  </p>
                 </div>
               </div>
             )}
