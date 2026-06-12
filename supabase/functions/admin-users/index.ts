@@ -344,6 +344,11 @@ Deno.serve(async (req) => {
       const { data, error } = await a.from("organizations").insert({ slug, name, created_by: caller.userId })
         .select("id, slug, name, created_at").single();
       if (error) return json({ ok: false, error: error.message }, 400);
+      const newOrgId = (data as any).id as string;
+      await a.from("organization_members").upsert(
+        { organization_id: newOrgId, user_id: caller.userId, role: "admin" },
+        { onConflict: "organization_id,user_id" },
+      );
 
       // Seed the new org by duplicating settings (NOT data) from the most recently
       // created prior org. This gives the new tenant the same structural setup
@@ -351,7 +356,6 @@ Deno.serve(async (req) => {
       // daily-report email template) without copying any operational data
       // (sites, events, users, configs, callouts, media, etc.).
       try {
-        const newOrgId = (data as any).id as string;
         const sourceOrgId = String(body.copy_from ?? "").trim() || null;
 
         let templateOrgId: string | null = sourceOrgId;
