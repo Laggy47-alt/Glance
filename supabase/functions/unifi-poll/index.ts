@@ -152,7 +152,7 @@ function normalizeEvent(input: UnifiEvent, camName: Map<string, string>): Normal
 
   const cameraObj = ev.camera && typeof ev.camera === "object" ? ev.camera as { id?: string; name?: string } : null;
   const cameraId = String(cameraObj?.id ?? ev.cameraId ?? (typeof ev.camera === "string" ? ev.camera : "") ?? "");
-  const cameraName = String(cameraObj?.name ?? ev.cameraName ?? camName.get(cameraId) ?? cameraId || "camera");
+  const cameraName = String((cameraObj?.name ?? ev.cameraName ?? camName.get(cameraId) ?? cameraId) || "camera");
   const smartTypes = Array.from(new Set([
     ...(Array.isArray(ev.smartDetectTypes) ? ev.smartDetectTypes.map(String) : []),
     ...(Array.isArray(ev.smartDetectEvents) ? ev.smartDetectEvents.map(String) : []),
