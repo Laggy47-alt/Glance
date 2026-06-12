@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
+import { useAuth } from "@/hooks/useAuth";
 
 type Alert = {
   key: string;
@@ -143,6 +144,7 @@ function prependUniqueIncidents(prev: Alert[], incoming: Alert[]) {
 
 const Wall = () => {
   const store = useWebhookStore();
+  const { activeOrg } = useAuth();
   const [alerts, setAlerts] = useState<Alert[]>(wallAlertsStore.alerts);
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -255,9 +257,11 @@ const Wall = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (!activeOrg?.id) { setDisarmedKeys(new Set()); setDisarmedLoaded(true); return; }
       const { data } = await supabase
         .from("camera_armed_state")
         .select("instance_id,camera,armed")
+        .eq("organization_id", activeOrg.id)
         .eq("armed", false);
       if (cancelled) return;
       setDisarmedKeys(new Set((data ?? []).map((r) => `${r.instance_id}::${r.camera}`)));
@@ -269,7 +273,7 @@ const Wall = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "camera_armed_state" }, () => void load())
       .subscribe();
     return () => { cancelled = true; void supabase.removeChannel(ch); };
-  }, []);
+  }, [activeOrg?.id]);
 
   const isCameraDisarmed = (source_id?: string | null, instance_id?: string | null, camera?: string | null) => {
     if (!camera) return false;
