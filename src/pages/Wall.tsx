@@ -629,6 +629,7 @@ const Wall = () => {
                         thumbnail: a.snapshot && m.kind === "clip" ? resolveMediaUrl(a.snapshot.url) : undefined,
                         frigateUrl: inst ? `${inst.base_url}/cameras/${a.camera}` : null,
                         mediaId: m.id,
+                        organizationId: m.organization_id ?? a.event?.organization_id ?? activeOrg?.id ?? null,
                         eventId: a.event?.id ?? m.event_id ?? null,
                       });
                     };
