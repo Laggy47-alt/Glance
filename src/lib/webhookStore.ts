@@ -370,20 +370,25 @@ class WebhookStore {
 
   // ─── Rules ───
   async addRule(pattern: string, source_id: string | null = null) {
+    if (!this.activeOrgId) throw new Error("No active organization");
     const { error } = await supabase.from("auto_read_rules").insert({
+      organization_id: this.activeOrgId,
       pattern, source_id, enabled: true,
     });
     if (error) throw error;
   }
   async toggleRule(id: string, enabled: boolean) {
-    await supabase.from("auto_read_rules").update({ enabled }).eq("id", id);
+    const q = supabase.from("auto_read_rules").update({ enabled }).eq("id", id);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async removeRule(id: string) {
-    await supabase.from("auto_read_rules").delete().eq("id", id);
+    const q = supabase.from("auto_read_rules").delete().eq("id", id);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
 
   // ─── Frigate instances ───
   async createFrigate(input: { name: string; base_url: string; api_key?: string; color?: string; is_local?: boolean }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
     const slugBase = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "frigate";
     const slug = `frigate-${slugBase}-${crypto.randomUUID().slice(0, 6)}`;
     const secret = crypto.randomUUID().replace(/-/g, "");
@@ -391,6 +396,7 @@ class WebhookStore {
 
     // Paired webhook source so push notifications and polled events share the same source view
     const { data: src, error: srcErr } = await supabase.from("webhook_sources").insert({
+      organization_id: this.activeOrgId,
       name: `Frigate · ${input.name}`,
       slug,
       color,
@@ -399,6 +405,7 @@ class WebhookStore {
     if (srcErr) throw srcErr;
 
     const { error } = await supabase.from("frigate_instances").insert({
+      organization_id: this.activeOrgId,
       source_id: src.id,
       name: input.name,
       base_url: input.base_url.replace(/\/+$/, ""),
@@ -411,7 +418,7 @@ class WebhookStore {
       mute_end: "17:30:00",
     });
     if (error) {
-      await supabase.from("webhook_sources").delete().eq("id", src.id);
+      await supabase.from("webhook_sources").delete().eq("id", src.id).eq("organization_id", this.activeOrgId);
       throw error;
     }
   }
@@ -425,7 +432,8 @@ class WebhookStore {
     const update = connectionChanged
       ? { ...cleaned, last_error: null, last_polled_at: null }
       : cleaned;
-    const { data, error } = await supabase.from("frigate_instances").update(update).eq("id", id).select("*").single();
+    const q = supabase.from("frigate_instances").update(update).eq("id", id);
+    const { data, error } = await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q).select("*").single();
     if (error) throw error;
     if (data) {
       this.frigates = this.frigates.map((x) => x.id === id ? data as FrigateInstance : x);
@@ -439,12 +447,16 @@ class WebhookStore {
     this.frigates = this.frigates.filter((f) => f.id !== id);
     if (inst?.source_id) this.sources = this.sources.filter((s) => s.id !== inst.source_id);
     this.emit();
-    const { error } = await supabase.from("frigate_instances").delete().eq("id", id);
+    const q = supabase.from("frigate_instances").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
     if (error) {
       await this.refreshAll();
       throw error;
     }
-    if (inst?.source_id) await supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+    if (inst?.source_id) {
+      const srcQ = supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+      await (this.activeOrgId ? srcQ.eq("organization_id", this.activeOrgId) : srcQ);
+    }
   }
   async pollFrigateNow(id?: string) {
     const url = id ? `frigate-poll?instance_id=${id}` : "frigate-poll";
