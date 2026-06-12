@@ -14,7 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
+import { SuperFeaturesPanel } from "@/components/SuperFeaturesPanel";
+import { ToggleLeft } from "lucide-react";
 import { toast } from "sonner";
+
 
 type Org = { id: string; slug: string; name: string; created_at: string };
 type Site = { id: string; name: string; base_url: string; color: string; enabled: boolean; organization_id: string };
