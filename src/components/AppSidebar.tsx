@@ -5,7 +5,9 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
 import { useOfflineStatus } from "@/hooks/useOfflineStatus";
+import { useOrgFeatures, FEATURE_UNIFI_ENVR } from "@/hooks/useOrgFeatures";
 import { cn } from "@/lib/utils";
+
 
 const adminItems = [
   { to: "/", label: "Overview", icon: Activity },
@@ -39,6 +41,8 @@ export function AppSidebar() {
   const { profile, isAdmin, isSuperAdmin, isCustomer, signOut, activeOrg, orgs, setActiveOrgId } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const { offlineCameras, unreachableNvrs, hasOffline } = useOfflineStatus();
+  const features = useOrgFeatures();
+  const unifiOn = features.hasFeature(FEATURE_UNIFI_ENVR);
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
@@ -47,13 +51,18 @@ export function AppSidebar() {
   );
   const [sitesOpen, setSitesOpen] = useState(true);
 
+  const adminItemsResolved = adminItems.map((it) =>
+    it.to === "/frigate" && unifiOn ? { ...it, label: "Unifi NVR" } : it
+  );
+
   const items = isAdmin
-    ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
+    ? [...adminItemsResolved, { to: "/users", label: "Users", icon: UsersIcon }]
     : isCustomer
       ? customerItems
       : userItems;
   const showSites = !isCustomer || isAdmin;
   const showOrgSwitcher = orgs.length > 1 || isSuperAdmin;
+
 
   const handleSignOut = async () => {
     await signOut();
