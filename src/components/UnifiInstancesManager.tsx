@@ -203,6 +203,34 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
               </div>
               <Switch checked={verifyTls} onCheckedChange={setVerifyTls} />
             </div>
+
+            {editingId && editingSecret && (
+              <div className="space-y-2 rounded-md border border-border p-3 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">UniFi Alarm Manager webhook</Label>
+                  <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={rotateSecret}>
+                    Rotate token
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  In UniFi: <span className="font-medium">Alarm Manager → Add Alarm → Send Webhook</span>. Use these values:
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] text-muted-foreground">Delivery URL · Method: POST</Label>
+                  <div className="flex gap-1.5">
+                    <Input readOnly value={webhookUrlFor(editingId)} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(webhookUrlFor(editingId), "URL")}>Copy</Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] text-muted-foreground">Authentication: Bearer · Token</Label>
+                  <div className="flex gap-1.5">
+                    <Input readOnly value={editingSecret} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(editingSecret, "Token")}>Copy</Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
