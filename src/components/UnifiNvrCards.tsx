@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +27,8 @@ export function UnifiNvrCards() {
   const [instances, setInstances] = useState<UnifiInstance[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [states, setStates] = useState<Record<string, CamState>>({});
-  const [thumbTick, setThumbTick] = useState<number>(() => Date.now());
+  // Per-instance "force refresh" tick (bumped by the Refresh button only).
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const loadList = useCallback(async () => {
     try {
@@ -75,11 +76,10 @@ export function UnifiNvrCards() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Refresh thumbnails periodically; snapshots are pulled via cache-busted URLs.
-  useEffect(() => {
-    const t = setInterval(() => setThumbTick(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  // Manual refresh only — thumbnails self-refresh on a per-camera staggered
+  // schedule (see UnifiCameraThumb) so we don't kick off a thundering herd
+  // of proxy calls every interval.
+  const bumpAll = useCallback(() => setRefreshTick((t) => t + 1), []);
 
   const enabled = instances.filter((i) => i.enabled);
   if (!loaded) return null;
@@ -92,7 +92,7 @@ export function UnifiNvrCards() {
           <h3 className="text-sm font-semibold text-foreground">UniFi ENVR</h3>
           <p className="text-xs text-muted-foreground">{enabled.length} instance{enabled.length === 1 ? "" : "s"} connected.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
+        <Button variant="outline" size="sm" onClick={() => { fetchAll(); bumpAll(); }} className="gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </Button>
       </div>
@@ -161,7 +161,7 @@ export function UnifiNvrCards() {
                           key={cam.id}
                           instanceId={inst.id}
                           camera={cam}
-                          tick={thumbTick}
+                          forceTick={refreshTick}
                         />
                       ))}
                     </div>
@@ -187,8 +187,27 @@ export function UnifiNvrCards() {
   );
 }
 
-function UnifiCameraThumb({ instanceId, camera, tick }: { instanceId: string; camera: UnifiCamera; tick: number }) {
+function UnifiCameraThumb({ instanceId, camera, forceTick }: { instanceId: string; camera: UnifiCamera; forceTick: number }) {
   const [errored, setErrored] = useState(false);
+  // Each tile picks its own cache-bust timestamp. We only bump it when the
+  // tile mounts, when the parent forces a refresh, or on the tile's own
+  // staggered ~2-minute timer. This avoids a thundering herd of proxy fetches.
+  const initialTick = useRef(Date.now());
+  const [tick, setTick] = useState(initialTick.current);
+  useEffect(() => {
+    if (camera.isConnected === false) return; // don't poll offline cams
+    // Stagger the first refresh anywhere in 60-180s so 20 tiles don't all
+    // hit the proxy at the same moment.
+    const period = 60_000 + Math.floor(Math.random() * 120_000);
+    const id = setInterval(() => setTick(Date.now()), period);
+    return () => clearInterval(id);
+  }, [camera.isConnected]);
+  useEffect(() => {
+    if (forceTick > 0) {
+      setTick(Date.now());
+      setErrored(false);
+    }
+  }, [forceTick]);
   const offline = camera.isConnected === false;
   const src = unifiCameraThumbnailUrl(instanceId, camera.id, tick);
   return (
@@ -206,6 +225,7 @@ function UnifiCameraThumb({ instanceId, camera, tick }: { instanceId: string; ca
           src={src}
           alt={camera.name}
           loading="lazy"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
           onError={() => setErrored(true)}
         />
