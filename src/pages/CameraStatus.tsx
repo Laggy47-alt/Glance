@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, WifiOff } from "lucide-react";
 import { fetchFrigateStats } from "@/lib/frigateStats";
 import { cn } from "@/lib/utils";
+import { UnifiNvrCards } from "@/components/UnifiNvrCards";
 
 type CameraStatus = {
   name: string;
