@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Webhook, Loader2 } from "lucide-react";
 import { forceCreateAdmin, isEmergencyCredentials, seedAdmin, startOfflineSession } from "@/lib/offlineMode";
+import { supabase } from "@/integrations/supabase/client";
 
 // Default org used for first-ever admin bootstrap on a fresh install.
 const BOOTSTRAP_ORG_SLUG = "abc-2026";
