@@ -268,6 +268,7 @@ export function OperatorOfflinePopup() {
     if (!current || !user) return;
     ackedRef.current.add(current.key);
     await supabase.from("offline_instruction_acks").insert({
+      organization_id: activeOrg?.id,
       user_id: user.id,
       instance_id: current.inst.id,
       camera: current.camera ?? "__nvr__",
