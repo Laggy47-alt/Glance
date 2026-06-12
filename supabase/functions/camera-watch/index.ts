@@ -110,14 +110,33 @@ Deno.serve(async (req) => {
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  // Fetch global WhatsApp settings (include_nvr_unreachable toggle) per org once.
+  // Fetch global WhatsApp settings per org once.
   const orgIds = Array.from(new Set((instances ?? []).map((i: any) => i.organization_id)));
   const { data: waSettings } = orgIds.length
-    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable").in("organization_id", orgIds)
+    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template").in("organization_id", orgIds)
     : { data: [] as any[] };
-  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean }>(
-    (waSettings ?? []).map((s: any) => [s.organization_id, { enabled: !!s.enabled, include_nvr_unreachable: !!s.include_nvr_unreachable }]),
+  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string }>(
+    (waSettings ?? []).map((s: any) => [s.organization_id, {
+      enabled: !!s.enabled,
+      include_nvr_unreachable: !!s.include_nvr_unreachable,
+      send_recovery: !!s.send_recovery,
+      recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
+    }]),
   );
+
+  const renderRecovery = (tpl: string, vars: Record<string, string | number>) =>
+    tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? ""));
+
+  const sendWaMessage = async (orgId: string, recipients: string[], message: string) => {
+    try {
+      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ organization_id: orgId, recipients, message }),
+      });
+      return await res.json().catch(() => ({ status: res.status }));
+    } catch (e: any) { return { error: String(e?.message ?? e) }; }
+  };
 
   const results: any[] = [];
 
