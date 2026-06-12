@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { webhookStore } from "@/lib/webhookStore";
+
 
 export type Profile = {
   user_id: string;
@@ -131,6 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!activeOrgId) return null;
     return orgs.find((o) => o.organization_id === activeOrgId)?.organization ?? null;
   }, [impersonated, activeOrgId, orgs]);
+
+  // Propagate org changes into the webhookStore so its cached rows refilter.
+  useEffect(() => { webhookStore.setActiveOrg(activeOrg?.id ?? null); }, [activeOrg?.id]);
+
 
   const value = useMemo<AuthCtx>(() => ({
     session,
