@@ -220,7 +220,14 @@ const NvrStatus = () => {
           })}
         </div>
       )}
+
+      {features.hasFeature(FEATURE_UNIFI_ENVR) && (
+        <div className="mt-8 pt-6 border-t border-border">
+          <UnifiInstancesManager />
+        </div>
+      )}
     </DashboardLayout>
+
   );
 };
 
