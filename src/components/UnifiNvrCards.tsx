@@ -189,19 +189,35 @@ export function UnifiNvrCards() {
 
 function UnifiCameraThumb({ instanceId, camera, forceTick }: { instanceId: string; camera: UnifiCamera; forceTick: number }) {
   const [errored, setErrored] = useState(false);
-  // Each tile picks its own cache-bust timestamp. We only bump it when the
-  // tile mounts, when the parent forces a refresh, or on the tile's own
-  // staggered ~2-minute timer. This avoids a thundering herd of proxy fetches.
   const initialTick = useRef(Date.now());
   const [tick, setTick] = useState(initialTick.current);
+  // Viewport-based lazy loading: only fetch the snapshot when the tile is
+  // (or has been) visible. With 20+ cameras this avoids hammering the proxy
+  // for tiles the user has never scrolled to.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [hasBeenVisible, setHasBeenVisible] = useState(false);
   useEffect(() => {
-    if (camera.isConnected === false) return; // don't poll offline cams
-    // Stagger the first refresh anywhere in 60-180s so 20 tiles don't all
-    // hit the proxy at the same moment.
+    const el = containerRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const v = entries[0]?.isIntersecting ?? false;
+        setVisible(v);
+        if (v) setHasBeenVisible(true);
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
+    if (camera.isConnected === false) return;
+    if (!visible) return; // pause polling when offscreen
     const period = 60_000 + Math.floor(Math.random() * 120_000);
     const id = setInterval(() => setTick(Date.now()), period);
     return () => clearInterval(id);
-  }, [camera.isConnected]);
+  }, [camera.isConnected, visible]);
   useEffect(() => {
     if (forceTick > 0) {
       setTick(Date.now());
@@ -210,12 +226,13 @@ function UnifiCameraThumb({ instanceId, camera, forceTick }: { instanceId: strin
   }, [forceTick]);
   const offline = camera.isConnected === false;
   const src = unifiCameraThumbnailUrl(instanceId, camera.id, tick);
+  const showImage = hasBeenVisible && !offline && !errored;
   return (
-    <div className={cn(
+    <div ref={containerRef} className={cn(
       "relative rounded-md overflow-hidden border bg-secondary/40 aspect-video",
       offline ? "border-destructive/40" : "border-border",
     )}>
-      {errored || offline ? (
+      {!showImage && (errored || offline || !hasBeenVisible) ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
           {offline ? <VideoOff className="h-4 w-4 text-destructive" /> : <ImageOff className="h-4 w-4" />}
           <span className="text-[9px]">{offline ? "Offline" : "No snapshot"}</span>
