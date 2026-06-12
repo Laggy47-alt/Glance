@@ -187,8 +187,27 @@ export function UnifiNvrCards() {
   );
 }
 
-function UnifiCameraThumb({ instanceId, camera, tick }: { instanceId: string; camera: UnifiCamera; tick: number }) {
+function UnifiCameraThumb({ instanceId, camera, forceTick }: { instanceId: string; camera: UnifiCamera; forceTick: number }) {
   const [errored, setErrored] = useState(false);
+  // Each tile picks its own cache-bust timestamp. We only bump it when the
+  // tile mounts, when the parent forces a refresh, or on the tile's own
+  // staggered ~2-minute timer. This avoids a thundering herd of proxy fetches.
+  const initialTick = useRef(Date.now());
+  const [tick, setTick] = useState(initialTick.current);
+  useEffect(() => {
+    if (camera.isConnected === false) return; // don't poll offline cams
+    // Stagger the first refresh anywhere in 60-180s so 20 tiles don't all
+    // hit the proxy at the same moment.
+    const period = 60_000 + Math.floor(Math.random() * 120_000);
+    const id = setInterval(() => setTick(Date.now()), period);
+    return () => clearInterval(id);
+  }, [camera.isConnected]);
+  useEffect(() => {
+    if (forceTick > 0) {
+      setTick(Date.now());
+      setErrored(false);
+    }
+  }, [forceTick]);
   const offline = camera.isConnected === false;
   const src = unifiCameraThumbnailUrl(instanceId, camera.id, tick);
   return (
