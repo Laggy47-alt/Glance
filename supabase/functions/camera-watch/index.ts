@@ -179,22 +179,61 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // Reachable — clear unreachable markers if previously set.
+    // Reachable — clear unreachable markers if previously set, and send NVR-recovery WA.
+    const wasUnreachableAlerted = !!inst.nvr_unreachable_alerted_since;
     if (inst.nvr_unreachable_since || inst.nvr_unreachable_alerted_since) {
       await supabase.from("frigate_instances")
         .update({ nvr_unreachable_since: null, nvr_unreachable_alerted_since: null })
         .eq("id", inst.id);
     }
+    const waCfg = waByOrg.get(inst.organization_id);
+    if (wasUnreachableAlerted && waCfg?.enabled && waCfg.send_recovery && inst.whatsapp_alert_enabled) {
+      const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
+      if (nvrWa.length) {
+        const msg = `✅ *${inst.name}* — NVR reachable again.`;
+        await sendWaMessage(inst.organization_id, nvrWa, msg);
+      }
+    }
+
     const states = await reconcile(supabase, inst.id, inst.organization_id, stats.online, stats.offline);
     const now = Date.now();
     const thresholdMs = Math.max(1, inst.offline_alert_minutes) * 60_000;
 
-    // Clear alert rows for cameras now back online
+    // Cameras now back online — send recovery WA for any that had an active alert row, then clear.
     const onlineNames = states.filter((s) => s.online).map((s) => s.camera);
     if (onlineNames.length) {
+      const { data: clearedAlerts } = await supabase.from("camera_offline_alerts")
+        .select("camera")
+        .eq("instance_id", inst.id).in("camera", onlineNames);
+      const recoveredCams = (clearedAlerts ?? []).map((r: any) => r.camera);
+      if (recoveredCams.length && waCfg?.enabled && waCfg.send_recovery && inst.whatsapp_alert_enabled) {
+        // Build per-recipient buckets like alerts do
+        const buckets = new Map<string, { recipients: string[]; cameras: string[] }>();
+        const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
+        if (inst.multi_client) {
+          const map = (inst.camera_whatsapp_recipients ?? {}) as Record<string, string[]>;
+          for (const cam of recoveredCams) {
+            const camRaw = (map[cam] ?? []).map((r) => r.trim()).filter(isWaRecipient);
+            const recips = camRaw.length ? camRaw : nvrWa;
+            if (!recips.length) continue;
+            const key = recips.slice().sort().join("|");
+            if (!buckets.has(key)) buckets.set(key, { recipients: recips, cameras: [] });
+            buckets.get(key)!.cameras.push(cam);
+          }
+        } else if (nvrWa.length) {
+          buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: recoveredCams });
+        }
+        for (const { recipients, cameras } of buckets.values()) {
+          const msg = cameras
+            .map((cam) => renderRecovery(waCfg.recovery_template, { nvr: inst.name, camera: cam }))
+            .join("\n");
+          await sendWaMessage(inst.organization_id, recipients, msg);
+        }
+      }
       await supabase.from("camera_offline_alerts").delete()
         .eq("instance_id", inst.id).in("camera", onlineNames);
     }
+
 
     if (!inst.offline_alert_enabled && !inst.whatsapp_alert_enabled) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
