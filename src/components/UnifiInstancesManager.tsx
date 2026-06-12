@@ -20,9 +20,16 @@ export type UnifiInstance = {
   enabled: boolean;
   is_local: boolean;
   verify_tls: boolean;
+  webhook_secret?: string | null;
 };
 
 const PALETTE = ["#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6"];
+
+function webhookUrlFor(instanceId: string) {
+  const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, "")
+    ?? `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`;
+  return `${base}/functions/v1/unifi-webhook/${instanceId}`;
+}
 
 export function UnifiInstancesManager({ compact = false }: { compact?: boolean }) {
   const { activeOrg } = useAuth();
@@ -32,6 +39,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingSecret, setEditingSecret] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -45,7 +53,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
     setLoading(true);
     const { data } = await supabase
       .from("unifi_instances")
-      .select("id, organization_id, name, base_url, api_key, color, enabled, is_local, verify_tls")
+      .select("id, organization_id, name, base_url, api_key, color, enabled, is_local, verify_tls, webhook_secret")
       .eq("organization_id", orgId)
       .order("name");
     setItems((data ?? []) as UnifiInstance[]);
