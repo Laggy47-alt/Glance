@@ -36,7 +36,7 @@ const customerItems = [
 
 export function AppSidebar() {
   const store = useWebhookStore();
-  const { profile, isAdmin, isCustomer, signOut, activeOrg } = useAuth();
+  const { profile, isAdmin, isSuperAdmin, isCustomer, signOut, activeOrg, orgs, setActiveOrgId } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const { offlineCameras, unreachableNvrs, hasOffline } = useOfflineStatus();
   const location = useLocation();
@@ -53,6 +53,7 @@ export function AppSidebar() {
       ? customerItems
       : userItems;
   const showSites = !isCustomer || isAdmin;
+  const showOrgSwitcher = orgs.length > 1 || isSuperAdmin;
 
   const handleSignOut = async () => {
     await signOut();
@@ -74,6 +75,25 @@ export function AppSidebar() {
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{appSubtitle}</div>
         </div>
       </div>
+
+      {showOrgSwitcher && (
+        <div className="px-3 pt-3">
+          <label className="text-[10px] uppercase tracking-widest text-muted-foreground px-1">Organization</label>
+          <select
+            value={activeOrg?.id ?? ""}
+            onChange={(e) => setActiveOrgId(e.target.value || null)}
+            className="mt-1 w-full bg-sidebar-accent/40 border border-sidebar-border rounded-md px-2 py-1.5 text-xs text-sidebar-accent-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {!activeOrg && <option value="">Select org…</option>}
+            {orgs.map((o) => (
+              <option key={o.organization_id} value={o.organization_id}>
+                {o.organization?.name ?? o.organization_id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {items.map((it) => {
