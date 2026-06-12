@@ -68,6 +68,7 @@ const Media = () => {
     topic: m.topic,
     ts: m.ts,
     mediaId: m.id,
+    organizationId: m.organization_id ?? activeOrg?.id ?? null,
     eventId: m.event_id ?? null,
   });
 
