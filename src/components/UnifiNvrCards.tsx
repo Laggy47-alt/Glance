@@ -76,11 +76,10 @@ export function UnifiNvrCards() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Refresh thumbnails periodically; snapshots are pulled via cache-busted URLs.
-  useEffect(() => {
-    const t = setInterval(() => setThumbTick(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  // Manual refresh only — thumbnails self-refresh on a per-camera staggered
+  // schedule (see UnifiCameraThumb) so we don't kick off a thundering herd
+  // of proxy calls every interval.
+  const bumpAll = useCallback(() => setRefreshTick((t) => t + 1), []);
 
   const enabled = instances.filter((i) => i.enabled);
   if (!loaded) return null;
