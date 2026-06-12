@@ -14,7 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
+import { SuperFeaturesPanel } from "@/components/SuperFeaturesPanel";
+import { ToggleLeft } from "lucide-react";
 import { toast } from "sonner";
+
 
 type Org = { id: string; slug: string; name: string; created_at: string };
 type Site = { id: string; name: string; base_url: string; color: string; enabled: boolean; organization_id: string };
@@ -197,7 +200,9 @@ export default function SuperAdmin() {
               <Phone className="h-4 w-4" /> Callouts
               {openCallouts.length > 0 && <Badge variant="secondary" className="ml-1">{openCallouts.length}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="features" className="gap-1.5"><ToggleLeft className="h-4 w-4" /> Features</TabsTrigger>
             <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
+
           </TabsList>
 
           {/* SITES */}
@@ -355,7 +360,14 @@ export default function SuperAdmin() {
             </Card>
           </TabsContent>
 
+          {/* FEATURES */}
+          <TabsContent value="features" className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">Toggle optional features per organization. Disabled features are hidden from that org's dashboard.</p>
+            <SuperFeaturesPanel orgs={orgs} />
+          </TabsContent>
+
           {/* CUSTOMIZATION */}
+
           <TabsContent value="customization" className="space-y-6 mt-4">
             <SuperBrandingEditor
               title="Platform branding (Super Admin Portal)"
