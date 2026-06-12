@@ -139,7 +139,7 @@ class WebhookStore {
     return org === this.activeOrgId;
   }
 
-  private scoped<T extends { eq: (column: string, value: string) => T }>(query: T) {
+  private scoped(query: any) {
     return this.activeOrgId ? query.eq("organization_id", this.activeOrgId) : query;
   }
 
