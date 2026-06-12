@@ -16,6 +16,7 @@ export type LightboxItem = {
   thumbnail?: string;
   frigateUrl?: string | null;
   mediaId?: string;
+  organizationId?: string | null;
   eventId?: string | null;
   /** Optional ordered fallback URLs tried in sequence if `url` (and prior fallbacks) fail to load. */
   fallbackUrls?: string[];
@@ -56,7 +57,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("media_tags")
-      .insert({ media_id: item.mediaId, tag, created_by: user?.id ?? null })
+      .insert({ organization_id: item.organizationId, media_id: item.mediaId, tag, created_by: user?.id ?? null })
       .select("id, tag, note")
       .single();
     setLoading(false);
