@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Server, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Plus, Trash2, Server, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 export type UnifiInstance = {
@@ -31,6 +31,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -55,35 +56,58 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
 
   useEffect(() => {
     if (!orgId) return;
+    const uniq = `${orgId}-${Math.random().toString(36).slice(2, 10)}`;
     const ch = supabase
-      .channel(`unifi-instances-${orgId}`)
+      .channel(`unifi-instances-${uniq}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "unifi_instances", filter: `organization_id=eq.${orgId}` }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
   }, [orgId, load]);
 
   const reset = () => {
+    setEditingId(null);
     setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]);
     setIsLocal(false); setVerifyTls(true);
   };
 
-  const create = async () => {
+  const openCreate = () => { reset(); setOpen(true); };
+
+  const openEdit = (it: UnifiInstance) => {
+    setEditingId(it.id);
+    setName(it.name);
+    setBaseUrl(it.base_url);
+    setApiKey(it.api_key ?? "");
+    setColor(it.color || PALETTE[0]);
+    setIsLocal(!!it.is_local);
+    setVerifyTls(!!it.verify_tls);
+    setOpen(true);
+  };
+
+  const save = async () => {
     if (!orgId) { toast.error("No active organization"); return; }
     if (!name.trim() || !baseUrl.trim()) { toast.error("Name and base URL required"); return; }
     setSaving(true);
-    const { error } = await supabase.from("unifi_instances").insert({
-      organization_id: orgId,
+    const payload = {
       name: name.trim(),
       base_url: baseUrl.trim().replace(/\/+$/, ""),
       api_key: apiKey.trim(),
       color,
-      enabled: true,
       is_local: isLocal,
       verify_tls: verifyTls,
-    });
+    };
+    let error;
+    if (editingId) {
+      ({ error } = await supabase.from("unifi_instances").update(payload).eq("id", editingId));
+    } else {
+      ({ error } = await supabase.from("unifi_instances").insert({
+        ...payload,
+        organization_id: orgId,
+        enabled: true,
+      }));
+    }
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Unifi ENVR added");
+    toast.success(editingId ? "Unifi ENVR updated" : "Unifi ENVR added");
     reset(); setOpen(false); void load();
   };
 
@@ -105,60 +129,64 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
           <h3 className="text-sm font-semibold text-foreground">Unifi ENVR</h3>
           <p className="text-xs text-muted-foreground">Connect Unifi Protect / ENVR instances for this organization.</p>
         </div>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5">
-              <Plus className="h-4 w-4" /> Add Unifi ENVR
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add Unifi ENVR</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Main site ENVR" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Base URL</Label>
-                <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://192.168.1.1" className="font-mono" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">API key</Label>
-                <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Unifi local API key" className="font-mono" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Color</Label>
-                <div className="flex gap-2 flex-wrap">
-                  {PALETTE.map((c) => (
-                    <button key={c} type="button" onClick={() => setColor(c)} className="h-7 w-7 rounded-md border-2" style={{ background: c, borderColor: color === c ? "hsl(var(--foreground))" : "transparent" }} />
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-md border border-border p-2">
-                <div>
-                  <Label className="text-xs">Local network</Label>
-                  <p className="text-[10px] text-muted-foreground">Reachable only from inside this network.</p>
-                </div>
-                <Switch checked={isLocal} onCheckedChange={setIsLocal} />
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-md border border-border p-2">
-                <div>
-                  <Label className="text-xs">Verify TLS</Label>
-                  <p className="text-[10px] text-muted-foreground">Disable for self-signed certs.</p>
-                </div>
-                <Switch checked={verifyTls} onCheckedChange={setVerifyTls} />
+        <Button size="sm" className="gap-1.5" onClick={openCreate}>
+          <Plus className="h-4 w-4" /> Add Unifi ENVR
+        </Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Edit Unifi ENVR" : "Add Unifi ENVR"}</DialogTitle>
+            <DialogDescription>
+              {editingId ? "Update this Unifi Protect / ENVR connection." : "Connect a Unifi Protect / ENVR instance."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Main site ENVR" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Base URL</Label>
+              <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://192.168.1.1" className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">API key</Label>
+              <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Unifi local API key" className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Color</Label>
+              <div className="flex gap-2 flex-wrap">
+                {PALETTE.map((c) => (
+                  <button key={c} type="button" onClick={() => setColor(c)} className="h-7 w-7 rounded-md border-2" style={{ background: c, borderColor: color === c ? "hsl(var(--foreground))" : "transparent" }} />
+                ))}
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-              <Button onClick={create} disabled={saving}>
-                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Add
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border p-2">
+              <div>
+                <Label className="text-xs">Local network</Label>
+                <p className="text-[10px] text-muted-foreground">Reachable only from inside this network.</p>
+              </div>
+              <Switch checked={isLocal} onCheckedChange={setIsLocal} />
+            </div>
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border p-2">
+              <div>
+                <Label className="text-xs">Verify TLS</Label>
+                <p className="text-[10px] text-muted-foreground">Disable for self-signed certs.</p>
+              </div>
+              <Switch checked={verifyTls} onCheckedChange={setVerifyTls} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingId ? "Save" : "Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <Card className="p-4 text-xs text-muted-foreground">Loading…</Card>
@@ -179,6 +207,9 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
                 <div className="text-[11px] text-muted-foreground truncate font-mono">{it.base_url}</div>
               </div>
               <Switch checked={it.enabled} onCheckedChange={(v) => toggle(it.id, v)} />
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" onClick={() => openEdit(it)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => remove(it)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
