@@ -350,3 +350,29 @@ CREATE POLICY platform_settings_super_all ON public.platform_settings FOR ALL TO
   USING (public.is_super_admin(auth.uid())) WITH CHECK (public.is_super_admin(auth.uid()));
 
 COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- Foreign keys for organization_members (required so PostgREST embedded
+-- selects like organization_members?select=organizations(...) resolve).
+-- Idempotent: drop-if-exists then add. Orphans (memberships pointing at a
+-- deleted user or organization) are cleaned up first.
+-- ---------------------------------------------------------------------------
+BEGIN;
+
+DELETE FROM public.organization_members om
+ WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = om.user_id)
+    OR NOT EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = om.organization_id);
+
+ALTER TABLE public.organization_members
+  DROP CONSTRAINT IF EXISTS organization_members_organization_id_fkey;
+ALTER TABLE public.organization_members
+  ADD CONSTRAINT organization_members_organization_id_fkey
+  FOREIGN KEY (organization_id) REFERENCES public.organizations(id) ON DELETE CASCADE;
+
+ALTER TABLE public.organization_members
+  DROP CONSTRAINT IF EXISTS organization_members_user_id_fkey;
+ALTER TABLE public.organization_members
+  ADD CONSTRAINT organization_members_user_id_fkey
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+COMMIT;
