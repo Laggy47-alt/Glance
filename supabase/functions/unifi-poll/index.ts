@@ -25,11 +25,20 @@ type UnifiInstance = {
 
 type UnifiEvent = {
   id: string;
+  item?: unknown;
+  event?: unknown;
+  modelKey?: string;
+  action?: string;
   type?: string;
   start?: number; // ms epoch
   end?: number | null;
-  camera?: string; // camera id
+  timestamp?: number;
+  camera?: string | { id?: string; name?: string }; // camera id or expanded camera
+  cameraId?: string;
+  cameraName?: string;
   score?: number;
+  thumbnail?: string;
+  thumb?: string;
   smartDetectTypes?: string[];
   smartDetectEvents?: string[];
 };
@@ -37,6 +46,18 @@ type UnifiEvent = {
 type UnifiCamera = {
   id: string;
   name: string;
+};
+
+type NormalizedUnifiEvent = {
+  id: string;
+  cameraId: string;
+  cameraName: string;
+  eventType: string;
+  smartTypes: string[];
+  startMs: number;
+  endMs: number | null;
+  score: number | null;
+  raw: Record<string, unknown>;
 };
 
 const MAX_EVENT_AGE_MS = 5 * 60 * 1000;
@@ -95,6 +116,63 @@ function kindFor(evType: string): string {
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unifi";
+}
+
+function asArray<T>(data: unknown, key: string): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const obj = data as Record<string, unknown> | null;
+  if (Array.isArray(obj?.[key])) return obj[key] as T[];
+  if (Array.isArray(obj?.data)) return obj.data as T[];
+  return [];
+}
+
+function parseTimeMs(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value < 10_000_000_000 ? Math.floor(value * 1000) : Math.floor(value);
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n < 10_000_000_000 ? Math.floor(n * 1000) : Math.floor(n);
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function normalizeEvent(input: UnifiEvent, camName: Map<string, string>): NormalizedUnifiEvent | null {
+  const wrapped = input as Record<string, unknown>;
+  const candidate = (wrapped.item && typeof wrapped.item === "object")
+    ? wrapped.item
+    : (wrapped.event && typeof wrapped.event === "object")
+      ? wrapped.event
+      : input;
+  const ev = candidate as UnifiEvent & Record<string, unknown>;
+  if (!ev || typeof ev !== "object") return null;
+
+  const id = ev.id ?? ev.eventId ?? ev._id;
+  if (!id) return null;
+
+  const cameraObj = ev.camera && typeof ev.camera === "object" ? ev.camera as { id?: string; name?: string } : null;
+  const cameraId = String(cameraObj?.id ?? ev.cameraId ?? (typeof ev.camera === "string" ? ev.camera : "") ?? "");
+  const cameraName = String(cameraObj?.name ?? ev.cameraName ?? camName.get(cameraId) ?? cameraId || "camera");
+  const smartTypes = Array.from(new Set([
+    ...(Array.isArray(ev.smartDetectTypes) ? ev.smartDetectTypes.map(String) : []),
+    ...(Array.isArray(ev.smartDetectEvents) ? ev.smartDetectEvents.map(String) : []),
+  ]));
+  const eventType = String(ev.type ?? ev.eventType ?? ev.modelKey ?? "event");
+  const startMs = parseTimeMs(ev.start ?? ev.timestamp ?? ev.createdAt) ?? Date.now();
+  const endMs = parseTimeMs(ev.end);
+  const score = typeof ev.score === "number" ? ev.score : null;
+
+  return {
+    id: String(id),
+    cameraId,
+    cameraName,
+    eventType,
+    smartTypes,
+    startMs,
+    endMs,
+    score,
+    raw: ev as Record<string, unknown>,
+  };
 }
 
 Deno.serve(async (req) => {
