@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.resolve-org-for-username]
 verify_jwt = false
+
+[functions.unifi-webhook]
+verify_jwt = false
