@@ -89,6 +89,7 @@ const App = () => (
                 <Route path="/sources" element={protect(<Sources />, true)} />
                 <Route path="/frigate" element={protect(<Frigate />, true)} />
                 <Route path="/nvr-status" element={protect(<NvrStatus />, true)} />
+                <Route path="/unifi-alerts" element={protect(<UnifiAlerts />, true)} />
                 <Route path="/camera-status" element={protect(<CameraStatus />)} />
                 <Route path="/wall" element={protect(<Wall />)} />
                 <Route path="/media" element={protect(<Media />)} />
