@@ -98,8 +98,20 @@ const Frigate = () => {
 
   const copy = (s: string) => { navigator.clipboard.writeText(s); toast.success("Copied"); };
 
+  if (unifiMode) {
+    return (
+      <DashboardLayout
+        title="Unifi NVR"
+        subtitle="Connect Unifi Protect / ENVR instances — events ingest via the Unifi API"
+      >
+        <UnifiInstancesManager />
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout
+
       title="Frigate NVR"
       subtitle="Connect multiple Frigate instances — events stream in via push and polling"
       actions={
