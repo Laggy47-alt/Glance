@@ -223,7 +223,8 @@ const NvrStatus = () => {
       )}
 
       {features.hasFeature(FEATURE_UNIFI_ENVR) && (
-        <div className="mt-8 pt-6 border-t border-border">
+        <div className="mt-8 pt-6 border-t border-border space-y-8">
+          <UnifiNvrCards />
           <UnifiInstancesManager />
         </div>
       )}
