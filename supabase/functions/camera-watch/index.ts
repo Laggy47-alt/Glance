@@ -110,14 +110,33 @@ Deno.serve(async (req) => {
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  // Fetch global WhatsApp settings (include_nvr_unreachable toggle) per org once.
+  // Fetch global WhatsApp settings per org once.
   const orgIds = Array.from(new Set((instances ?? []).map((i: any) => i.organization_id)));
   const { data: waSettings } = orgIds.length
-    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable").in("organization_id", orgIds)
+    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template").in("organization_id", orgIds)
     : { data: [] as any[] };
-  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean }>(
-    (waSettings ?? []).map((s: any) => [s.organization_id, { enabled: !!s.enabled, include_nvr_unreachable: !!s.include_nvr_unreachable }]),
+  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string }>(
+    (waSettings ?? []).map((s: any) => [s.organization_id, {
+      enabled: !!s.enabled,
+      include_nvr_unreachable: !!s.include_nvr_unreachable,
+      send_recovery: !!s.send_recovery,
+      recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
+    }]),
   );
+
+  const renderRecovery = (tpl: string, vars: Record<string, string | number>) =>
+    tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? ""));
+
+  const sendWaMessage = async (orgId: string, recipients: string[], message: string) => {
+    try {
+      const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ organization_id: orgId, recipients, message }),
+      });
+      return await res.json().catch(() => ({ status: res.status }));
+    } catch (e: any) { return { error: String(e?.message ?? e) }; }
+  };
 
   const results: any[] = [];
 
@@ -160,22 +179,61 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // Reachable — clear unreachable markers if previously set.
+    // Reachable — clear unreachable markers if previously set, and send NVR-recovery WA.
+    const wasUnreachableAlerted = !!inst.nvr_unreachable_alerted_since;
     if (inst.nvr_unreachable_since || inst.nvr_unreachable_alerted_since) {
       await supabase.from("frigate_instances")
         .update({ nvr_unreachable_since: null, nvr_unreachable_alerted_since: null })
         .eq("id", inst.id);
     }
+    const waCfg = waByOrg.get(inst.organization_id);
+    if (wasUnreachableAlerted && waCfg?.enabled && waCfg.send_recovery && inst.whatsapp_alert_enabled) {
+      const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
+      if (nvrWa.length) {
+        const msg = `✅ *${inst.name}* — NVR reachable again.`;
+        await sendWaMessage(inst.organization_id, nvrWa, msg);
+      }
+    }
+
     const states = await reconcile(supabase, inst.id, inst.organization_id, stats.online, stats.offline);
     const now = Date.now();
     const thresholdMs = Math.max(1, inst.offline_alert_minutes) * 60_000;
 
-    // Clear alert rows for cameras now back online
+    // Cameras now back online — send recovery WA for any that had an active alert row, then clear.
     const onlineNames = states.filter((s) => s.online).map((s) => s.camera);
     if (onlineNames.length) {
+      const { data: clearedAlerts } = await supabase.from("camera_offline_alerts")
+        .select("camera")
+        .eq("instance_id", inst.id).in("camera", onlineNames);
+      const recoveredCams = (clearedAlerts ?? []).map((r: any) => r.camera);
+      if (recoveredCams.length && waCfg?.enabled && waCfg.send_recovery && inst.whatsapp_alert_enabled) {
+        // Build per-recipient buckets like alerts do
+        const buckets = new Map<string, { recipients: string[]; cameras: string[] }>();
+        const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
+        if (inst.multi_client) {
+          const map = (inst.camera_whatsapp_recipients ?? {}) as Record<string, string[]>;
+          for (const cam of recoveredCams) {
+            const camRaw = (map[cam] ?? []).map((r) => r.trim()).filter(isWaRecipient);
+            const recips = camRaw.length ? camRaw : nvrWa;
+            if (!recips.length) continue;
+            const key = recips.slice().sort().join("|");
+            if (!buckets.has(key)) buckets.set(key, { recipients: recips, cameras: [] });
+            buckets.get(key)!.cameras.push(cam);
+          }
+        } else if (nvrWa.length) {
+          buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: recoveredCams });
+        }
+        for (const { recipients, cameras } of buckets.values()) {
+          const msg = cameras
+            .map((cam) => renderRecovery(waCfg.recovery_template, { nvr: inst.name, camera: cam }))
+            .join("\n");
+          await sendWaMessage(inst.organization_id, recipients, msg);
+        }
+      }
       await supabase.from("camera_offline_alerts").delete()
         .eq("instance_id", inst.id).in("camera", onlineNames);
     }
+
 
     if (!inst.offline_alert_enabled && !inst.whatsapp_alert_enabled) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
