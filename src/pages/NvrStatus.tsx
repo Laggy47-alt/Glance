@@ -9,6 +9,7 @@ import { fetchFrigateStats } from "@/lib/frigateStats";
 import { cn } from "@/lib/utils";
 import { useOrgFeatures, FEATURE_UNIFI_ENVR } from "@/hooks/useOrgFeatures";
 import { UnifiInstancesManager } from "@/components/UnifiInstancesManager";
+import { UnifiNvrCards } from "@/components/UnifiNvrCards";
 
 
 type CameraStatus = {
