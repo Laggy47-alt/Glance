@@ -3,6 +3,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export type WebhookSource = {
   id: string;
+  organization_id?: string | null;
   name: string;
   slug: string;
   secret: string;
@@ -13,6 +14,7 @@ export type WebhookSource = {
 
 export type WebhookEvent = {
   id: string;
+  organization_id?: string | null;
   source_id: string;
   topic: string;
   payload: Record<string, unknown> | unknown[];
@@ -30,6 +32,7 @@ export type WebhookEvent = {
 
 export type AutoReadRule = {
   id: string;
+  organization_id?: string | null;
   source_id: string | null;
   pattern: string;
   enabled: boolean;
@@ -38,6 +41,7 @@ export type AutoReadRule = {
 
 export type MediaItem = {
   id: string;
+  organization_id?: string | null;
   source_id: string;
   event_id: string | null;
   kind: "snapshot" | "clip";
@@ -52,6 +56,7 @@ export type MediaItem = {
 
 export type FrigateInstance = {
   id: string;
+  organization_id?: string | null;
   source_id: string;
   name: string;
   base_url: string;
@@ -129,10 +134,13 @@ class WebhookStore {
   }
 
   private matchesOrg(row: unknown) {
-    if (!this.activeOrgId) return true;
+    if (!this.activeOrgId) return false;
     const org = (row as { organization_id?: string | null } | null)?.organization_id;
-    // Rows without org info (rare) are kept; otherwise must match active org.
-    return !org || org === this.activeOrgId;
+    return org === this.activeOrgId;
+  }
+
+  private scoped<T extends { eq: (column: string, value: string) => T }>(query: T) {
+    return this.activeOrgId ? query.eq("organization_id", this.activeOrgId) : query;
   }
 
 
