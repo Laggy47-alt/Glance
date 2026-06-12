@@ -25,10 +25,11 @@ export type UnifiInstance = {
 
 const PALETTE = ["#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6"];
 
-function webhookUrlFor(instanceId: string) {
+function webhookUrlFor(instanceId: string, token?: string | null) {
   const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, "")
     ?? `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`;
-  return `${base}/functions/v1/unifi-webhook/${instanceId}`;
+  const qs = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${base}/functions/v1/unifi-webhook/${instanceId}${qs}`;
 }
 
 export function UnifiInstancesManager({ compact = false }: { compact?: boolean }) {
@@ -212,22 +213,35 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
                     Rotate token
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  In UniFi: <span className="font-medium">Alarm Manager → Add Alarm → Send Webhook</span>. Use these values:
-                </p>
+                <ol className="text-[10px] text-muted-foreground space-y-0.5 list-decimal pl-4">
+                  <li>UniFi: <span className="font-medium">Alarm Manager → Add Alarm → Send Webhook</span></li>
+                  <li>Paste the URL below as <span className="font-medium">Delivery URL</span></li>
+                  <li>Open <span className="font-medium">Advanced Settings</span> and switch Method from GET to <span className="font-medium">POST</span></li>
+                  <li>Click <span className="font-medium">Test Alarm</span> — it should appear in UniFi Alerts</li>
+                </ol>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] text-muted-foreground">Delivery URL · Method: POST</Label>
+                  <Label className="text-[10px] text-muted-foreground">Delivery URL (token included)</Label>
                   <div className="flex gap-1.5">
-                    <Input readOnly value={webhookUrlFor(editingId)} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(webhookUrlFor(editingId), "URL")}>Copy</Button>
+                    <Input
+                      readOnly
+                      value={webhookUrlFor(editingId, editingSecret)}
+                      className="font-mono text-[11px] h-8"
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => copy(webhookUrlFor(editingId, editingSecret), "Webhook URL")}
+                    >
+                      Copy
+                    </Button>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] text-muted-foreground">Authentication: Bearer · Token</Label>
-                  <div className="flex gap-1.5">
-                    <Input readOnly value={editingSecret} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(editingSecret, "Token")}>Copy</Button>
-                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Keep this URL private — anyone with it can post alarms to your account.
+                    The endpoint must use HTTPS with a publicly-trusted certificate; UniFi silently drops self-signed certs.
+                  </p>
                 </div>
               </div>
             )}
