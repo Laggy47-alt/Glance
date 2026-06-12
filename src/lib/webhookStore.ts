@@ -3,6 +3,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export type WebhookSource = {
   id: string;
+  organization_id?: string | null;
   name: string;
   slug: string;
   secret: string;
@@ -13,6 +14,7 @@ export type WebhookSource = {
 
 export type WebhookEvent = {
   id: string;
+  organization_id?: string | null;
   source_id: string;
   topic: string;
   payload: Record<string, unknown> | unknown[];
@@ -30,6 +32,7 @@ export type WebhookEvent = {
 
 export type AutoReadRule = {
   id: string;
+  organization_id?: string | null;
   source_id: string | null;
   pattern: string;
   enabled: boolean;
@@ -38,6 +41,7 @@ export type AutoReadRule = {
 
 export type MediaItem = {
   id: string;
+  organization_id?: string | null;
   source_id: string;
   event_id: string | null;
   kind: "snapshot" | "clip";
@@ -52,6 +56,7 @@ export type MediaItem = {
 
 export type FrigateInstance = {
   id: string;
+  organization_id?: string | null;
   source_id: string;
   name: string;
   base_url: string;
@@ -100,6 +105,7 @@ type Listener = () => void;
 // start_time is slightly earlier than `cursor` (e.g. Frigate published it a
 // few seconds before the poller picked it up) still surfaces.
 const LIVE_CURSOR_GRACE_MS = 30_000;
+const NO_ACTIVE_ORG_ID = "00000000-0000-0000-0000-000000000000";
 
 class WebhookStore {
   sources: WebhookSource[] = [];
@@ -129,10 +135,13 @@ class WebhookStore {
   }
 
   private matchesOrg(row: unknown) {
-    if (!this.activeOrgId) return true;
+    if (!this.activeOrgId) return false;
     const org = (row as { organization_id?: string | null } | null)?.organization_id;
-    // Rows without org info (rare) are kept; otherwise must match active org.
-    return !org || org === this.activeOrgId;
+    return org === this.activeOrgId;
+  }
+
+  private scoped(query: any) {
+    return query.eq("organization_id", this.activeOrgId ?? NO_ACTIVE_ORG_ID);
   }
 
 
@@ -199,10 +208,10 @@ class WebhookStore {
     const cursorIso = new Date(this.liveCursorMs - LIVE_CURSOR_GRACE_MS).toISOString();
     try {
       const [ev, md] = await Promise.all([
-        supabase.from("webhook_events").select("*")
+        this.scoped(supabase.from("webhook_events").select("*"))
           .gt("ts", cursorIso)
           .order("ts", { ascending: false }).limit(100),
-        supabase.from("media_items").select("*")
+        this.scoped(supabase.from("media_items").select("*"))
           .gt("ts", cursorIso)
           .order("ts", { ascending: false }).limit(100),
       ]);
@@ -246,11 +255,11 @@ class WebhookStore {
   async refreshAll() {
     try {
       const [s, e, r, m, f] = await Promise.all([
-        supabase.from("webhook_sources").select("*").order("created_at", { ascending: true }),
-        supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500),
-        supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true }),
-        supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200),
-        supabase.from("frigate_instances").select("*").order("created_at", { ascending: true }),
+        this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("webhook_events").select("*")).order("ts", { ascending: false }).limit(500),
+        this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("media_items").select("*")).order("ts", { ascending: false }).limit(200),
+        this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = (e.data ?? []) as WebhookEvent[];
@@ -315,8 +324,10 @@ class WebhookStore {
 
   // ─── Sources ───
   async createSource(input: { name: string; slug: string; color?: string }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
     const secret = crypto.randomUUID().replace(/-/g, "");
     const { error } = await supabase.from("webhook_sources").insert({
+      organization_id: this.activeOrgId,
       name: input.name,
       slug: input.slug,
       color: input.color ?? "#06b6d4",
@@ -326,11 +337,13 @@ class WebhookStore {
   }
 
   async updateSource(id: string, patch: Partial<Pick<WebhookSource, "name" | "enabled" | "color" | "secret">>) {
-    const { error } = await supabase.from("webhook_sources").update(patch).eq("id", id);
+    const q = supabase.from("webhook_sources").update(patch).eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
     if (error) throw error;
   }
   async deleteSource(id: string) {
-    const { error } = await supabase.from("webhook_sources").delete().eq("id", id);
+    const q = supabase.from("webhook_sources").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
     if (error) throw error;
   }
   async rotateSecret(id: string) {
@@ -340,34 +353,43 @@ class WebhookStore {
 
   // ─── Events ───
   async markRead(id: string, read = true) {
-    await supabase.from("webhook_events").update({ read }).eq("id", id);
+    const q = supabase.from("webhook_events").update({ read }).eq("id", id);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async markAllRead() {
-    await supabase.from("webhook_events").update({ read: true }).eq("read", false);
+    const q = supabase.from("webhook_events").update({ read: true }).eq("read", false);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async clearEvents() {
-    await supabase.from("webhook_events").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    const q = supabase.from("webhook_events").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async clearMedia() {
-    await supabase.from("media_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    const q = supabase.from("media_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
 
   // ─── Rules ───
   async addRule(pattern: string, source_id: string | null = null) {
+    if (!this.activeOrgId) throw new Error("No active organization");
     const { error } = await supabase.from("auto_read_rules").insert({
+      organization_id: this.activeOrgId,
       pattern, source_id, enabled: true,
     });
     if (error) throw error;
   }
   async toggleRule(id: string, enabled: boolean) {
-    await supabase.from("auto_read_rules").update({ enabled }).eq("id", id);
+    const q = supabase.from("auto_read_rules").update({ enabled }).eq("id", id);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async removeRule(id: string) {
-    await supabase.from("auto_read_rules").delete().eq("id", id);
+    const q = supabase.from("auto_read_rules").delete().eq("id", id);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
 
   // ─── Frigate instances ───
   async createFrigate(input: { name: string; base_url: string; api_key?: string; color?: string; is_local?: boolean }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
     const slugBase = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "frigate";
     const slug = `frigate-${slugBase}-${crypto.randomUUID().slice(0, 6)}`;
     const secret = crypto.randomUUID().replace(/-/g, "");
@@ -375,6 +397,7 @@ class WebhookStore {
 
     // Paired webhook source so push notifications and polled events share the same source view
     const { data: src, error: srcErr } = await supabase.from("webhook_sources").insert({
+      organization_id: this.activeOrgId,
       name: `Frigate · ${input.name}`,
       slug,
       color,
@@ -383,6 +406,7 @@ class WebhookStore {
     if (srcErr) throw srcErr;
 
     const { error } = await supabase.from("frigate_instances").insert({
+      organization_id: this.activeOrgId,
       source_id: src.id,
       name: input.name,
       base_url: input.base_url.replace(/\/+$/, ""),
@@ -395,7 +419,7 @@ class WebhookStore {
       mute_end: "17:30:00",
     });
     if (error) {
-      await supabase.from("webhook_sources").delete().eq("id", src.id);
+      await supabase.from("webhook_sources").delete().eq("id", src.id).eq("organization_id", this.activeOrgId);
       throw error;
     }
   }
@@ -409,7 +433,8 @@ class WebhookStore {
     const update = connectionChanged
       ? { ...cleaned, last_error: null, last_polled_at: null }
       : cleaned;
-    const { data, error } = await supabase.from("frigate_instances").update(update).eq("id", id).select("*").single();
+    const q = supabase.from("frigate_instances").update(update).eq("id", id);
+    const { data, error } = await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q).select("*").single();
     if (error) throw error;
     if (data) {
       this.frigates = this.frigates.map((x) => x.id === id ? data as FrigateInstance : x);
@@ -423,12 +448,16 @@ class WebhookStore {
     this.frigates = this.frigates.filter((f) => f.id !== id);
     if (inst?.source_id) this.sources = this.sources.filter((s) => s.id !== inst.source_id);
     this.emit();
-    const { error } = await supabase.from("frigate_instances").delete().eq("id", id);
+    const q = supabase.from("frigate_instances").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
     if (error) {
       await this.refreshAll();
       throw error;
     }
-    if (inst?.source_id) await supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+    if (inst?.source_id) {
+      const srcQ = supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+      await (this.activeOrgId ? srcQ.eq("organization_id", this.activeOrgId) : srcQ);
+    }
   }
   async pollFrigateNow(id?: string) {
     const url = id ? `frigate-poll?instance_id=${id}` : "frigate-poll";

@@ -85,7 +85,7 @@ function parseStats(stats: unknown): { online: string[]; offline: string[] } {
 }
 
 const Customer = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, activeOrg } = useAuth();
   const store = useWebhookStore();
   const [assignedIds, setAssignedIds] = useState<string[]>([]);
   // Map<instance_id, Set<camera>> — only present for NVRs with per-camera filter.
@@ -101,10 +101,10 @@ const Customer = () => {
 
   // Load assignments (NVR + per-camera)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeOrg?.id) return;
     void Promise.all([
-      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", user.id),
-      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", user.id),
+      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", user.id).eq("organization_id", activeOrg.id),
+      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", user.id).eq("organization_id", activeOrg.id),
     ]).then(([{ data: nvrRows }, { data: camRows }]) => {
       setAssignedIds((nvrRows ?? []).map((d) => d.instance_id));
       const m = new Map<string, Set<string>>();
@@ -114,19 +114,20 @@ const Customer = () => {
       }
       setCamFilter(m);
     });
-  }, [user]);
+  }, [user, activeOrg?.id]);
 
   // Load armed states
   const loadArmed = useCallback(async () => {
-    if (assignedIds.length === 0) return;
+    if (assignedIds.length === 0 || !activeOrg?.id) return;
     const { data } = await supabase
       .from("camera_armed_state")
       .select("instance_id, camera, armed")
+      .eq("organization_id", activeOrg.id)
       .in("instance_id", assignedIds);
     const map = new Map<string, boolean>();
     (data ?? []).forEach((r) => map.set(armedKey(r.instance_id, r.camera), r.armed));
     setArmedMap(map);
-  }, [assignedIds]);
+  }, [assignedIds, activeOrg?.id]);
 
   useEffect(() => { void loadArmed(); }, [loadArmed]);
 
@@ -145,15 +146,16 @@ const Customer = () => {
 
   // Load callouts (own)
   const loadCallouts = useCallback(async () => {
-    if (!user) return;
+    if (!user || !activeOrg?.id) return;
     const { data } = await supabase
       .from("callout_requests")
       .select("*")
       .eq("requested_by", user.id)
+      .eq("organization_id", activeOrg.id)
       .order("created_at", { ascending: false })
       .limit(10);
     setRecentCallouts(data ?? []);
-  }, [user]);
+  }, [user, activeOrg?.id]);
   useEffect(() => { void loadCallouts(); }, [loadCallouts]);
 
   // Poll Frigate stats for assigned NVRs
@@ -196,12 +198,13 @@ const Customer = () => {
   const actorName = profile?.display_name || profile?.username || user?.email || "customer";
 
   const toggleArmed = async (instId: string, camera: string, armed: boolean) => {
+    if (!activeOrg?.id) return;
     const key = armedKey(instId, camera);
     setArmedMap((prev) => new Map(prev).set(key, armed));
     const { error } = await supabase
       .from("camera_armed_state")
       .upsert(
-        { instance_id: instId, camera, armed, updated_by: user?.id ?? null },
+        { organization_id: activeOrg.id, instance_id: instId, camera, armed, updated_by: user?.id ?? null },
         { onConflict: "instance_id,camera" }
       );
     if (error) {
@@ -211,6 +214,7 @@ const Customer = () => {
       toast({ title: armed ? "Camera armed" : "Camera disarmed", description: camera });
       void supabase.from("camera_arm_audit").insert({
         instance_id: instId, camera,
+        organization_id: activeOrg.id,
         action: armed ? "arm" : "disarm", source: "manual",
         actor: user?.id ?? null, actor_name: actorName,
       });
@@ -218,9 +222,10 @@ const Customer = () => {
   };
 
   const setAllArmed = async (view: NvrView, armed: boolean) => {
+    if (!activeOrg?.id) return;
     if (view.cameras.length === 0) return;
     const rows = view.cameras.map((c) => ({
-      instance_id: view.inst.id, camera: c.name, armed, updated_by: user?.id ?? null,
+      organization_id: activeOrg.id, instance_id: view.inst.id, camera: c.name, armed, updated_by: user?.id ?? null,
     }));
     setArmedMap((prev) => {
       const next = new Map(prev);
@@ -238,6 +243,7 @@ const Customer = () => {
       void supabase.from("camera_arm_audit").insert(
         view.cameras.map((c) => ({
           instance_id: view.inst.id, camera: c.name,
+          organization_id: activeOrg.id,
           action: armed ? "arm" : "disarm", source: "manual",
           actor: user?.id ?? null, actor_name: actorName,
           note: "Bulk toggle",
@@ -440,6 +446,7 @@ function CalloutDialog({
       const { data: inserted, error } = await supabase
         .from("callout_requests")
         .insert({
+          organization_id: activeOrg?.id,
           instance_id: target.inst.id,
           camera: camerasCsv,
           reason: fullReason,

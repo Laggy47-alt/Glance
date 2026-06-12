@@ -30,8 +30,16 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    let q = supabase.from("app_settings").select("app_name, app_subtitle, logo_url, organization_id");
-    if (activeOrg?.id) q = q.eq("organization_id", activeOrg.id);
+    if (!activeOrg?.id) {
+      setBranding(DEFAULTS);
+      setLoading(false);
+      return;
+    }
+
+    const q = supabase
+      .from("app_settings")
+      .select("app_name, app_subtitle, logo_url, organization_id")
+      .eq("organization_id", activeOrg.id);
     const { data } = await q.order("updated_at", { ascending: false }).limit(1).maybeSingle();
 
     const base = (data?.app_name?.trim() || BASE_DEFAULT);

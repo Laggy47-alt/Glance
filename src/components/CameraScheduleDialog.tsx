@@ -35,7 +35,7 @@ export function CameraScheduleDialog({
   instanceName: string;
   availableCameras?: string[];
 }) {
-  const { user } = useAuth();
+  const { user, activeOrg } = useAuth();
   const [rows, setRows] = useState<Row[]>(
     Array.from({ length: 7 }, (_, w) => ({ weekday: w, arm_time: null, disarm_time: null, enabled: false }))
   );
@@ -45,7 +45,7 @@ export function CameraScheduleDialog({
   const [copying, setCopying] = useState(false);
 
   const copyToCameras = async () => {
-    if (!user || copyTargets.size === 0) return;
+    if (!user || !activeOrg?.id || copyTargets.size === 0) return;
     setCopying(true);
     try {
       const targets = Array.from(copyTargets);
@@ -53,6 +53,7 @@ export function CameraScheduleDialog({
       const { error: delErr } = await supabase
         .from("camera_arm_schedules")
         .delete()
+        .eq("organization_id", activeOrg.id)
         .eq("instance_id", instanceId)
         .in("camera", targets);
       if (delErr) throw delErr;
@@ -61,6 +62,7 @@ export function CameraScheduleDialog({
         rows
           .filter((r) => r.enabled && (r.arm_time || r.disarm_time))
           .map((r) => ({
+            organization_id: activeOrg.id,
             instance_id: instanceId,
             camera: cam,
             weekday: r.weekday,
@@ -87,11 +89,12 @@ export function CameraScheduleDialog({
   };
 
   const load = useCallback(async () => {
-    if (!user || !open) return;
+    if (!user || !activeOrg?.id || !open) return;
     setLoading(true);
     const { data } = await supabase
       .from("camera_arm_schedules")
       .select("id, weekday, arm_time, disarm_time, enabled")
+      .eq("organization_id", activeOrg.id)
       .eq("instance_id", instanceId)
       .eq("camera", camera);
     const base: Row[] = Array.from({ length: 7 }, (_, w) => ({
@@ -108,7 +111,7 @@ export function CameraScheduleDialog({
     }
     setRows(base);
     setLoading(false);
-  }, [user, open, instanceId, camera]);
+  }, [user, activeOrg?.id, open, instanceId, camera]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -128,12 +131,13 @@ export function CameraScheduleDialog({
   };
 
   const save = async () => {
-    if (!user) return;
+    if (!user || !activeOrg?.id) return;
     setSaving(true);
     try {
       const toUpsert = rows
         .filter((r) => r.enabled && (r.arm_time || r.disarm_time))
         .map((r) => ({
+          organization_id: activeOrg.id,
           instance_id: instanceId,
           camera,
           weekday: r.weekday,

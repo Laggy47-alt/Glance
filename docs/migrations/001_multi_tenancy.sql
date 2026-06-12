@@ -33,26 +33,30 @@ BEGIN;
 DO $$
 DECLARE
   default_org uuid;
+  org_count integer;
 BEGIN
+  SELECT count(*) INTO org_count FROM public.organizations;
   SELECT id INTO default_org FROM public.organizations ORDER BY created_at LIMIT 1;
   IF default_org IS NULL THEN
     RAISE EXCEPTION 'No organizations row exists; cannot backfill memberships.';
   END IF;
 
-  INSERT INTO public.organization_members (organization_id, user_id, role)
-  SELECT default_org,
-         ur.user_id,
-         CASE
-           WHEN bool_or(ur.role::text IN ('super_admin','admin')) THEN 'admin'::public.org_member_role
-           ELSE 'customer'::public.org_member_role
-         END
-    FROM public.user_roles ur
-   GROUP BY ur.user_id
-  ON CONFLICT (organization_id, user_id) DO UPDATE
-     SET role = CASE
-                  WHEN EXCLUDED.role = 'admin'::public.org_member_role THEN 'admin'::public.org_member_role
-                  ELSE public.organization_members.role
-                END;
+  IF org_count = 1 THEN
+    INSERT INTO public.organization_members (organization_id, user_id, role)
+    SELECT default_org,
+           ur.user_id,
+           CASE
+             WHEN bool_or(ur.role::text IN ('super_admin','admin')) THEN 'admin'::public.org_member_role
+             ELSE 'customer'::public.org_member_role
+           END
+      FROM public.user_roles ur
+     GROUP BY ur.user_id
+    ON CONFLICT (organization_id, user_id) DO UPDATE
+       SET role = CASE
+                    WHEN EXCLUDED.role = 'admin'::public.org_member_role THEN 'admin'::public.org_member_role
+                    ELSE public.organization_members.role
+                  END;
+  END IF;
 
   UPDATE public.media_items             SET organization_id = default_org WHERE organization_id IS NULL;
   UPDATE public.webhook_events          SET organization_id = default_org WHERE organization_id IS NULL;
@@ -114,26 +118,20 @@ END $$;
 CREATE OR REPLACE FUNCTION public.is_org_member(_user_id uuid, _org_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
-  SELECT _user_id IS NOT NULL AND (
-    public.is_super_admin(_user_id)
-    OR EXISTS (
-      SELECT 1 FROM public.organization_members
-       WHERE user_id = _user_id AND organization_id = _org_id
-    )
+  SELECT _user_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.organization_members
+     WHERE user_id = _user_id AND organization_id = _org_id
   )
 $$;
 
 CREATE OR REPLACE FUNCTION public.is_org_admin(_user_id uuid, _org_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
-  SELECT _user_id IS NOT NULL AND (
-    public.is_super_admin(_user_id)
-    OR EXISTS (
-      SELECT 1 FROM public.organization_members
-       WHERE user_id = _user_id
-         AND organization_id = _org_id
-         AND role = 'admin'::public.org_member_role
-    )
+  SELECT _user_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.organization_members
+     WHERE user_id = _user_id
+       AND organization_id = _org_id
+       AND role = 'admin'::public.org_member_role
   )
 $$;
 
@@ -200,22 +198,57 @@ END $$;
 -- 5. Replace stub policies with real org-scoped policies
 -- ----------------------------------------------------------------------------
 
--- Drop existing stub policies on public schema.
+-- Drop every existing policy on the tables this migration owns. RLS policies
+-- are PERMISSIVE by default, so leaving even one old "authenticated can read
+-- all" policy in place ORs with the new org policies and leaks tenant data.
 DO $$
-DECLARE r record;
+DECLARE
+  r record;
+  isolation_tables text[] := ARRAY[
+    'app_settings','auto_read_rules','callout_requests','callout_settings',
+    'camera_arm_audit','camera_arm_schedule_runs','camera_arm_schedules',
+    'camera_armed_state','camera_offline_alerts','camera_status',
+    'customer_camera_assignments','customer_nvr_assignments',
+    'customer_offline_instructions','daily_report_configs','daily_report_runs',
+    'daily_report_settings','frigate_instances','media_items','media_tags',
+    'offline_instruction_acks','organizations','organization_members',
+    'platform_settings','profiles','super_callout_requests','user_roles',
+    'webhook_events','webhook_sources','whatsapp_incoming_messages',
+    'whatsapp_settings'
+  ];
 BEGIN
   FOR r IN
     SELECT schemaname, tablename, policyname FROM pg_policies
-     WHERE schemaname = 'public' AND policyname LIKE '%_authenticated_all'
+     WHERE schemaname = 'public' AND tablename = ANY(isolation_tables)
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', r.policyname, r.schemaname, r.tablename);
   END LOOP;
 END $$;
 
--- Drop policies we explicitly replace below.
-DROP POLICY IF EXISTS "Authenticated users can read incoming messages"   ON public.whatsapp_incoming_messages;
-DROP POLICY IF EXISTS "Authenticated users can update incoming messages" ON public.whatsapp_incoming_messages;
-DROP POLICY IF EXISTS "Org admins manage whatsapp settings"              ON public.whatsapp_settings;
+-- Universal tenant boundary. These RESTRICTIVE policies are ANDed with any
+-- future permissive policies, so org-owned rows can never leak across orgs.
+DO $$
+DECLARE
+  t text;
+  org_tables text[] := ARRAY[
+    'app_settings','auto_read_rules','callout_requests','callout_settings',
+    'camera_arm_audit','camera_arm_schedule_runs','camera_arm_schedules',
+    'camera_armed_state','camera_offline_alerts','camera_status',
+    'customer_camera_assignments','customer_nvr_assignments',
+    'customer_offline_instructions','daily_report_configs','daily_report_runs',
+    'daily_report_settings','frigate_instances','media_items','media_tags',
+    'offline_instruction_acks','organization_members','super_callout_requests',
+    'webhook_events','webhook_sources','whatsapp_incoming_messages',
+    'whatsapp_settings'
+  ];
+BEGIN
+  FOREACH t IN ARRAY org_tables LOOP
+    EXECUTE format(
+      'CREATE POLICY %I ON public.%I AS RESTRICTIVE FOR ALL TO authenticated USING (public.can_read_org(organization_id)) WITH CHECK (public.can_read_org(organization_id))',
+      t || '_tenant_boundary', t
+    );
+  END LOOP;
+END $$;
 
 -- Admin-write tables: members read, org admins write.
 DO $$
