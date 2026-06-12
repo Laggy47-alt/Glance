@@ -101,10 +101,10 @@ const Customer = () => {
 
   // Load assignments (NVR + per-camera)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeOrg?.id) return;
     void Promise.all([
-      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", user.id),
-      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", user.id),
+      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", user.id).eq("organization_id", activeOrg.id),
+      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", user.id).eq("organization_id", activeOrg.id),
     ]).then(([{ data: nvrRows }, { data: camRows }]) => {
       setAssignedIds((nvrRows ?? []).map((d) => d.instance_id));
       const m = new Map<string, Set<string>>();
@@ -114,7 +114,7 @@ const Customer = () => {
       }
       setCamFilter(m);
     });
-  }, [user]);
+  }, [user, activeOrg?.id]);
 
   // Load armed states
   const loadArmed = useCallback(async () => {
@@ -146,15 +146,16 @@ const Customer = () => {
 
   // Load callouts (own)
   const loadCallouts = useCallback(async () => {
-    if (!user) return;
+    if (!user || !activeOrg?.id) return;
     const { data } = await supabase
       .from("callout_requests")
       .select("*")
       .eq("requested_by", user.id)
+      .eq("organization_id", activeOrg.id)
       .order("created_at", { ascending: false })
       .limit(10);
     setRecentCallouts(data ?? []);
-  }, [user]);
+  }, [user, activeOrg?.id]);
   useEffect(() => { void loadCallouts(); }, [loadCallouts]);
 
   // Poll Frigate stats for assigned NVRs
@@ -445,6 +446,7 @@ function CalloutDialog({
       const { data: inserted, error } = await supabase
         .from("callout_requests")
         .insert({
+          organization_id: activeOrg?.id,
           instance_id: target.inst.id,
           camera: camerasCsv,
           reason: fullReason,
