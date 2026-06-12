@@ -9,6 +9,7 @@ import { fetchFrigateStats } from "@/lib/frigateStats";
 import { cn } from "@/lib/utils";
 import { useOrgFeatures, FEATURE_UNIFI_ENVR } from "@/hooks/useOrgFeatures";
 import { UnifiInstancesManager } from "@/components/UnifiInstancesManager";
+import { UnifiNvrCards } from "@/components/UnifiNvrCards";
 
 
 type CameraStatus = {
@@ -222,7 +223,8 @@ const NvrStatus = () => {
       )}
 
       {features.hasFeature(FEATURE_UNIFI_ENVR) && (
-        <div className="mt-8 pt-6 border-t border-border">
+        <div className="mt-8 pt-6 border-t border-border space-y-8">
+          <UnifiNvrCards />
           <UnifiInstancesManager />
         </div>
       )}
