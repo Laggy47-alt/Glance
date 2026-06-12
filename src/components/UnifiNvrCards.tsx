@@ -92,7 +92,7 @@ export function UnifiNvrCards() {
           <h3 className="text-sm font-semibold text-foreground">UniFi ENVR</h3>
           <p className="text-xs text-muted-foreground">{enabled.length} instance{enabled.length === 1 ? "" : "s"} connected.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
+        <Button variant="outline" size="sm" onClick={() => { fetchAll(); bumpAll(); }} className="gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </Button>
       </div>
