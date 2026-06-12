@@ -43,14 +43,16 @@ BEGIN
   SELECT default_org,
          ur.user_id,
          CASE
-           WHEN ur.role::text IN ('super_admin','admin') THEN 'admin'::public.org_member_role
+           WHEN bool_or(ur.role::text IN ('super_admin','admin')) THEN 'admin'::public.org_member_role
            ELSE 'customer'::public.org_member_role
          END
     FROM public.user_roles ur
-   WHERE NOT EXISTS (
-           SELECT 1 FROM public.organization_members om
-            WHERE om.user_id = ur.user_id AND om.organization_id = default_org
-         );
+   GROUP BY ur.user_id
+  ON CONFLICT (organization_id, user_id) DO UPDATE
+     SET role = CASE
+                  WHEN EXCLUDED.role = 'admin'::public.org_member_role THEN 'admin'::public.org_member_role
+                  ELSE public.organization_members.role
+                END;
 
   UPDATE public.media_items             SET organization_id = default_org WHERE organization_id IS NULL;
   UPDATE public.webhook_events          SET organization_id = default_org WHERE organization_id IS NULL;
