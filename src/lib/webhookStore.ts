@@ -207,10 +207,10 @@ class WebhookStore {
     const cursorIso = new Date(this.liveCursorMs - LIVE_CURSOR_GRACE_MS).toISOString();
     try {
       const [ev, md] = await Promise.all([
-        supabase.from("webhook_events").select("*")
+        this.scoped(supabase.from("webhook_events").select("*"))
           .gt("ts", cursorIso)
           .order("ts", { ascending: false }).limit(100),
-        supabase.from("media_items").select("*")
+        this.scoped(supabase.from("media_items").select("*"))
           .gt("ts", cursorIso)
           .order("ts", { ascending: false }).limit(100),
       ]);
@@ -254,11 +254,11 @@ class WebhookStore {
   async refreshAll() {
     try {
       const [s, e, r, m, f] = await Promise.all([
-        supabase.from("webhook_sources").select("*").order("created_at", { ascending: true }),
-        supabase.from("webhook_events").select("*").order("ts", { ascending: false }).limit(500),
-        supabase.from("auto_read_rules").select("*").order("created_at", { ascending: true }),
-        supabase.from("media_items").select("*").order("ts", { ascending: false }).limit(200),
-        supabase.from("frigate_instances").select("*").order("created_at", { ascending: true }),
+        this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("webhook_events").select("*")).order("ts", { ascending: false }).limit(500),
+        this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("media_items").select("*")).order("ts", { ascending: false }).limit(200),
+        this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = (e.data ?? []) as WebhookEvent[];
