@@ -117,24 +117,9 @@ Deno.serve(async (req) => {
       );
     if (ueErr) console.error("unifi_events insert error:", ueErr);
 
-    // 2) Mirror to webhook_events so the Wall surfaces it.
-    if (inst.source_id) {
-      const { error: weErr } = await admin.from("webhook_events").insert({
-        organization_id: inst.organization_id,
-        source_id: inst.source_id,
-        kind: "unifi",
-        label: smart[0] ?? type,
-        camera: camName ?? camId ?? null,
-        payload,
-        payload_text: bodyText,
-        headers: Object.fromEntries(req.headers.entries()),
-        frigate_event_id: remoteId,
-        ts: startAt,
-      });
-      if (weErr) console.error("webhook_events insert error:", weErr);
-    } else {
-      console.warn(`Instance ${inst.id} has no source_id; cannot mirror to Wall.`);
-    }
+    // NOTE: UniFi events are intentionally NOT mirrored into webhook_events.
+    // They live solely in unifi_events so the UniFi tenant view stays isolated
+    // from the Frigate Wall (multi-tenancy: separate sources, separate UIs).
 
     return json({ ok: true });
   } catch (e) {
