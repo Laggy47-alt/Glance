@@ -246,7 +246,7 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
 
     // Snapshot: try event-specific thumbnail, fall back to live camera snapshot.
     const tsParam = startMs ? `&ts=${startMs}` : "";
-    const snapshotUrl = `/functions/v1/unifi-proxy/${inst.id}/proxy/protect/integration/v1/events/${encodeURIComponent(ev.id)}/thumbnail?highQuality=false${tsParam}`;
+    const snapshotUrl = `${supabaseUrl}/functions/v1/unifi-proxy/${inst.id}/proxy/protect/integration/v1/events/${encodeURIComponent(ev.id)}/thumbnail?highQuality=false${tsParam}`;
     try {
       await rest(supabaseUrl, serviceKey, `media_items`, {
         method: "POST",
