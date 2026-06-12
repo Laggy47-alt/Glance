@@ -16,7 +16,7 @@ import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
 import { useOrgFeatures, FEATURE_UNIFI_ENVR } from "@/hooks/useOrgFeatures";
 import { UnifiInstancesManager } from "@/components/UnifiInstancesManager";
-import { DashboardLayout as _DL } from "@/components/DashboardLayout";
+
 
 
 const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6"];
