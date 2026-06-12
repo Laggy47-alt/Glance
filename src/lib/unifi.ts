@@ -57,7 +57,13 @@ export async function fetchUnifiCameras(instance: UnifiInstance): Promise<UnifiC
     const body = await r.text().catch(() => "");
     throw new Error(`${r.status} ${r.statusText}${body ? ` — ${body.slice(0, 160)}` : ""}`);
   }
-  const data = await r.json();
+  const text = await r.text();
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Non-JSON response from proxy (${text.slice(0, 160) || "empty body"})`);
+  }
   // Integration API returns an array; legacy API returns {cameras: []}.
   const arr = Array.isArray(data) ? data : Array.isArray((data as any)?.cameras) ? (data as any).cameras : [];
   return arr.map((c: any) => ({
