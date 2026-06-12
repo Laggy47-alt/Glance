@@ -105,6 +105,7 @@ type Listener = () => void;
 // start_time is slightly earlier than `cursor` (e.g. Frigate published it a
 // few seconds before the poller picked it up) still surfaces.
 const LIVE_CURSOR_GRACE_MS = 30_000;
+const NO_ACTIVE_ORG_ID = "00000000-0000-0000-0000-000000000000";
 
 class WebhookStore {
   sources: WebhookSource[] = [];
@@ -140,7 +141,7 @@ class WebhookStore {
   }
 
   private scoped(query: any) {
-    return this.activeOrgId ? query.eq("organization_id", this.activeOrgId) : query;
+    return query.eq("organization_id", this.activeOrgId ?? NO_ACTIVE_ORG_ID);
   }
 
 
