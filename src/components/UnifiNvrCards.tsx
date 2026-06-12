@@ -29,12 +29,6 @@ export function UnifiNvrCards() {
   const [states, setStates] = useState<Record<string, CamState>>({});
   // Per-instance "force refresh" tick (bumped by the Refresh button only).
   const [refreshTick, setRefreshTick] = useState(0);
-  const { activeOrg } = useAuth();
-  const orgId = activeOrg?.id ?? null;
-  const [instances, setInstances] = useState<UnifiInstance[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [states, setStates] = useState<Record<string, CamState>>({});
-  const [thumbTick, setThumbTick] = useState<number>(() => Date.now());
 
   const loadList = useCallback(async () => {
     try {
