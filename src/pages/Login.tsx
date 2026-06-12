@@ -8,8 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Webhook, Loader2 } from "lucide-react";
 import { forceCreateAdmin, isEmergencyCredentials, seedAdmin, startOfflineSession } from "@/lib/offlineMode";
 
-// Single-tenant: ABC is the only organization. Slug is fixed.
-const ORG_SLUG = "abc-2026";
+// Default org used for first-ever admin bootstrap on a fresh install.
+const BOOTSTRAP_ORG_SLUG = "abc-2026";
+// Fallback slugs always tried (super-admin tenant + legacy installs) in case
+// the lookup endpoint is unreachable.
+const FALLBACK_SLUGS = ["super", BOOTSTRAP_ORG_SLUG, "abc-2026-canonical"];
 
 const Login = () => {
   const { session, loading } = useAuth();
@@ -46,9 +49,29 @@ const Login = () => {
     return <Navigate to={location.state?.from ?? "/"} replace />;
   }
 
+  // Ask the backend which org(s) this username belongs to, then try each.
+  const resolveSlugs = async (u: string): Promise<string[]> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("resolve-org-for-username", {
+        body: { username: u },
+      });
+      if (error) throw error;
+      const slugs = Array.isArray((data as any)?.slugs) ? ((data as any).slugs as string[]) : [];
+      // Merge resolved slugs with fallbacks, dedupe, resolved-first.
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const s of [...slugs, ...FALLBACK_SLUGS]) {
+        const k = s.toLowerCase();
+        if (k && !seen.has(k)) { seen.add(k); out.push(k); }
+      }
+      return out;
+    } catch {
+      return [...FALLBACK_SLUGS];
+    }
+  };
+
   const attemptSignIn = async (u: string, p: string) => {
-    // Try ABC first, then known legacy/fallback slugs from upgraded self-host installs.
-    const slugs = [ORG_SLUG, "abc-2026-canonical", "super"];
+    const slugs = await resolveSlugs(u);
     let lastError: { message: string } | null = null;
     for (const slug of slugs) {
       const { error: err } = await signInWithUsername(u, p, slug);
