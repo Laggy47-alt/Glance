@@ -360,7 +360,14 @@ export default function SuperAdmin() {
             </Card>
           </TabsContent>
 
+          {/* FEATURES */}
+          <TabsContent value="features" className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">Toggle optional features per organization. Disabled features are hidden from that org's dashboard.</p>
+            <SuperFeaturesPanel orgs={orgs} />
+          </TabsContent>
+
           {/* CUSTOMIZATION */}
+
           <TabsContent value="customization" className="space-y-6 mt-4">
             <SuperBrandingEditor
               title="Platform branding (Super Admin Portal)"
