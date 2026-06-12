@@ -225,6 +225,7 @@ function UnifiCameraThumb({ instanceId, camera, forceTick }: { instanceId: strin
           src={src}
           alt={camera.name}
           loading="lazy"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
           onError={() => setErrored(true)}
         />
