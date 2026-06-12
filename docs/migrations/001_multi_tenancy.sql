@@ -43,8 +43,8 @@ BEGIN
   SELECT default_org,
          ur.user_id,
          CASE
-           WHEN ur.role IN ('super_admin','admin') THEN 'admin'::public.app_role
-           ELSE 'customer'::public.app_role
+           WHEN ur.role::text IN ('super_admin','admin') THEN 'admin'::public.org_member_role
+           ELSE 'customer'::public.org_member_role
          END
     FROM public.user_roles ur
    WHERE NOT EXISTS (
