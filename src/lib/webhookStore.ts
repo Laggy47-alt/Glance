@@ -323,8 +323,10 @@ class WebhookStore {
 
   // ─── Sources ───
   async createSource(input: { name: string; slug: string; color?: string }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
     const secret = crypto.randomUUID().replace(/-/g, "");
     const { error } = await supabase.from("webhook_sources").insert({
+      organization_id: this.activeOrgId,
       name: input.name,
       slug: input.slug,
       color: input.color ?? "#06b6d4",
@@ -334,11 +336,13 @@ class WebhookStore {
   }
 
   async updateSource(id: string, patch: Partial<Pick<WebhookSource, "name" | "enabled" | "color" | "secret">>) {
-    const { error } = await supabase.from("webhook_sources").update(patch).eq("id", id);
+    const q = supabase.from("webhook_sources").update(patch).eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
     if (error) throw error;
   }
   async deleteSource(id: string) {
-    const { error } = await supabase.from("webhook_sources").delete().eq("id", id);
+    const q = supabase.from("webhook_sources").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
     if (error) throw error;
   }
   async rotateSecret(id: string) {
@@ -348,16 +352,20 @@ class WebhookStore {
 
   // ─── Events ───
   async markRead(id: string, read = true) {
-    await supabase.from("webhook_events").update({ read }).eq("id", id);
+    const q = supabase.from("webhook_events").update({ read }).eq("id", id);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async markAllRead() {
-    await supabase.from("webhook_events").update({ read: true }).eq("read", false);
+    const q = supabase.from("webhook_events").update({ read: true }).eq("read", false);
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async clearEvents() {
-    await supabase.from("webhook_events").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    const q = supabase.from("webhook_events").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async clearMedia() {
-    await supabase.from("media_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    const q = supabase.from("media_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
 
   // ─── Rules ───
