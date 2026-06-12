@@ -200,22 +200,57 @@ END $$;
 -- 5. Replace stub policies with real org-scoped policies
 -- ----------------------------------------------------------------------------
 
--- Drop existing stub policies on public schema.
+-- Drop every existing policy on the tables this migration owns. RLS policies
+-- are PERMISSIVE by default, so leaving even one old "authenticated can read
+-- all" policy in place ORs with the new org policies and leaks tenant data.
 DO $$
-DECLARE r record;
+DECLARE
+  r record;
+  isolation_tables text[] := ARRAY[
+    'app_settings','auto_read_rules','callout_requests','callout_settings',
+    'camera_arm_audit','camera_arm_schedule_runs','camera_arm_schedules',
+    'camera_armed_state','camera_offline_alerts','camera_status',
+    'customer_camera_assignments','customer_nvr_assignments',
+    'customer_offline_instructions','daily_report_configs','daily_report_runs',
+    'daily_report_settings','frigate_instances','media_items','media_tags',
+    'offline_instruction_acks','organizations','organization_members',
+    'platform_settings','profiles','super_callout_requests','user_roles',
+    'webhook_events','webhook_sources','whatsapp_incoming_messages',
+    'whatsapp_settings'
+  ];
 BEGIN
   FOR r IN
     SELECT schemaname, tablename, policyname FROM pg_policies
-     WHERE schemaname = 'public' AND policyname LIKE '%_authenticated_all'
+     WHERE schemaname = 'public' AND tablename = ANY(isolation_tables)
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', r.policyname, r.schemaname, r.tablename);
   END LOOP;
 END $$;
 
--- Drop policies we explicitly replace below.
-DROP POLICY IF EXISTS "Authenticated users can read incoming messages"   ON public.whatsapp_incoming_messages;
-DROP POLICY IF EXISTS "Authenticated users can update incoming messages" ON public.whatsapp_incoming_messages;
-DROP POLICY IF EXISTS "Org admins manage whatsapp settings"              ON public.whatsapp_settings;
+-- Universal tenant boundary. These RESTRICTIVE policies are ANDed with any
+-- future permissive policies, so org-owned rows can never leak across orgs.
+DO $$
+DECLARE
+  t text;
+  org_tables text[] := ARRAY[
+    'app_settings','auto_read_rules','callout_requests','callout_settings',
+    'camera_arm_audit','camera_arm_schedule_runs','camera_arm_schedules',
+    'camera_armed_state','camera_offline_alerts','camera_status',
+    'customer_camera_assignments','customer_nvr_assignments',
+    'customer_offline_instructions','daily_report_configs','daily_report_runs',
+    'daily_report_settings','frigate_instances','media_items','media_tags',
+    'offline_instruction_acks','organization_members','super_callout_requests',
+    'webhook_events','webhook_sources','whatsapp_incoming_messages',
+    'whatsapp_settings'
+  ];
+BEGIN
+  FOREACH t IN ARRAY org_tables LOOP
+    EXECUTE format(
+      'CREATE POLICY %I ON public.%I AS RESTRICTIVE FOR ALL TO authenticated USING (public.can_read_org(organization_id)) WITH CHECK (public.can_read_org(organization_id))',
+      t || '_tenant_boundary', t
+    );
+  END LOOP;
+END $$;
 
 -- Admin-write tables: members read, org admins write.
 DO $$
