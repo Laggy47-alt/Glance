@@ -323,6 +323,7 @@ function ResetPasswordDialog({
 
 function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => void }) {
   const store = useWebhookStore();
+  const { activeOrg } = useAuth();
   // Set of assigned NVR ids
   const [assigned, setAssigned] = useState<Set<string>>(new Set());
   // Map<instance_id, Set<camera>> of explicitly chosen cameras. If an NVR id is not present
@@ -336,11 +337,11 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!row) return;
+    if (!row || !activeOrg?.id) return;
     setLoading(true);
     void Promise.all([
-      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", row.user_id),
-      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", row.user_id),
+      supabase.from("customer_nvr_assignments").select("instance_id").eq("user_id", row.user_id).eq("organization_id", activeOrg.id),
+      supabase.from("customer_camera_assignments").select("instance_id, camera").eq("user_id", row.user_id).eq("organization_id", activeOrg.id),
     ]).then(([{ data: nvrRows }, { data: camRows }]) => {
       setAssigned(new Set((nvrRows ?? []).map((d) => d.instance_id)));
       const m = new Map<string, Set<string>>();
@@ -351,7 +352,7 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
       setCamSel(m);
       setLoading(false);
     });
-  }, [row]);
+  }, [row, activeOrg?.id]);
 
   const fetchCams = async (instId: string) => {
     if (camList.has(instId) || camLoading.has(instId)) return;
@@ -414,22 +415,23 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
   };
 
   const save = async () => {
+    if (!activeOrg?.id) { toast.error("No active organization selected"); return; }
     setBusy(true);
     try {
       // ----- NVR assignments diff -----
       const { data: existingNvr } = await supabase
-        .from("customer_nvr_assignments").select("instance_id").eq("user_id", row.user_id);
+        .from("customer_nvr_assignments").select("instance_id").eq("user_id", row.user_id).eq("organization_id", activeOrg.id);
       const existingNvrSet = new Set((existingNvr ?? []).map((d) => d.instance_id));
       const nvrAdd = [...assigned].filter((id) => !existingNvrSet.has(id));
       const nvrRemove = [...existingNvrSet].filter((id) => !assigned.has(id));
       if (nvrAdd.length) {
         const { error } = await supabase.from("customer_nvr_assignments")
-          .insert(nvrAdd.map((instance_id) => ({ user_id: row.user_id, instance_id })));
+          .insert(nvrAdd.map((instance_id) => ({ organization_id: activeOrg.id, user_id: row.user_id, instance_id })));
         if (error) throw error;
       }
       if (nvrRemove.length) {
         const { error } = await supabase.from("customer_nvr_assignments")
-          .delete().eq("user_id", row.user_id).in("instance_id", nvrRemove);
+          .delete().eq("user_id", row.user_id).eq("organization_id", activeOrg.id).in("instance_id", nvrRemove);
         if (error) throw error;
       }
 
@@ -442,7 +444,7 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
       }
 
       const { data: existingCam } = await supabase
-        .from("customer_camera_assignments").select("instance_id, camera").eq("user_id", row.user_id);
+        .from("customer_camera_assignments").select("instance_id, camera").eq("user_id", row.user_id).eq("organization_id", activeOrg.id);
       const existingCamMap = new Map<string, Set<string>>();
       for (const r of existingCam ?? []) {
         if (!existingCamMap.has(r.instance_id)) existingCamMap.set(r.instance_id, new Set());
@@ -456,7 +458,7 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
       }
       if (clearInstances.length) {
         const { error } = await supabase.from("customer_camera_assignments")
-          .delete().eq("user_id", row.user_id).in("instance_id", clearInstances);
+          .delete().eq("user_id", row.user_id).eq("organization_id", activeOrg.id).in("instance_id", clearInstances);
         if (error) throw error;
       }
 
@@ -467,12 +469,12 @@ function AssignNvrsDialog({ row, onClose }: { row: Row | null; onClose: () => vo
         const toRemove = [...haveSet].filter((c) => !wantSet.has(c));
         if (toAdd.length) {
           const { error } = await supabase.from("customer_camera_assignments")
-            .insert(toAdd.map((camera) => ({ user_id: row.user_id, instance_id: instId, camera })));
+            .insert(toAdd.map((camera) => ({ organization_id: activeOrg.id, user_id: row.user_id, instance_id: instId, camera })));
           if (error) throw error;
         }
         if (toRemove.length) {
           const { error } = await supabase.from("customer_camera_assignments")
-            .delete().eq("user_id", row.user_id).eq("instance_id", instId).in("camera", toRemove);
+            .delete().eq("user_id", row.user_id).eq("organization_id", activeOrg.id).eq("instance_id", instId).in("camera", toRemove);
           if (error) throw error;
         }
       }
