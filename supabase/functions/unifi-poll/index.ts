@@ -265,35 +265,54 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
   // Map camera id → name for nicer topics and offline checks.
   const cameras = await unifiFetch(base, inst.api_key, "/proxy/protect/integration/v1/cameras")
     .then((r) => r.json())
-    .then((data) => (Array.isArray(data) ? data : (data?.cameras ?? [])) as UnifiCamera[])
+    .then((data) => asArray<UnifiCamera>(data, "cameras"))
     .catch(() => [] as UnifiCamera[]);
   const camName = new Map<string, string>();
   for (const c of cameras) camName.set(String(c.id), String(c.name ?? c.id));
 
   const evPath = `/proxy/protect/integration/v1/events?start=${sinceMs}&end=${nowMs}&limit=100`;
-  const events = await unifiFetch(base, inst.api_key, evPath)
+  const rawEvents = await unifiFetch(base, inst.api_key, evPath)
     .then((r) => r.json())
-    .then((data) => (Array.isArray(data) ? data : ((data as any)?.events ?? [])) as UnifiEvent[]);
+    .then((data) => asArray<UnifiEvent>(data, "events"));
 
   let inserted = 0;
+  let insertedAlerts = 0;
   let insertedMedia = 0;
   let maxStart = sinceMs;
+  let skippedOld = 0;
+  let skippedDisarmed = 0;
+  let skippedInvalid = 0;
 
-  for (const ev of events) {
-    const startMs = typeof ev.start === "number" ? ev.start : 0;
-    if (startMs > maxStart) maxStart = startMs;
-    if (!startMs || startMs < windowStartMs) continue;
-    const cameraId = String(ev.camera ?? "");
-    const cameraNameStr = camName.get(cameraId) || cameraId || "camera";
-    if (disarmed.has(cameraNameStr)) continue;
+  for (const rawEv of rawEvents) {
+    const ev = normalizeEvent(rawEv, camName);
+    if (!ev) { skippedInvalid++; continue; }
+    if (ev.startMs > maxStart) maxStart = ev.startMs;
+    if (!ev.startMs || ev.startMs < windowStartMs) { skippedOld++; continue; }
+    if (disarmed.has(ev.cameraName)) { skippedDisarmed++; continue; }
 
-    const evType = String(ev.type ?? "event");
-    const topic = topicFor(evType, cameraNameStr);
-    const score = typeof ev.score === "number" ? ev.score / 100 : null;
-    const label = (ev.smartDetectTypes && ev.smartDetectTypes[0])
-      || (ev.smartDetectEvents && ev.smartDetectEvents[0])
-      || evType;
+    const topic = topicFor(ev.eventType, ev.cameraName);
+    const score = typeof ev.score === "number" ? (ev.score > 1 ? ev.score / 100 : ev.score) : null;
+    const label = ev.smartTypes[0] || ev.eventType;
     const dedupeId = `unifi-${inst.id}-${ev.id}`;
+
+    await rest(supabaseUrl, serviceKey, `unifi_events?on_conflict=instance_id,remote_event_id`, {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+      body: JSON.stringify({
+        organization_id: inst.organization_id,
+        instance_id: inst.id,
+        remote_event_id: ev.id,
+        camera_id: ev.cameraId || "unknown",
+        camera_name: ev.cameraName,
+        event_type: ev.eventType,
+        smart_types: ev.smartTypes.length ? ev.smartTypes : null,
+        start_at: new Date(ev.startMs).toISOString(),
+        end_at: ev.endMs ? new Date(ev.endMs).toISOString() : null,
+        score: typeof ev.score === "number" ? Math.round(ev.score) : null,
+        thumbnail_path: String(ev.raw.thumbnail ?? ev.raw.thumb ?? "") || null,
+        raw: ev.raw,
+      }),
+    }).then((rows: any) => { if (Array.isArray(rows) && rows[0]?.id) insertedAlerts++; }).catch(() => null);
 
     let row: Array<{ id: string }> = [];
     try {
@@ -308,12 +327,12 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
           headers: { "x-unifi-instance": inst.id },
           read: false,
           archived: false,
-          ts: new Date(startMs).toISOString(),
+          ts: new Date(ev.startMs).toISOString(),
           frigate_event_id: dedupeId,
           label,
-          camera: cameraNameStr,
+          camera: ev.cameraName,
           score,
-          kind: kindFor(evType),
+          kind: kindFor(ev.eventType),
         }),
       });
     } catch (_) { continue; }
@@ -323,7 +342,7 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
     inserted++;
 
     // Snapshot: try event-specific thumbnail, fall back to live camera snapshot.
-    const tsParam = startMs ? `&ts=${startMs}` : "";
+    const tsParam = ev.startMs ? `&ts=${ev.startMs}` : "";
     const snapshotUrl = `${supabaseUrl}/functions/v1/unifi-proxy/${inst.id}/proxy/protect/integration/v1/events/${encodeURIComponent(ev.id)}/thumbnail?highQuality=false${tsParam}`;
     try {
       await rest(supabaseUrl, serviceKey, `media_items`, {
@@ -336,9 +355,9 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
           instance_id: inst.id,
           kind: "snapshot",
           url: snapshotUrl,
-          camera: cameraNameStr,
+          camera: ev.cameraName,
           topic,
-          ts: new Date(startMs).toISOString(),
+          ts: new Date(ev.startMs).toISOString(),
           frigate_event_id: dedupeId,
         }]),
       });
@@ -357,5 +376,5 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
     }),
   });
 
-  return { events: inserted, media: insertedMedia };
+  return { scanned: rawEvents.length, alerts: insertedAlerts, wall: inserted, media: insertedMedia, skipped_old: skippedOld, skipped_disarmed: skippedDisarmed, skipped_invalid: skippedInvalid };
 }
