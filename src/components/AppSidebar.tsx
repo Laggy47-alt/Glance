@@ -51,9 +51,12 @@ export function AppSidebar() {
   );
   const [sitesOpen, setSitesOpen] = useState(true);
 
-  const adminItemsResolved = adminItems.map((it) =>
-    it.to === "/frigate" && unifiOn ? { ...it, label: "Unifi NVR" } : it
-  );
+  const adminItemsResolved = adminItems.flatMap((it) => {
+    if (it.to === "/frigate" && unifiOn) {
+      return [{ ...it, label: "Unifi NVR" }, { to: "/unifi-alerts", label: "UniFi Alerts", icon: ShieldAlert }];
+    }
+    return [it];
+  });
 
   const items = isAdmin
     ? [...adminItemsResolved, { to: "/users", label: "Users", icon: UsersIcon }]
