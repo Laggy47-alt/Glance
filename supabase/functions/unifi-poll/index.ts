@@ -25,11 +25,20 @@ type UnifiInstance = {
 
 type UnifiEvent = {
   id: string;
+  item?: unknown;
+  event?: unknown;
+  modelKey?: string;
+  action?: string;
   type?: string;
   start?: number; // ms epoch
   end?: number | null;
-  camera?: string; // camera id
+  timestamp?: number;
+  camera?: string | { id?: string; name?: string }; // camera id or expanded camera
+  cameraId?: string;
+  cameraName?: string;
   score?: number;
+  thumbnail?: string;
+  thumb?: string;
   smartDetectTypes?: string[];
   smartDetectEvents?: string[];
 };
@@ -37,6 +46,18 @@ type UnifiEvent = {
 type UnifiCamera = {
   id: string;
   name: string;
+};
+
+type NormalizedUnifiEvent = {
+  id: string;
+  cameraId: string;
+  cameraName: string;
+  eventType: string;
+  smartTypes: string[];
+  startMs: number;
+  endMs: number | null;
+  score: number | null;
+  raw: Record<string, unknown>;
 };
 
 const MAX_EVENT_AGE_MS = 5 * 60 * 1000;
@@ -95,6 +116,63 @@ function kindFor(evType: string): string {
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unifi";
+}
+
+function asArray<T>(data: unknown, key: string): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const obj = data as Record<string, unknown> | null;
+  if (Array.isArray(obj?.[key])) return obj[key] as T[];
+  if (Array.isArray(obj?.data)) return obj.data as T[];
+  return [];
+}
+
+function parseTimeMs(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value < 10_000_000_000 ? Math.floor(value * 1000) : Math.floor(value);
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n < 10_000_000_000 ? Math.floor(n * 1000) : Math.floor(n);
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function normalizeEvent(input: UnifiEvent, camName: Map<string, string>): NormalizedUnifiEvent | null {
+  const wrapped = input as Record<string, unknown>;
+  const candidate = (wrapped.item && typeof wrapped.item === "object")
+    ? wrapped.item
+    : (wrapped.event && typeof wrapped.event === "object")
+      ? wrapped.event
+      : input;
+  const ev = candidate as UnifiEvent & Record<string, unknown>;
+  if (!ev || typeof ev !== "object") return null;
+
+  const id = ev.id ?? ev.eventId ?? ev._id;
+  if (!id) return null;
+
+  const cameraObj = ev.camera && typeof ev.camera === "object" ? ev.camera as { id?: string; name?: string } : null;
+  const cameraId = String(cameraObj?.id ?? ev.cameraId ?? (typeof ev.camera === "string" ? ev.camera : "") ?? "");
+  const cameraName = String((cameraObj?.name ?? ev.cameraName ?? camName.get(cameraId) ?? cameraId) || "camera");
+  const smartTypes = Array.from(new Set([
+    ...(Array.isArray(ev.smartDetectTypes) ? ev.smartDetectTypes.map(String) : []),
+    ...(Array.isArray(ev.smartDetectEvents) ? ev.smartDetectEvents.map(String) : []),
+  ]));
+  const eventType = String(ev.type ?? ev.eventType ?? ev.modelKey ?? "event");
+  const startMs = parseTimeMs(ev.start ?? ev.timestamp ?? ev.createdAt) ?? Date.now();
+  const endMs = parseTimeMs(ev.end);
+  const score = typeof ev.score === "number" ? ev.score : null;
+
+  return {
+    id: String(id),
+    cameraId,
+    cameraName,
+    eventType,
+    smartTypes,
+    startMs,
+    endMs,
+    score,
+    raw: ev as Record<string, unknown>,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -187,35 +265,54 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
   // Map camera id → name for nicer topics and offline checks.
   const cameras = await unifiFetch(base, inst.api_key, "/proxy/protect/integration/v1/cameras")
     .then((r) => r.json())
-    .then((data) => (Array.isArray(data) ? data : (data?.cameras ?? [])) as UnifiCamera[])
+    .then((data) => asArray<UnifiCamera>(data, "cameras"))
     .catch(() => [] as UnifiCamera[]);
   const camName = new Map<string, string>();
   for (const c of cameras) camName.set(String(c.id), String(c.name ?? c.id));
 
   const evPath = `/proxy/protect/integration/v1/events?start=${sinceMs}&end=${nowMs}&limit=100`;
-  const events = await unifiFetch(base, inst.api_key, evPath)
+  const rawEvents = await unifiFetch(base, inst.api_key, evPath)
     .then((r) => r.json())
-    .then((data) => (Array.isArray(data) ? data : ((data as any)?.events ?? [])) as UnifiEvent[]);
+    .then((data) => asArray<UnifiEvent>(data, "events"));
 
   let inserted = 0;
+  let insertedAlerts = 0;
   let insertedMedia = 0;
   let maxStart = sinceMs;
+  let skippedOld = 0;
+  let skippedDisarmed = 0;
+  let skippedInvalid = 0;
 
-  for (const ev of events) {
-    const startMs = typeof ev.start === "number" ? ev.start : 0;
-    if (startMs > maxStart) maxStart = startMs;
-    if (!startMs || startMs < windowStartMs) continue;
-    const cameraId = String(ev.camera ?? "");
-    const cameraNameStr = camName.get(cameraId) || cameraId || "camera";
-    if (disarmed.has(cameraNameStr)) continue;
+  for (const rawEv of rawEvents) {
+    const ev = normalizeEvent(rawEv, camName);
+    if (!ev) { skippedInvalid++; continue; }
+    if (ev.startMs > maxStart) maxStart = ev.startMs;
+    if (!ev.startMs || ev.startMs < windowStartMs) { skippedOld++; continue; }
+    if (disarmed.has(ev.cameraName)) { skippedDisarmed++; continue; }
 
-    const evType = String(ev.type ?? "event");
-    const topic = topicFor(evType, cameraNameStr);
-    const score = typeof ev.score === "number" ? ev.score / 100 : null;
-    const label = (ev.smartDetectTypes && ev.smartDetectTypes[0])
-      || (ev.smartDetectEvents && ev.smartDetectEvents[0])
-      || evType;
+    const topic = topicFor(ev.eventType, ev.cameraName);
+    const score = typeof ev.score === "number" ? (ev.score > 1 ? ev.score / 100 : ev.score) : null;
+    const label = ev.smartTypes[0] || ev.eventType;
     const dedupeId = `unifi-${inst.id}-${ev.id}`;
+
+    await rest(supabaseUrl, serviceKey, `unifi_events?on_conflict=instance_id,remote_event_id`, {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+      body: JSON.stringify({
+        organization_id: inst.organization_id,
+        instance_id: inst.id,
+        remote_event_id: ev.id,
+        camera_id: ev.cameraId || "unknown",
+        camera_name: ev.cameraName,
+        event_type: ev.eventType,
+        smart_types: ev.smartTypes.length ? ev.smartTypes : null,
+        start_at: new Date(ev.startMs).toISOString(),
+        end_at: ev.endMs ? new Date(ev.endMs).toISOString() : null,
+        score: typeof ev.score === "number" ? Math.round(ev.score) : null,
+        thumbnail_path: String(ev.raw.thumbnail ?? ev.raw.thumb ?? "") || null,
+        raw: ev.raw,
+      }),
+    }).then((rows: any) => { if (Array.isArray(rows) && rows[0]?.id) insertedAlerts++; }).catch(() => null);
 
     let row: Array<{ id: string }> = [];
     try {
@@ -230,12 +327,12 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
           headers: { "x-unifi-instance": inst.id },
           read: false,
           archived: false,
-          ts: new Date(startMs).toISOString(),
+          ts: new Date(ev.startMs).toISOString(),
           frigate_event_id: dedupeId,
           label,
-          camera: cameraNameStr,
+          camera: ev.cameraName,
           score,
-          kind: kindFor(evType),
+          kind: kindFor(ev.eventType),
         }),
       });
     } catch (_) { continue; }
@@ -245,7 +342,7 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
     inserted++;
 
     // Snapshot: try event-specific thumbnail, fall back to live camera snapshot.
-    const tsParam = startMs ? `&ts=${startMs}` : "";
+    const tsParam = ev.startMs ? `&ts=${ev.startMs}` : "";
     const snapshotUrl = `${supabaseUrl}/functions/v1/unifi-proxy/${inst.id}/proxy/protect/integration/v1/events/${encodeURIComponent(ev.id)}/thumbnail?highQuality=false${tsParam}`;
     try {
       await rest(supabaseUrl, serviceKey, `media_items`, {
@@ -258,9 +355,9 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
           instance_id: inst.id,
           kind: "snapshot",
           url: snapshotUrl,
-          camera: cameraNameStr,
+          camera: ev.cameraName,
           topic,
-          ts: new Date(startMs).toISOString(),
+          ts: new Date(ev.startMs).toISOString(),
           frigate_event_id: dedupeId,
         }]),
       });
@@ -279,5 +376,5 @@ async function pollOne(supabaseUrl: string, serviceKey: string, inst: UnifiInsta
     }),
   });
 
-  return { events: inserted, media: insertedMedia };
+  return { scanned: rawEvents.length, alerts: insertedAlerts, wall: inserted, media: insertedMedia, skipped_old: skippedOld, skipped_disarmed: skippedDisarmed, skipped_invalid: skippedInvalid };
 }
