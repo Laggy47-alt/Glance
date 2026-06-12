@@ -14,7 +14,7 @@ export type Profile = {
 export type OrgMembership = {
   organization_id: string;
   role: "admin" | "customer";
-  organization: { id: string; slug: string; name: string } | null;
+  organization: { id: string; slug: string; name: string; camera_provider?: "frigate" | "unifi" } | null;
 };
 
 type AuthCtx = {
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("user_roles").select("role").eq("user_id", userId),
       supabase
         .from("organization_members")
-        .select("organization_id, role, organizations(id, slug, name)")
+        .select("organization_id, role, organizations(id, slug, name, camera_provider)")
         .eq("user_id", userId),
     ]);
     setProfile((prof as Profile) ?? null);
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Super-admin sees every org so they can switch.
     if (superAdmin) {
-      const { data: allOrgs } = await supabase.from("organizations").select("id, slug, name");
+      const { data: allOrgs } = await supabase.from("organizations").select("id, slug, name, camera_provider");
       const have = new Set(orgList.map((o) => o.organization_id));
       for (const o of allOrgs ?? []) {
         if (!have.has(o.id as string)) {

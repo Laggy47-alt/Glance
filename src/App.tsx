@@ -38,6 +38,9 @@ const Offline = lazy(() => import("./pages/Offline.tsx"));
 const Terms = lazy(() => import("./pages/Terms.tsx"));
 const RefundPolicy = lazy(() => import("./pages/RefundPolicy.tsx"));
 const Privacy = lazy(() => import("./pages/Privacy.tsx"));
+const UnifiNvrs = lazy(() => import("./pages/UnifiNvrs.tsx"));
+const UnifiWall = lazy(() => import("./pages/UnifiWall.tsx"));
+const UnifiEvents = lazy(() => import("./pages/UnifiEvents.tsx"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -102,6 +105,10 @@ const App = () => (
                 <Route path="/customer" element={protect(<Customer />)} />
                 <Route path="/customer/events" element={protect(<CustomerEvents />)} />
                 <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />
+                <Route path="/unifi" element={protect(<UnifiNvrs />, true)} />
+                <Route path="/unifi/wall" element={protect(<UnifiWall />)} />
+                <Route path="/unifi/events" element={protect(<UnifiEvents />)} />
+                <Route path="*" element={protect(<NotFound />)} />
                 <Route path="*" element={protect(<NotFound />)} />
               </Routes>
             </Suspense>
