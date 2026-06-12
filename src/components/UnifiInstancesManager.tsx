@@ -25,10 +25,11 @@ export type UnifiInstance = {
 
 const PALETTE = ["#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6"];
 
-function webhookUrlFor(instanceId: string) {
+function webhookUrlFor(instanceId: string, token?: string | null) {
   const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, "")
     ?? `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`;
-  return `${base}/functions/v1/unifi-webhook/${instanceId}`;
+  const qs = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${base}/functions/v1/unifi-webhook/${instanceId}${qs}`;
 }
 
 export function UnifiInstancesManager({ compact = false }: { compact?: boolean }) {
