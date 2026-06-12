@@ -25,7 +25,7 @@ export function CustomerInstructionsCard({
   instances: FrigateInstance[];
   camerasByInstance: Map<string, string[]>;
 }) {
-  const { user } = useAuth();
+  const { user, activeOrg } = useAuth();
   const [rows, setRows] = useState<Map<string, Row>>(new Map()); // key = `${instance_id}::${camera ?? ""}`
   const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -34,12 +34,13 @@ export function CustomerInstructionsCard({
   const keyOf = (instId: string, camera: string | null) => `${instId}::${camera ?? ""}`;
 
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user || !activeOrg?.id) return;
     setLoading(true);
     const { data } = await supabase
       .from("customer_offline_instructions")
       .select("id, instance_id, camera, instructions")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("organization_id", activeOrg.id);
     const m = new Map<string, Row>();
     const d = new Map<string, string>();
     for (const r of data ?? []) {
@@ -50,12 +51,12 @@ export function CustomerInstructionsCard({
     setRows(m);
     setDrafts(d);
     setLoading(false);
-  }, [user]);
+  }, [user, activeOrg?.id]);
 
   useEffect(() => { void load(); }, [load]);
 
   const save = async (instId: string, camera: string | null) => {
-    if (!user) return;
+    if (!user || !activeOrg?.id) return;
     const k = keyOf(instId, camera);
     const text = drafts.get(k) ?? "";
     setSaving(k);
@@ -64,13 +65,14 @@ export function CustomerInstructionsCard({
       if (text.trim() === "") {
         // empty → delete
         if (existing?.id) {
-          const { error } = await supabase.from("customer_offline_instructions").delete().eq("id", existing.id);
+          const { error } = await supabase.from("customer_offline_instructions").delete().eq("id", existing.id).eq("organization_id", activeOrg.id);
           if (error) throw error;
         }
         setRows((p) => { const n = new Map(p); n.delete(k); return n; });
         toast({ title: "Instruction cleared" });
       } else {
         const payload = {
+          organization_id: activeOrg.id,
           user_id: user.id,
           instance_id: instId,
           camera,
