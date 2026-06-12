@@ -1076,9 +1076,14 @@ export type Database = {
           enabled: boolean
           id: string
           is_local: boolean
+          last_error: string | null
+          last_event_ts: string | null
+          last_polled_at: string | null
           last_seen_at: string | null
           name: string
           organization_id: string
+          poll_enabled: boolean
+          source_id: string | null
           updated_at: string
           verify_tls: boolean
         }
@@ -1090,9 +1095,14 @@ export type Database = {
           enabled?: boolean
           id?: string
           is_local?: boolean
+          last_error?: string | null
+          last_event_ts?: string | null
+          last_polled_at?: string | null
           last_seen_at?: string | null
           name: string
           organization_id: string
+          poll_enabled?: boolean
+          source_id?: string | null
           updated_at?: string
           verify_tls?: boolean
         }
@@ -1104,9 +1114,14 @@ export type Database = {
           enabled?: boolean
           id?: string
           is_local?: boolean
+          last_error?: string | null
+          last_event_ts?: string | null
+          last_polled_at?: string | null
           last_seen_at?: string | null
           name?: string
           organization_id?: string
+          poll_enabled?: boolean
+          source_id?: string | null
           updated_at?: string
           verify_tls?: boolean
         }
@@ -1116,6 +1131,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unifi_instances_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_sources"
             referencedColumns: ["id"]
           },
         ]
