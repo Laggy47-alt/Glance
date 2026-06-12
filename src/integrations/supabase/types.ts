@@ -833,7 +833,6 @@ export type Database = {
       }
       organizations: {
         Row: {
-          camera_provider: string
           created_at: string
           created_by: string | null
           id: string
@@ -841,7 +840,6 @@ export type Database = {
           slug: string
         }
         Insert: {
-          camera_provider?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -849,7 +847,6 @@ export type Database = {
           slug: string
         }
         Update: {
-          camera_provider?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -959,131 +956,6 @@ export type Database = {
           subject?: string
         }
         Relationships: []
-      }
-      unifi_events: {
-        Row: {
-          archived: boolean
-          camera_id: string
-          camera_name: string | null
-          created_at: string
-          end_at: string | null
-          event_type: string
-          id: string
-          instance_id: string
-          organization_id: string
-          raw: Json | null
-          read: boolean
-          remote_event_id: string
-          score: number | null
-          smart_types: string[] | null
-          start_at: string
-          thumbnail_path: string | null
-        }
-        Insert: {
-          archived?: boolean
-          camera_id: string
-          camera_name?: string | null
-          created_at?: string
-          end_at?: string | null
-          event_type: string
-          id?: string
-          instance_id: string
-          organization_id: string
-          raw?: Json | null
-          read?: boolean
-          remote_event_id: string
-          score?: number | null
-          smart_types?: string[] | null
-          start_at: string
-          thumbnail_path?: string | null
-        }
-        Update: {
-          archived?: boolean
-          camera_id?: string
-          camera_name?: string | null
-          created_at?: string
-          end_at?: string | null
-          event_type?: string
-          id?: string
-          instance_id?: string
-          organization_id?: string
-          raw?: Json | null
-          read?: boolean
-          remote_event_id?: string
-          score?: number | null
-          smart_types?: string[] | null
-          start_at?: string
-          thumbnail_path?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "unifi_events_instance_id_fkey"
-            columns: ["instance_id"]
-            isOneToOne: false
-            referencedRelation: "unifi_instances"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "unifi_events_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      unifi_instances: {
-        Row: {
-          api_key: string
-          base_url: string
-          color: string
-          created_at: string
-          enabled: boolean
-          id: string
-          is_local: boolean
-          last_seen_at: string | null
-          name: string
-          organization_id: string
-          updated_at: string
-          verify_tls: boolean
-        }
-        Insert: {
-          api_key: string
-          base_url: string
-          color?: string
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          is_local?: boolean
-          last_seen_at?: string | null
-          name: string
-          organization_id: string
-          updated_at?: string
-          verify_tls?: boolean
-        }
-        Update: {
-          api_key?: string
-          base_url?: string
-          color?: string
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          is_local?: boolean
-          last_seen_at?: string | null
-          name?: string
-          organization_id?: string
-          updated_at?: string
-          verify_tls?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "unifi_instances_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       user_roles: {
         Row: {

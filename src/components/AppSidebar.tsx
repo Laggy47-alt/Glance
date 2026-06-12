@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Filter, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, AlertTriangle, MessageCircle, Camera, Cctv } from "lucide-react";
+import { Activity, Filter, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, AlertTriangle, MessageCircle } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -22,24 +22,10 @@ const adminItems = [
   { to: "/customization", label: "Customization", icon: Palette },
 ];
 
-// UniFi Protect orgs get a slimmed nav focused on UniFi pages.
-const unifiAdminItems = [
-  { to: "/unifi", label: "UniFi NVRs", icon: Cctv },
-  { to: "/unifi/wall", label: "Live Wall", icon: Bell },
-  { to: "/unifi/events", label: "Detections", icon: Radio },
-  { to: "/callouts", label: "Callout Requests", icon: Phone },
-  { to: "/customization", label: "Customization", icon: Palette },
-];
-
 const userItems = [
   { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
   { to: "/media", label: "Media", icon: Film },
-];
-
-const unifiUserItems = [
-  { to: "/unifi/wall", label: "Live Wall", icon: Bell },
-  { to: "/unifi/events", label: "Detections", icon: Radio },
 ];
 
 const customerItems = [
@@ -61,14 +47,12 @@ export function AppSidebar() {
   );
   const [sitesOpen, setSitesOpen] = useState(true);
 
-  const isUnifiOrg = (activeOrg as { camera_provider?: string } | null)?.camera_provider === "unifi";
-
   const items = isAdmin
-    ? [...(isUnifiOrg ? unifiAdminItems : adminItems), { to: "/users", label: "Users", icon: UsersIcon }]
+    ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
     : isCustomer
       ? customerItems
-      : isUnifiOrg ? unifiUserItems : userItems;
-  const showSites = (!isCustomer || isAdmin) && !isUnifiOrg;
+      : userItems;
+  const showSites = !isCustomer || isAdmin;
   const showOrgSwitcher = orgs.length > 1 || isSuperAdmin;
 
   const handleSignOut = async () => {
