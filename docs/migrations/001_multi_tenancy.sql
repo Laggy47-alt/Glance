@@ -132,7 +132,7 @@ AS $$
       SELECT 1 FROM public.organization_members
        WHERE user_id = _user_id
          AND organization_id = _org_id
-         AND role = 'admin'::public.app_role
+         AND role = 'admin'::public.org_member_role
     )
   )
 $$;
