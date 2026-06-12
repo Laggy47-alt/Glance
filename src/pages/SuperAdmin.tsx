@@ -266,6 +266,9 @@ export default function SuperAdmin() {
           <TabsContent value="orgs" className="space-y-4 mt-4">
             <div className="flex justify-between items-center">
               <p className="text-sm text-muted-foreground">{orgs.length} organization{orgs.length === 1 ? "" : "s"}</p>
+              <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+                <Plus className="h-4 w-4" /> Add organization
+              </Button>
             </div>
             <Card>
               <Table>
@@ -288,9 +291,14 @@ export default function SuperAdmin() {
                       <TableCell>{(sitesByOrg.get(o.id) ?? []).length}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
-                          Enter <ExternalLink className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex justify-end gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => enterOrg(o)} className="gap-1.5">
+                            Enter <ExternalLink className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setDeleteOrg(o); setDeleteConfirm(""); }} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
