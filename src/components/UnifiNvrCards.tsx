@@ -161,7 +161,7 @@ export function UnifiNvrCards() {
                           key={cam.id}
                           instanceId={inst.id}
                           camera={cam}
-                          tick={thumbTick}
+                          forceTick={refreshTick}
                         />
                       ))}
                     </div>
