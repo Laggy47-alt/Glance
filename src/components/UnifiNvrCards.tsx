@@ -232,11 +232,15 @@ function UnifiCameraThumb({ instanceId, camera, forceTick }: { instanceId: strin
       "relative rounded-md overflow-hidden border bg-secondary/40 aspect-video",
       offline ? "border-destructive/40" : "border-border",
     )}>
-      {!showImage && (errored || offline || !hasBeenVisible) ? (
+      {!hasBeenVisible ? (
+        <div className="absolute inset-0 bg-secondary/30" />
+      ) : errored || offline ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground">
           {offline ? <VideoOff className="h-4 w-4 text-destructive" /> : <ImageOff className="h-4 w-4" />}
           <span className="text-[9px]">{offline ? "Offline" : "No snapshot"}</span>
         </div>
+      ) : null}
+      {showImage && (
       ) : (
         <img
           src={src}
