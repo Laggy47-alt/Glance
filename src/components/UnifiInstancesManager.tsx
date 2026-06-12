@@ -74,6 +74,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
 
   const reset = () => {
     setEditingId(null);
+    setEditingSecret(null);
     setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]);
     setIsLocal(false); setVerifyTls(true);
   };
@@ -82,6 +83,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
 
   const openEdit = (it: UnifiInstance) => {
     setEditingId(it.id);
+    setEditingSecret(it.webhook_secret ?? null);
     setName(it.name);
     setBaseUrl(it.base_url);
     setApiKey(it.api_key ?? "");
@@ -89,6 +91,22 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
     setIsLocal(!!it.is_local);
     setVerifyTls(!!it.verify_tls);
     setOpen(true);
+  };
+
+  const rotateSecret = async () => {
+    if (!editingId) return;
+    if (!confirm("Rotate webhook token? You'll need to paste the new token into UniFi.")) return;
+    const newSecret = crypto.randomUUID();
+    const { error } = await supabase.from("unifi_instances").update({ webhook_secret: newSecret }).eq("id", editingId);
+    if (error) { toast.error(error.message); return; }
+    setEditingSecret(newSecret);
+    toast.success("Webhook token rotated");
+    void load();
+  };
+
+  const copy = async (text: string, label: string) => {
+    try { await navigator.clipboard.writeText(text); toast.success(`${label} copied`); }
+    catch { toast.error("Copy failed"); }
   };
 
   const save = async () => {
