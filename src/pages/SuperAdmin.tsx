@@ -200,7 +200,9 @@ export default function SuperAdmin() {
               <Phone className="h-4 w-4" /> Callouts
               {openCallouts.length > 0 && <Badge variant="secondary" className="ml-1">{openCallouts.length}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="features" className="gap-1.5"><ToggleLeft className="h-4 w-4" /> Features</TabsTrigger>
             <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
+
           </TabsList>
 
           {/* SITES */}
