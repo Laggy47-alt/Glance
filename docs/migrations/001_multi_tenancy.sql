@@ -150,7 +150,7 @@ RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT organization_id FROM public.organization_members
    WHERE user_id = auth.uid()
-   ORDER BY (role = 'admin'::public.app_role) DESC, created_at ASC
+   ORDER BY (role = 'admin'::public.org_member_role) DESC, created_at ASC
    LIMIT 1
 $$;
 
