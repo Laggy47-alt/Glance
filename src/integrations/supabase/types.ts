@@ -799,6 +799,41 @@ export type Database = {
         }
         Relationships: []
       }
+      org_features: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          feature_key: string
+          id: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          feature_key: string
+          id?: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          feature_key?: string
+          id?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_features_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           created_at: string
@@ -1369,6 +1404,10 @@ export type Database = {
           name: string
           slug: string
         }[]
+      }
+      org_has_feature: {
+        Args: { _key: string; _org_id: string }
+        Returns: boolean
       }
       user_has_camera: {
         Args: { _camera: string; _instance_id: string; _user_id: string }
