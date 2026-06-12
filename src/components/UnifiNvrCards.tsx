@@ -241,7 +241,6 @@ function UnifiCameraThumb({ instanceId, camera, forceTick }: { instanceId: strin
         </div>
       ) : null}
       {showImage && (
-      ) : (
         <img
           src={src}
           alt={camera.name}
