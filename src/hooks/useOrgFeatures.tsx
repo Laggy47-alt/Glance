@@ -25,8 +25,12 @@ export function useOrgFeatures() {
 
   useEffect(() => {
     if (!orgId) return;
+    // Unique channel per hook instance — multiple components may mount this
+    // hook for the same org, and Supabase reuses channels by topic name,
+    // which causes "cannot add postgres_changes callbacks ... after subscribe()".
+    const uniq = `${orgId}-${Math.random().toString(36).slice(2, 10)}`;
     const ch = supabase
-      .channel(`org-features-${orgId}`)
+      .channel(`org-features-${uniq}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "org_features", filter: `organization_id=eq.${orgId}` }, () => void load())
       .subscribe();
     return () => { void supabase.removeChannel(ch); };
