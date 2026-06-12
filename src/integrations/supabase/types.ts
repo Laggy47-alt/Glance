@@ -1086,6 +1086,7 @@ export type Database = {
           source_id: string | null
           updated_at: string
           verify_tls: boolean
+          webhook_secret: string
         }
         Insert: {
           api_key: string
@@ -1105,6 +1106,7 @@ export type Database = {
           source_id?: string | null
           updated_at?: string
           verify_tls?: boolean
+          webhook_secret?: string
         }
         Update: {
           api_key?: string
@@ -1124,6 +1126,7 @@ export type Database = {
           source_id?: string | null
           updated_at?: string
           verify_tls?: boolean
+          webhook_secret?: string
         }
         Relationships: [
           {

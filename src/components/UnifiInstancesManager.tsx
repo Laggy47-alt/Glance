@@ -20,9 +20,16 @@ export type UnifiInstance = {
   enabled: boolean;
   is_local: boolean;
   verify_tls: boolean;
+  webhook_secret?: string | null;
 };
 
 const PALETTE = ["#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6"];
+
+function webhookUrlFor(instanceId: string) {
+  const base = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/+$/, "")
+    ?? `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`;
+  return `${base}/functions/v1/unifi-webhook/${instanceId}`;
+}
 
 export function UnifiInstancesManager({ compact = false }: { compact?: boolean }) {
   const { activeOrg } = useAuth();
@@ -32,6 +39,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingSecret, setEditingSecret] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -45,7 +53,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
     setLoading(true);
     const { data } = await supabase
       .from("unifi_instances")
-      .select("id, organization_id, name, base_url, api_key, color, enabled, is_local, verify_tls")
+      .select("id, organization_id, name, base_url, api_key, color, enabled, is_local, verify_tls, webhook_secret")
       .eq("organization_id", orgId)
       .order("name");
     setItems((data ?? []) as UnifiInstance[]);
@@ -66,6 +74,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
 
   const reset = () => {
     setEditingId(null);
+    setEditingSecret(null);
     setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]);
     setIsLocal(false); setVerifyTls(true);
   };
@@ -74,6 +83,7 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
 
   const openEdit = (it: UnifiInstance) => {
     setEditingId(it.id);
+    setEditingSecret(it.webhook_secret ?? null);
     setName(it.name);
     setBaseUrl(it.base_url);
     setApiKey(it.api_key ?? "");
@@ -81,6 +91,22 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
     setIsLocal(!!it.is_local);
     setVerifyTls(!!it.verify_tls);
     setOpen(true);
+  };
+
+  const rotateSecret = async () => {
+    if (!editingId) return;
+    if (!confirm("Rotate webhook token? You'll need to paste the new token into UniFi.")) return;
+    const newSecret = crypto.randomUUID();
+    const { error } = await supabase.from("unifi_instances").update({ webhook_secret: newSecret }).eq("id", editingId);
+    if (error) { toast.error(error.message); return; }
+    setEditingSecret(newSecret);
+    toast.success("Webhook token rotated");
+    void load();
+  };
+
+  const copy = async (text: string, label: string) => {
+    try { await navigator.clipboard.writeText(text); toast.success(`${label} copied`); }
+    catch { toast.error("Copy failed"); }
   };
 
   const save = async () => {
@@ -177,6 +203,34 @@ export function UnifiInstancesManager({ compact = false }: { compact?: boolean }
               </div>
               <Switch checked={verifyTls} onCheckedChange={setVerifyTls} />
             </div>
+
+            {editingId && editingSecret && (
+              <div className="space-y-2 rounded-md border border-border p-3 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">UniFi Alarm Manager webhook</Label>
+                  <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={rotateSecret}>
+                    Rotate token
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  In UniFi: <span className="font-medium">Alarm Manager → Add Alarm → Send Webhook</span>. Use these values:
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] text-muted-foreground">Delivery URL · Method: POST</Label>
+                  <div className="flex gap-1.5">
+                    <Input readOnly value={webhookUrlFor(editingId)} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(webhookUrlFor(editingId), "URL")}>Copy</Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] text-muted-foreground">Authentication: Bearer · Token</Label>
+                  <div className="flex gap-1.5">
+                    <Input readOnly value={editingSecret} className="font-mono text-[11px] h-8" onFocus={(e) => e.currentTarget.select()} />
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => copy(editingSecret, "Token")}>Copy</Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
