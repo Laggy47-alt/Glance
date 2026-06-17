@@ -14,8 +14,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
-import { useOrgFeatures, FEATURE_UNIFI_ENVR } from "@/hooks/useOrgFeatures";
-import { UnifiInstancesManager } from "@/components/UnifiInstancesManager";
 
 
 
@@ -23,8 +21,6 @@ const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444
 
 const Frigate = () => {
   const store = useWebhookStore();
-  const features = useOrgFeatures();
-  const unifiMode = features.hasFeature(FEATURE_UNIFI_ENVR);
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FrigateInstance | null>(null);
@@ -97,17 +93,6 @@ const Frigate = () => {
   };
 
   const copy = (s: string) => { navigator.clipboard.writeText(s); toast.success("Copied"); };
-
-  if (unifiMode) {
-    return (
-      <DashboardLayout
-        title="Unifi NVR"
-        subtitle="Connect Unifi Protect / ENVR instances — events ingest via the Unifi API"
-      >
-        <UnifiInstancesManager />
-      </DashboardLayout>
-    );
-  }
 
   return (
     <DashboardLayout

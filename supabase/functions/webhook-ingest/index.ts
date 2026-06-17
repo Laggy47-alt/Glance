@@ -26,7 +26,7 @@ function pick(obj: Record<string, unknown>, keys: string[]) {
 }
 function inferCamera(topic: string, fallback: string): string {
   const parts = topic.split("/").filter(Boolean);
-  const known = ["cameras", "camera", "frigate", "cam", "ipcam", "unifi", "protect"];
+  const known = ["cameras", "camera", "frigate", "cam", "ipcam"];
   for (let i = 0; i < parts.length - 1; i++) {
     if (known.includes(parts[i].toLowerCase())) return parts[i + 1];
   }
