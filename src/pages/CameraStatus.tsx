@@ -7,7 +7,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, WifiOff } from "lucide-react";
 import { fetchFrigateStats } from "@/lib/frigateStats";
 import { cn } from "@/lib/utils";
-import { UnifiNvrCards } from "@/components/UnifiNvrCards";
+
 
 type CameraStatus = {
   name: string;
@@ -180,14 +180,11 @@ const CameraStatusPage = () => {
           </div>
         )}
 
-        {/* UniFi ENVR cameras (only renders when the active org has enabled UniFi instances) */}
-        <UnifiNvrCards />
-
         {enabled.length === 0 && (
           <Card className="bg-gradient-card border-border shadow-card p-12 text-center">
             <Server className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-foreground font-medium">No Frigate NVRs configured</p>
-            <p className="text-xs text-muted-foreground mt-1">UniFi NVRs (if any) appear above.</p>
+            <p className="text-xs text-muted-foreground mt-1">Add one from the Frigate NVR page.</p>
           </Card>
         )}
       </div>

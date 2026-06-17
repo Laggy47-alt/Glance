@@ -7,9 +7,6 @@ import { useEffect, useState, useCallback } from "react";
 import { Server, RefreshCw, CheckCircle2, AlertTriangle, VideoOff, Camera, WifiOff, Wifi } from "lucide-react";
 import { fetchFrigateStats } from "@/lib/frigateStats";
 import { cn } from "@/lib/utils";
-import { useOrgFeatures, FEATURE_UNIFI_ENVR } from "@/hooks/useOrgFeatures";
-import { UnifiInstancesManager } from "@/components/UnifiInstancesManager";
-import { UnifiNvrCards } from "@/components/UnifiNvrCards";
 
 
 type CameraStatus = {
@@ -56,7 +53,6 @@ function parseStats(stats: unknown): CameraStatus[] {
 
 const NvrStatus = () => {
   const store = useWebhookStore();
-  const features = useOrgFeatures();
   const [statuses, setStatuses] = useState<Record<string, NvrStatus>>({});
 
 
@@ -222,12 +218,6 @@ const NvrStatus = () => {
         </div>
       )}
 
-      {features.hasFeature(FEATURE_UNIFI_ENVR) && (
-        <div className="mt-8 pt-6 border-t border-border space-y-8">
-          <UnifiNvrCards />
-          <UnifiInstancesManager />
-        </div>
-      )}
     </DashboardLayout>
 
   );

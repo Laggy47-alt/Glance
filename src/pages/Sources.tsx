@@ -10,15 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useState } from "react";
 import { Plus, Trash2, Copy, RefreshCw, Eye, EyeOff, Plug } from "lucide-react";
 import { toast } from "sonner";
-import { useOrgFeatures, FEATURE_UNIFI_ENVR } from "@/hooks/useOrgFeatures";
-import { UnifiInstancesManager } from "@/components/UnifiInstancesManager";
 
 
 const PALETTE = ["#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6"];
 
 const Sources = () => {
   const store = useWebhookStore();
-  const features = useOrgFeatures();
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -150,11 +147,6 @@ const Sources = () => {
         </div>
       )}
 
-      {features.hasFeature(FEATURE_UNIFI_ENVR) && (
-        <div className="mt-8 pt-6 border-t border-border">
-          <UnifiInstancesManager />
-        </div>
-      )}
     </DashboardLayout>
 
   );
