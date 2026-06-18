@@ -246,6 +246,11 @@ Deno.serve(async (req) => {
         } else if (nvrWa.length) {
           buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: recoveredCams });
         }
+        // Global recipients always get a consolidated summary across all recovered cameras.
+        const globalRecips = waByOrg.get(inst.organization_id)?.globalRecipients ?? [];
+        if (globalRecips.length && recoveredCams.length) {
+          buckets.set("__global__", { recipients: globalRecips, cameras: recoveredCams });
+        }
         for (const { recipients, cameras } of buckets.values()) {
           const msg = cameras
             .map((cam) => renderRecovery(waCfg.recovery_template, { nvr: inst.name, camera: cam }))
