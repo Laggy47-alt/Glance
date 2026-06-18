@@ -362,11 +362,13 @@ class WebhookStore {
 
   // ─── Events ───
   async markRead(id: string, read = true) {
-    const q = supabase.from("webhook_events").update({ read }).eq("id", id);
+    const stamp = await getAckStamp(read);
+    const q = supabase.from("webhook_events").update({ read, ...stamp }).eq("id", id);
     await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async markAllRead() {
-    const q = supabase.from("webhook_events").update({ read: true }).eq("read", false);
+    const stamp = await getAckStamp(true);
+    const q = supabase.from("webhook_events").update({ read: true, ...stamp }).eq("read", false);
     await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async clearEvents() {
