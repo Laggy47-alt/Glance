@@ -542,7 +542,7 @@ export default function WhatsAppAlerts() {
 
           {section === "nvrs" && (
             <div className="space-y-3">
-              <Header icon={Server} title="Per-NVR overrides" subtitle={`${nvrs.length} NVR${nvrs.length === 1 ? "" : "s"}`} />
+              <Header icon={Server} title="Per-NVR recipients" subtitle={`${nvrs.length} NVR${nvrs.length === 1 ? "" : "s"} — each NVR's recipients receive its offline/online alerts and (if enabled) its daily report. Global recipients are added automatically to offline/online events.`} />
               {nvrs.length === 0 && <p className="text-sm text-muted-foreground italic">No NVRs configured.</p>}
               {nvrs.length > 0 && (
                 <Input placeholder="Filter NVRs…" value={nvrFilter} onChange={(e) => setNvrFilter(e.target.value)} className="bg-secondary border-border h-9 max-w-xs" />
