@@ -474,11 +474,11 @@ export default function WhatsAppAlerts() {
                 <Field label={`Send at (HH:MM, ${settings.quiet_timezone})`}>
                   <Input type="time" value={settings.daily_broadcast_time} onChange={(e) => setSettings({ ...settings, daily_broadcast_time: e.target.value || "08:00" })} className="bg-secondary border-border w-40" />
                 </Field>
-                <Field label="Org-wide recipients / group(s)" hint="If empty, default recipients are used.">
+                <Field label="Global daily-broadcast recipients" hint="Receive the consolidated org-wide daily report. Falls back to Global recipients if empty.">
                   <RecipientList value={settings.daily_broadcast_recipients} onChange={(v) => setSettings({ ...settings, daily_broadcast_recipients: v })} placeholder="+27821234567 or 12345-67890@g.us" />
                 </Field>
               </div>
-              <p className="text-[11px] text-muted-foreground">Per-NVR client reports are configured under <button onClick={() => setSection("nvrs")} className="text-primary hover:underline">Per-NVR overrides</button>.</p>
+              <p className="text-[11px] text-muted-foreground">Each NVR can also send its own daily report to its assigned recipients — enable it under <button onClick={() => setSection("nvrs")} className="text-primary hover:underline">Per-NVR recipients</button>.</p>
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}
