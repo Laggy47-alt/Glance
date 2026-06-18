@@ -13,10 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   MessageCircle, Save, Send, Plus, X, Server, Megaphone, Inbox,
-  Settings2, Users, FileText, Clock, Radio, Activity,
+  Settings2, Users, FileText, Clock, Radio, Activity, UserCheck, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import WhatsAppInbox from "@/components/WhatsAppInbox";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 function parseOfflineCams(stats: unknown): string[] {
