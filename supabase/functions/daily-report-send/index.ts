@@ -212,15 +212,21 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
     ? providedSnapshots
     : await listStoredSnapshots(supabase, inst.id);
   if (filter) snapshots = snapshots.filter((s) => filter.has(s.name));
+  console.log(`[report] ${inst.name} reachable=${statsAll.reachable} online=${stats.online.length} offline=${stats.offline.length} storedSnapshots=${snapshots.length}`);
 
   // If reachable and missing snapshots for some online cameras, fetch them now.
   if (statsAll.reachable) {
     const have = new Set(snapshots.map((s) => s.name));
     const missing = stats.online.filter((c) => !have.has(c));
     if (missing.length) {
+      console.log(`[report] ${inst.name} fetching ${missing.length} missing snapshots: ${missing.join(", ")}`);
       const fetched = await Promise.all(missing.map((c) => fetchAndUploadSnapshot(supabase, inst, c)));
+      const got = fetched.filter(Boolean).length;
+      console.log(`[report] ${inst.name} fetched ${got}/${missing.length} snapshots`);
       for (const f of fetched) if (f) snapshots.push(f);
     }
+  } else {
+    console.log(`[report] ${inst.name} NVR unreachable from edge function — relying on browser-uploaded snapshots only`);
   }
 
 
