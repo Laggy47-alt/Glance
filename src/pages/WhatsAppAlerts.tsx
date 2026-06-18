@@ -186,6 +186,8 @@ export default function WhatsAppAlerts() {
       if (s) setSettings({ ...DEFAULTS, ...(s as any) });
       const list = ((n ?? []) as any[]).map((x) => ({
         ...x,
+        whatsapp_recipients: x.whatsapp_recipients ?? [],
+        master_alert_recipients: x.master_alert_recipients ?? [],
         camera_whatsapp_recipients: (x.camera_whatsapp_recipients ?? {}) as Record<string, string[]>,
       })) as Nvr[];
       setNvrs(list);
