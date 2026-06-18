@@ -143,12 +143,12 @@ type Section = "connection" | "recipients" | "templates" | "schedule" | "daily" 
 
 const NAV: { id: Section; label: string; icon: any }[] = [
   { id: "connection", label: "Connection", icon: Settings2 },
-  { id: "recipients", label: "Recipients", icon: Users },
+  { id: "recipients", label: "Global recipients", icon: Users },
   { id: "templates", label: "Templates", icon: FileText },
   { id: "schedule", label: "Schedule & limits", icon: Clock },
   { id: "daily", label: "Daily broadcast", icon: Megaphone },
-  { id: "broadcast", label: "Send broadcast", icon: Radio },
-  { id: "nvrs", label: "Per-NVR overrides", icon: Server },
+  { id: "broadcast", label: "Send message", icon: Radio },
+  { id: "nvrs", label: "Per-NVR recipients", icon: Server },
   { id: "inbox", label: "Reply inbox", icon: Inbox },
 ];
 
