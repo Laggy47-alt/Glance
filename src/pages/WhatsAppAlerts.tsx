@@ -76,6 +76,7 @@ type Nvr = {
   name: string;
   whatsapp_alert_enabled: boolean;
   whatsapp_recipients: string[];
+  master_alert_recipients: string[];
   whatsapp_alert_minutes: number | null;
   offline_alert_minutes: number;
   multi_client: boolean;
