@@ -60,6 +60,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void load();
+    if (!session?.user?.id || !activeOrg?.id) return;
     const channel = supabase
       .channel("app_settings_changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "app_settings" }, () => {
@@ -67,7 +68,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [load, session?.user?.id]);
+  }, [load, session?.user?.id, activeOrg?.id]);
 
   useEffect(() => {
     if (branding.appName) document.title = branding.appName;

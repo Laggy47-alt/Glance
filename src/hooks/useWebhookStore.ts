@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
 import { webhookStore } from "@/lib/webhookStore";
 
-export function useWebhookStore() {
+export function useWebhookStore(enabled = true) {
   useSyncExternalStore(
-    (l) => webhookStore.subscribe(l),
+    (l) => enabled ? webhookStore.subscribe(l) : () => undefined,
     () =>
       webhookStore.sources.length +
       ":" + webhookStore.events.length +
