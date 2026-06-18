@@ -50,7 +50,8 @@ function parseStats(stats: unknown): string[] {
 
 export function OperatorOfflinePopup() {
   const { user, isCustomer, activeOrg } = useAuth();
-  const store = useWebhookStore();
+  const enabled = !!user && !isCustomer;
+  const store = useWebhookStore(enabled);
   const [queue, setQueue] = useState<OfflineEvent[]>([]);
   // Acked keys are scoped to (instance, camera) only — NOT to a specific outage
   // timestamp. We clear an ack only after the camera has been continuously
@@ -69,8 +70,6 @@ export function OperatorOfflinePopup() {
     perCam: Map<string, string[]>;   // `${inst}::${cam}` -> direct override notes
     perNvr: Map<string, NvrNote[]>;  // `${inst}` -> scoped site-wide notes
   }>({ perCam: new Map(), perNvr: new Map() });
-
-  const enabled = !!user && !isCustomer;
 
   const loadInstructions = useCallback(async () => {
     if (!enabled || !activeOrg?.id) return;
