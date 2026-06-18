@@ -490,6 +490,25 @@ Deno.serve(async (req) => {
 
       const orgSlug = org.id === ABC_ORG_ID ? ABC_ORG_SLUG : org.slug;
       const email = buildEmail(username, orgSlug);
+
+      // Self-heal: if a previous delete left orphan rows (profile / role /
+      // membership / assignments) whose user_id no longer exists in auth.users,
+      // clean them out so the new account doesn't collide on profiles.username
+      // or auth.users.email unique constraints.
+      const { data: orphanProfile } = await a
+        .from("profiles").select("user_id").eq("username", username).maybeSingle();
+      const orphanUserId = (orphanProfile as { user_id?: string } | null)?.user_id;
+      if (orphanUserId) {
+        const { data: stillExists } = await a.auth.admin.getUserById(orphanUserId);
+        if (!stillExists?.user) {
+          await a.from("organization_members").delete().eq("user_id", orphanUserId);
+          await a.from("customer_camera_assignments").delete().eq("user_id", orphanUserId);
+          await a.from("customer_nvr_assignments").delete().eq("user_id", orphanUserId);
+          await a.from("user_roles").delete().eq("user_id", orphanUserId);
+          await a.from("profiles").delete().eq("user_id", orphanUserId);
+        }
+      }
+
       const { data: created, error } = await a.auth.admin.createUser({
         email, password, email_confirm: true,
         user_metadata: { username, display_name, must_change_password: true, org_slug: orgSlug },
