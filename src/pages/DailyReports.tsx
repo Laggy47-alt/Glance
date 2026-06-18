@@ -26,8 +26,8 @@ async function blobFromFrigate(inst: any, camera: string): Promise<Blob | null> 
 }
 
 /** Fetch latest snapshots for all online cameras of an instance and upload them to storage.
- *  Returns the public URLs keyed by camera name. */
-async function refreshAndUploadSnapshots(instanceId: string): Promise<Array<{ name: string; url: string }>> {
+ *  Returns the public URLs and storage paths keyed by camera name. */
+async function refreshAndUploadSnapshots(instanceId: string): Promise<Array<{ name: string; url: string; storagePath: string }>> {
   const { data: inst } = await supabase
     .from("frigate_instances")
     .select("id, base_url, is_local")
@@ -43,7 +43,7 @@ async function refreshAndUploadSnapshots(instanceId: string): Promise<Array<{ na
       .map(([n]) => n);
   } catch { return []; }
 
-  const uploaded: Array<{ name: string; url: string }> = [];
+  const uploaded: Array<{ name: string; url: string; storagePath: string }> = [];
   await Promise.all(online.map(async (name) => {
     const blob = await blobFromFrigate(inst as any, name);
     if (!blob) return;
@@ -55,7 +55,7 @@ async function refreshAndUploadSnapshots(instanceId: string): Promise<Array<{ na
     if (error) return;
     const { data: pub } = supabase.storage.from("camera-snapshots").getPublicUrl(path);
     // bust browser cache for the email render
-    uploaded.push({ name, url: `${pub.publicUrl}?t=${Date.now()}` });
+    uploaded.push({ name, url: `${pub.publicUrl}?t=${Date.now()}`, storagePath: path });
   }));
   return uploaded;
 }
