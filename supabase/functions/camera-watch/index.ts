@@ -177,15 +177,16 @@ Deno.serve(async (req) => {
         inst.nvr_unreachable_alerted_since !== sinceIso;
 
       const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
+      const unreachableRecipients = mergeWithGlobal(inst.organization_id, nvrWa);
       let waResult: any = null;
-      if (shouldAlert && nvrWa.length) {
+      if (shouldAlert && unreachableRecipients.length) {
         try {
           const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
             body: JSON.stringify({
               organization_id: inst.organization_id,
-              recipients: nvrWa,
+              recipients: unreachableRecipients,
               message: `🚨 *${inst.name}* — NVR UNREACHABLE for ${mins}m. Cameras cannot be polled.`,
             }),
           });
