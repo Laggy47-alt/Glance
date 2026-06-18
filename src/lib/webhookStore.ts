@@ -28,6 +28,12 @@ export type WebhookEvent = {
   camera?: string | null;
   score?: number | null;
   kind?: string | null;
+  read_by?: string | null;
+  read_by_name?: string | null;
+  read_at?: string | null;
+  archived_by?: string | null;
+  archived_by_name?: string | null;
+  archived_at?: string | null;
 };
 
 export type AutoReadRule = {
@@ -52,6 +58,9 @@ export type MediaItem = {
   instance_id?: string | null;
   frigate_event_id?: string | null;
   archived?: boolean;
+  archived_by?: string | null;
+  archived_by_name?: string | null;
+  archived_at?: string | null;
 };
 
 export type FrigateInstance = {
