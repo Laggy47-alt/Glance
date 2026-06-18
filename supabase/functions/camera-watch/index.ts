@@ -242,10 +242,10 @@ Deno.serve(async (req) => {
         } else if (nvrWa.length) {
           buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: recoveredCams });
         }
-        // Global recipients always get a consolidated summary across all recovered cameras.
-        const globalRecips = waByOrg.get(inst.organization_id)?.globalRecipients ?? [];
-        if (globalRecips.length && recoveredCams.length) {
-          buckets.set("__global__", { recipients: globalRecips, cameras: recoveredCams });
+        // Master-alert recipients always get a consolidated summary across recovered cameras.
+        const masterRecips = (inst.master_alert_recipients ?? []).map((r) => String(r).trim()).filter(isWaRecipient);
+        if (masterRecips.length && recoveredCams.length) {
+          buckets.set("__master__", { recipients: masterRecips, cameras: recoveredCams });
         }
         for (const { recipients, cameras } of buckets.values()) {
           const msg = cameras
