@@ -233,6 +233,7 @@ export default function WhatsAppAlerts() {
     const { error } = await supabase.from("frigate_instances").update({
       whatsapp_alert_enabled: n.whatsapp_alert_enabled,
       whatsapp_recipients: n.whatsapp_recipients,
+      master_alert_recipients: n.master_alert_recipients,
       whatsapp_alert_minutes: n.whatsapp_alert_minutes,
       multi_client: n.multi_client,
       camera_whatsapp_recipients: n.camera_whatsapp_recipients,
