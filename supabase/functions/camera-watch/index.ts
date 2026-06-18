@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
         inst.nvr_unreachable_alerted_since !== sinceIso;
 
       const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
-      const unreachableRecipients = mergeWithGlobal(inst.organization_id, nvrWa);
+      const unreachableRecipients = mergeWithMaster(inst, nvrWa);
       let waResult: any = null;
       if (shouldAlert && unreachableRecipients.length) {
         try {
