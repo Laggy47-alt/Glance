@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
     const waCfg = waByOrg.get(inst.organization_id);
     if (wasUnreachableAlerted && waCfg?.enabled && waCfg.send_recovery && inst.whatsapp_alert_enabled) {
       const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
-      const recoveryRecipients = mergeWithGlobal(inst.organization_id, nvrWa);
+      const recoveryRecipients = mergeWithMaster(inst, nvrWa);
       if (recoveryRecipients.length) {
         const msg = `✅ *${inst.name}* — NVR reachable again.`;
         await sendWaMessage(inst.organization_id, recoveryRecipients, msg);
