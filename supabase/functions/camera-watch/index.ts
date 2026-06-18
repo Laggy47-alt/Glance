@@ -334,10 +334,10 @@ Deno.serve(async (req) => {
       } else if (nvrWa.length) {
         buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: toAlert });
       }
-      // Global recipients always get a consolidated summary across all offline cameras for this NVR.
-      const globalRecips = waByOrg.get(inst.organization_id)?.globalRecipients ?? [];
-      if (globalRecips.length && toAlert.length) {
-        buckets.set("__global__", { recipients: globalRecips, cameras: toAlert });
+      // Master-alert recipients always get a consolidated summary across all offline cameras for this NVR.
+      const masterRecips = (inst.master_alert_recipients ?? []).map((r) => String(r).trim()).filter(isWaRecipient);
+      if (masterRecips.length && toAlert.length) {
+        buckets.set("__master__", { recipients: masterRecips, cameras: toAlert });
       }
 
       const waOut: any[] = [];
