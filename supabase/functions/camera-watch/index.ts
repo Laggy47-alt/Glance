@@ -113,16 +113,37 @@ Deno.serve(async (req) => {
   // Fetch global WhatsApp settings per org once.
   const orgIds = Array.from(new Set((instances ?? []).map((i: any) => i.organization_id)));
   const { data: waSettings } = orgIds.length
-    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template").in("organization_id", orgIds)
+    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template, default_recipients, daily_broadcast_recipients").in("organization_id", orgIds)
     : { data: [] as any[] };
-  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string }>(
-    (waSettings ?? []).map((s: any) => [s.organization_id, {
-      enabled: !!s.enabled,
-      include_nvr_unreachable: !!s.include_nvr_unreachable,
-      send_recovery: !!s.send_recovery,
-      recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
-    }]),
+  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string; globalRecipients: string[] }>(
+    (waSettings ?? []).map((s: any) => {
+      const global = (Array.isArray(s.daily_broadcast_recipients) && s.daily_broadcast_recipients.length
+        ? s.daily_broadcast_recipients
+        : (s.default_recipients ?? [])
+      ).map((r: string) => String(r).trim()).filter(isWaRecipient);
+      return [s.organization_id, {
+        enabled: !!s.enabled,
+        include_nvr_unreachable: !!s.include_nvr_unreachable,
+        send_recovery: !!s.send_recovery,
+        recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
+        globalRecipients: global,
+      }];
+    }),
   );
+
+  // Merge per-NVR recipients with the org's global recipients (dedup, preserve order).
+  // Used so every offline/online notification reaches assigned + global recipients.
+  const mergeWithGlobal = (orgId: string, perNvr: string[]) => {
+    const g = waByOrg.get(orgId)?.globalRecipients ?? [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of [...perNvr, ...g]) {
+      if (!isWaRecipient(r)) continue;
+      if (seen.has(r)) continue;
+      seen.add(r); out.push(r);
+    }
+    return out;
+  };
 
   const renderRecovery = (tpl: string, vars: Record<string, string | number>) =>
     tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? ""));
