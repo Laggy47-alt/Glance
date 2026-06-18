@@ -113,16 +113,37 @@ Deno.serve(async (req) => {
   // Fetch global WhatsApp settings per org once.
   const orgIds = Array.from(new Set((instances ?? []).map((i: any) => i.organization_id)));
   const { data: waSettings } = orgIds.length
-    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template").in("organization_id", orgIds)
+    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template, default_recipients, daily_broadcast_recipients").in("organization_id", orgIds)
     : { data: [] as any[] };
-  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string }>(
-    (waSettings ?? []).map((s: any) => [s.organization_id, {
-      enabled: !!s.enabled,
-      include_nvr_unreachable: !!s.include_nvr_unreachable,
-      send_recovery: !!s.send_recovery,
-      recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
-    }]),
+  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string; globalRecipients: string[] }>(
+    (waSettings ?? []).map((s: any) => {
+      const global = (Array.isArray(s.daily_broadcast_recipients) && s.daily_broadcast_recipients.length
+        ? s.daily_broadcast_recipients
+        : (s.default_recipients ?? [])
+      ).map((r: string) => String(r).trim()).filter(isWaRecipient);
+      return [s.organization_id, {
+        enabled: !!s.enabled,
+        include_nvr_unreachable: !!s.include_nvr_unreachable,
+        send_recovery: !!s.send_recovery,
+        recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
+        globalRecipients: global,
+      }];
+    }),
   );
+
+  // Merge per-NVR recipients with the org's global recipients (dedup, preserve order).
+  // Used so every offline/online notification reaches assigned + global recipients.
+  const mergeWithGlobal = (orgId: string, perNvr: string[]) => {
+    const g = waByOrg.get(orgId)?.globalRecipients ?? [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of [...perNvr, ...g]) {
+      if (!isWaRecipient(r)) continue;
+      if (seen.has(r)) continue;
+      seen.add(r); out.push(r);
+    }
+    return out;
+  };
 
   const renderRecovery = (tpl: string, vars: Record<string, string | number>) =>
     tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? ""));
@@ -156,15 +177,16 @@ Deno.serve(async (req) => {
         inst.nvr_unreachable_alerted_since !== sinceIso;
 
       const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
+      const unreachableRecipients = mergeWithGlobal(inst.organization_id, nvrWa);
       let waResult: any = null;
-      if (shouldAlert && nvrWa.length) {
+      if (shouldAlert && unreachableRecipients.length) {
         try {
           const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/escalate-offline-whatsapp`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
             body: JSON.stringify({
               organization_id: inst.organization_id,
-              recipients: nvrWa,
+              recipients: unreachableRecipients,
               message: `🚨 *${inst.name}* — NVR UNREACHABLE for ${mins}m. Cameras cannot be polled.`,
             }),
           });
@@ -189,9 +211,10 @@ Deno.serve(async (req) => {
     const waCfg = waByOrg.get(inst.organization_id);
     if (wasUnreachableAlerted && waCfg?.enabled && waCfg.send_recovery && inst.whatsapp_alert_enabled) {
       const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
-      if (nvrWa.length) {
+      const recoveryRecipients = mergeWithGlobal(inst.organization_id, nvrWa);
+      if (recoveryRecipients.length) {
         const msg = `✅ *${inst.name}* — NVR reachable again.`;
-        await sendWaMessage(inst.organization_id, nvrWa, msg);
+        await sendWaMessage(inst.organization_id, recoveryRecipients, msg);
       }
     }
 
@@ -222,6 +245,11 @@ Deno.serve(async (req) => {
           }
         } else if (nvrWa.length) {
           buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: recoveredCams });
+        }
+        // Global recipients always get a consolidated summary across all recovered cameras.
+        const globalRecips = waByOrg.get(inst.organization_id)?.globalRecipients ?? [];
+        if (globalRecips.length && recoveredCams.length) {
+          buckets.set("__global__", { recipients: globalRecips, cameras: recoveredCams });
         }
         for (const { recipients, cameras } of buckets.values()) {
           const msg = cameras
@@ -309,6 +337,11 @@ Deno.serve(async (req) => {
         }
       } else if (nvrWa.length) {
         buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: toAlert });
+      }
+      // Global recipients always get a consolidated summary across all offline cameras for this NVR.
+      const globalRecips = waByOrg.get(inst.organization_id)?.globalRecipients ?? [];
+      if (globalRecips.length && toAlert.length) {
+        buckets.set("__global__", { recipients: globalRecips, cameras: toAlert });
       }
 
       const waOut: any[] = [];

@@ -143,12 +143,12 @@ type Section = "connection" | "recipients" | "templates" | "schedule" | "daily" 
 
 const NAV: { id: Section; label: string; icon: any }[] = [
   { id: "connection", label: "Connection", icon: Settings2 },
-  { id: "recipients", label: "Recipients", icon: Users },
+  { id: "recipients", label: "Global recipients", icon: Users },
   { id: "templates", label: "Templates", icon: FileText },
   { id: "schedule", label: "Schedule & limits", icon: Clock },
   { id: "daily", label: "Daily broadcast", icon: Megaphone },
-  { id: "broadcast", label: "Send broadcast", icon: Radio },
-  { id: "nvrs", label: "Per-NVR overrides", icon: Server },
+  { id: "broadcast", label: "Send message", icon: Radio },
+  { id: "nvrs", label: "Per-NVR recipients", icon: Server },
   { id: "inbox", label: "Reply inbox", icon: Inbox },
 ];
 
@@ -410,8 +410,9 @@ export default function WhatsAppAlerts() {
 
           {section === "recipients" && (
             <div className="space-y-4">
-              <Header icon={Users} title="Default recipients" subtitle="Used when an NVR has no per-NVR recipients set." />
+              <Header icon={Users} title="Global recipients" subtitle="Receive the daily broadcast and every offline / online notification from all NVRs. Not included in custom 'Send message' sends." />
               <RecipientList value={settings.default_recipients} onChange={(v) => setSettings({ ...settings, default_recipients: v })} />
+              <p className="text-[11px] text-muted-foreground">If you also set dedicated daily broadcast recipients below, those take priority for the daily report; otherwise this list is used.</p>
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}
@@ -473,11 +474,11 @@ export default function WhatsAppAlerts() {
                 <Field label={`Send at (HH:MM, ${settings.quiet_timezone})`}>
                   <Input type="time" value={settings.daily_broadcast_time} onChange={(e) => setSettings({ ...settings, daily_broadcast_time: e.target.value || "08:00" })} className="bg-secondary border-border w-40" />
                 </Field>
-                <Field label="Org-wide recipients / group(s)" hint="If empty, default recipients are used.">
+                <Field label="Global daily-broadcast recipients" hint="Receive the consolidated org-wide daily report. Falls back to Global recipients if empty.">
                   <RecipientList value={settings.daily_broadcast_recipients} onChange={(v) => setSettings({ ...settings, daily_broadcast_recipients: v })} placeholder="+27821234567 or 12345-67890@g.us" />
                 </Field>
               </div>
-              <p className="text-[11px] text-muted-foreground">Per-NVR client reports are configured under <button onClick={() => setSection("nvrs")} className="text-primary hover:underline">Per-NVR overrides</button>.</p>
+              <p className="text-[11px] text-muted-foreground">Each NVR can also send its own daily report to its assigned recipients — enable it under <button onClick={() => setSection("nvrs")} className="text-primary hover:underline">Per-NVR recipients</button>.</p>
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}
@@ -496,7 +497,7 @@ export default function WhatsAppAlerts() {
                 </div>
               </div>
               <div className="pt-4 border-t border-border">
-                <Header icon={Megaphone} title="Custom broadcast" subtitle="One-time message to WhatsApp recipients of the NVRs you select. Quiet hours & rate limits bypassed." />
+                <Header icon={Megaphone} title="Send to assigned NVR recipients" subtitle="Sends only to the recipients assigned to the NVRs you pick — global recipients are NOT included. Quiet hours & rate limits bypassed." />
                 <div className="space-y-3 mt-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs">Message</Label>
@@ -541,7 +542,7 @@ export default function WhatsAppAlerts() {
 
           {section === "nvrs" && (
             <div className="space-y-3">
-              <Header icon={Server} title="Per-NVR overrides" subtitle={`${nvrs.length} NVR${nvrs.length === 1 ? "" : "s"}`} />
+              <Header icon={Server} title="Per-NVR recipients" subtitle={`${nvrs.length} NVR${nvrs.length === 1 ? "" : "s"} — each NVR's recipients receive its offline/online alerts and (if enabled) its daily report. Global recipients are added automatically to offline/online events.`} />
               {nvrs.length === 0 && <p className="text-sm text-muted-foreground italic">No NVRs configured.</p>}
               {nvrs.length > 0 && (
                 <Input placeholder="Filter NVRs…" value={nvrFilter} onChange={(e) => setNvrFilter(e.target.value)} className="bg-secondary border-border h-9 max-w-xs" />
@@ -569,7 +570,7 @@ export default function WhatsAppAlerts() {
                               className="bg-secondary border-border" />
                           </Field>
                         </div>
-                        <Field label="Recipients (overrides default)">
+                        <Field label="Assigned recipients" hint="Get this NVR's offline/online alerts plus daily report (if enabled). Global recipients are added automatically to offline/online events.">
                           <RecipientList value={n.whatsapp_recipients ?? []}
                             onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, whatsapp_recipients: v } : x))} />
                         </Field>
