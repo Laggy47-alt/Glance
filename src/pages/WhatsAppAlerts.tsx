@@ -415,9 +415,9 @@ export default function WhatsAppAlerts() {
 
           {section === "recipients" && (
             <div className="space-y-4">
-              <Header icon={Users} title="Global recipients" subtitle="Receive the daily broadcast and every offline / online notification from all NVRs. Not included in custom 'Send message' sends." />
+              <Header icon={Users} title="Global recipients" subtitle="Receive ONLY the daily 8am consolidated broadcast of every offline device/NVR. They do NOT get individual offline/online alerts and are not included in custom 'Send message' sends." />
               <RecipientList value={settings.default_recipients} onChange={(v) => setSettings({ ...settings, default_recipients: v })} />
-              <p className="text-[11px] text-muted-foreground">If you also set dedicated daily broadcast recipients below, those take priority for the daily report; otherwise this list is used.</p>
+              <p className="text-[11px] text-muted-foreground">Per-event offline/online alerts go only to the recipients you configure under each NVR (Client and Master tabs).</p>
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}
