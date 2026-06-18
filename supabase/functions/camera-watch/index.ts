@@ -23,6 +23,7 @@ type Instance = {
   offline_alert_recipients: string[];
   whatsapp_alert_enabled: boolean;
   whatsapp_recipients: string[];
+  master_alert_recipients: string[] | null;
   whatsapp_alert_minutes: number | null;
   multi_client: boolean;
   camera_whatsapp_recipients: Record<string, string[]> | null;
