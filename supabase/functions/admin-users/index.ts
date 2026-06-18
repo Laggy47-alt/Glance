@@ -535,6 +535,13 @@ Deno.serve(async (req) => {
       const user_id = String(body.user_id ?? "");
       if (!user_id) return json({ ok: false, error: "user_id required" }, 400);
       if (user_id === caller.userId) return json({ ok: false, error: "cannot delete yourself" }, 400);
+      // Clean up app-level rows first so a future user with the same username
+      // doesn't collide with orphaned profile/role/membership rows.
+      await a.from("organization_members").delete().eq("user_id", user_id);
+      await a.from("customer_camera_assignments").delete().eq("user_id", user_id);
+      await a.from("customer_nvr_assignments").delete().eq("user_id", user_id);
+      await a.from("user_roles").delete().eq("user_id", user_id);
+      await a.from("profiles").delete().eq("user_id", user_id);
       const { error } = await a.auth.admin.deleteUser(user_id);
       if (error) return json({ ok: false, error: error.message }, 400);
       return json({ ok: true });
