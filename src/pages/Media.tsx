@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useState } from "react";
-import { Camera, Film, ImageOff, Play, Tag as TagIcon } from "lucide-react";
+import { Camera, Film, ImageOff, Play, Tag as TagIcon, CheckCircle2 } from "lucide-react";
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
 import { resolveMediaUrl } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -128,6 +128,17 @@ const Media = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {items.map((m) => {
             const tags = tagsByMedia[m.id] ?? [];
+            const linkedEvent = m.event_id ? store.events.find((e) => e.id === m.event_id) : null;
+            const ackName =
+              m.archived_by_name ??
+              linkedEvent?.archived_by_name ??
+              linkedEvent?.read_by_name ??
+              null;
+            const ackAt =
+              m.archived_at ??
+              linkedEvent?.archived_at ??
+              linkedEvent?.read_at ??
+              null;
             const thumbnail =
               m.kind === "clip"
                 ? store.media.find((x) => x.kind === "snapshot" && (
@@ -140,6 +151,7 @@ const Media = () => {
                 key={m.id}
                 onClick={() => setSelected(toLightbox(m))}
                 className="group relative aspect-video bg-black rounded-md overflow-hidden border border-border hover:border-primary transition-colors text-left"
+                title={ackName ? `Acknowledged by ${ackName}${ackAt ? ` · ${new Date(ackAt).toLocaleString()}` : ""}` : undefined}
               >
                 {m.kind === "snapshot" ? (
                   <img src={resolveMediaUrl(m.url)} alt={m.camera ?? ""} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
@@ -163,6 +175,12 @@ const Media = () => {
                   {m.kind === "snapshot" ? <Camera className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
                   <span className="text-foreground/90 capitalize">{m.camera ?? "—"}</span>
                 </div>
+                {ackName && (
+                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-emerald-600/80 backdrop-blur px-1.5 py-0.5 rounded text-[10px] text-white">
+                    <CheckCircle2 className="h-2.5 w-2.5" />
+                    <span className="truncate max-w-[90px]">{ackName}</span>
+                  </div>
+                )}
                 <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur px-1.5 py-0.5 rounded text-[10px] text-foreground/80 tabular-nums">
                   {new Date(m.ts).toLocaleTimeString()}
                 </div>

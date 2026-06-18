@@ -28,6 +28,12 @@ export type WebhookEvent = {
   camera?: string | null;
   score?: number | null;
   kind?: string | null;
+  read_by?: string | null;
+  read_by_name?: string | null;
+  read_at?: string | null;
+  archived_by?: string | null;
+  archived_by_name?: string | null;
+  archived_at?: string | null;
 };
 
 export type AutoReadRule = {
@@ -52,6 +58,9 @@ export type MediaItem = {
   instance_id?: string | null;
   frigate_event_id?: string | null;
   archived?: boolean;
+  archived_by?: string | null;
+  archived_by_name?: string | null;
+  archived_at?: string | null;
 };
 
 export type FrigateInstance = {
@@ -106,6 +115,28 @@ type Listener = () => void;
 // few seconds before the poller picked it up) still surfaces.
 const LIVE_CURSOR_GRACE_MS = 30_000;
 const NO_ACTIVE_ORG_ID = "00000000-0000-0000-0000-000000000000";
+
+/** Build the ack-stamp patch for read/archive actions. Pass `false` to clear. */
+export async function getAckStamp(active: boolean, kind: "read" | "archived" = "read") {
+  const prefix = kind === "read" ? "read" : "archived";
+  if (!active) {
+    return { [`${prefix}_by`]: null, [`${prefix}_by_name`]: null, [`${prefix}_at`]: null } as Record<string, string | null>;
+  }
+  const { data } = await supabase.auth.getUser();
+  const u = data.user;
+  if (!u) return {} as Record<string, string | null>;
+  let name: string | null = (u.user_metadata?.display_name as string) ?? (u.user_metadata?.username as string) ?? null;
+  if (!name) {
+    const { data: prof } = await supabase.from("profiles").select("display_name, username").eq("user_id", u.id).maybeSingle();
+    name = prof?.display_name ?? prof?.username ?? u.email ?? null;
+  }
+  return {
+    [`${prefix}_by`]: u.id,
+    [`${prefix}_by_name`]: name,
+    [`${prefix}_at`]: new Date().toISOString(),
+  } as Record<string, string | null>;
+}
+
 
 class WebhookStore {
   sources: WebhookSource[] = [];
@@ -353,11 +384,13 @@ class WebhookStore {
 
   // ─── Events ───
   async markRead(id: string, read = true) {
-    const q = supabase.from("webhook_events").update({ read }).eq("id", id);
+    const stamp = await getAckStamp(read);
+    const q = supabase.from("webhook_events").update({ read, ...stamp }).eq("id", id);
     await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async markAllRead() {
-    const q = supabase.from("webhook_events").update({ read: true }).eq("read", false);
+    const stamp = await getAckStamp(true);
+    const q = supabase.from("webhook_events").update({ read: true, ...stamp }).eq("read", false);
     await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q);
   }
   async clearEvents() {
