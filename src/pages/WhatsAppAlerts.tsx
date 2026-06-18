@@ -238,7 +238,7 @@ export default function WhatsAppAlerts() {
       multi_client: n.multi_client,
       camera_whatsapp_recipients: n.camera_whatsapp_recipients,
       daily_broadcast_enabled: n.daily_broadcast_enabled,
-    }).eq("id", n.id);
+    } as any).eq("id", n.id);
     if (error) { toast.error(error.message); return; }
     toast.success(`Saved ${n.name}`);
   };
