@@ -74,6 +74,80 @@ If either psql fails → **STOP**. Fix connectivity / password before continuing
 
 ---
 
+### ⚠️ If you see `(ENOIDENTIFIER) no tenant identifier provided`
+
+That error means port `5432` on your host is **Supavisor** (the Supabase connection
+pooler), not Postgres directly. Supavisor demands a tenant identifier in the
+username and won't let plain `pg_dump` through. You have **three options** —
+pick ONE and use it consistently for every `psql` / `pg_dump` / `pg_restore`
+command in the rest of this guide.
+
+#### Option A — Bypass the pooler with `docker exec` (RECOMMENDED, simplest)
+
+Run Postgres tools **inside** the `supabase-db` container, where it's just a
+local unix socket — no pooler, no tenant, no password headaches. Run this on
+the OLD server (SSH in first), and later on the NEW server for the restore.
+
+```bash
+# Find the db container name (usually 'supabase-db')
+sudo docker ps --format '{{.Names}}' | grep -i db
+
+# Test it
+sudo docker exec -i supabase-db psql -U postgres -d postgres -c "SELECT version();"
+```
+
+Then, **everywhere below**, replace patterns like:
+
+```bash
+PGPASSWORD="$SRC_PASS" pg_dump -h $SRC_HOST -U postgres -d postgres ...
+```
+
+with the docker form, writing the dump inside the container then copying it out:
+
+```bash
+sudo docker exec -i supabase-db pg_dump -U postgres -d postgres \
+  --schema=public --no-owner --no-privileges --clean --if-exists \
+  -Fc -f /tmp/public.dump
+sudo docker cp supabase-db:/tmp/public.dump /tmp/glance-backup/public.dump
+```
+
+Do the same for `auth.dump`, the cron-jobs query, and (on the new server) the
+`pg_restore` commands — wrap each one in `sudo docker exec -i supabase-db ...`.
+For restore you copy IN first: `sudo docker cp /tmp/glance-backup/public.dump supabase-db:/tmp/public.dump`.
+
+#### Option B — Connect to Postgres directly on a different port
+
+The Postgres container is often exposed on a **different** host port. Check:
+
+```bash
+sudo docker ps --format '{{.Names}} {{.Ports}}' | grep -E 'db|postgres'
+```
+
+If you see e.g. `0.0.0.0:5433->5432/tcp` on the db container, use `-p 5433`:
+
+```bash
+PGPASSWORD="$SRC_PASS" psql -h $SRC_HOST -p 5433 -U postgres -d postgres -c "SELECT version();"
+```
+
+If it's only bound to `127.0.0.1`, you must run the commands from the server
+itself (SSH in first) with `-h 127.0.0.1 -p <that-port>`.
+
+#### Option C — Use the Supavisor tenant username (last resort)
+
+Supavisor accepts `postgres.<tenant-id>` as the username. The tenant id lives in
+`/srv/supabase/.env` as `POOLER_TENANT_ID`:
+
+```bash
+export SRC_TENANT="$(sudo grep POOLER_TENANT_ID /srv/supabase/.env | cut -d= -f2)"
+PGPASSWORD="$SRC_PASS" psql -h $SRC_HOST -U "postgres.$SRC_TENANT" -d postgres -c "SELECT version();"
+```
+
+Works but pooled connections can drop large dumps mid-stream — **prefer Option A**.
+
+---
+
+---
+
 ### Step 2 — Create a backup folder
 
 ```bash
