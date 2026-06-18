@@ -570,7 +570,7 @@ export default function WhatsAppAlerts() {
                               className="bg-secondary border-border" />
                           </Field>
                         </div>
-                        <Field label="Recipients (overrides default)">
+                        <Field label="Assigned recipients" hint="Get this NVR's offline/online alerts plus daily report (if enabled). Global recipients are added automatically to offline/online events.">
                           <RecipientList value={n.whatsapp_recipients ?? []}
                             onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, whatsapp_recipients: v } : x))} />
                         </Field>
