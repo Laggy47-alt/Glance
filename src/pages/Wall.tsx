@@ -454,14 +454,16 @@ const Wall = () => {
 
   const archive = async (a: Alert) => {
     setAlerts((prev) => prev.filter((x) => x.key !== a.key));
+    const readStamp = await getAckStamp(true, "read");
+    const archStamp = await getAckStamp(true, "archived");
     const eventIds = Array.from(new Set([...(a.eventIds ?? []), a.event?.id].filter((id): id is string => !!id)));
     if (eventIds.length) {
-      await supabase.from("webhook_events").update({ archived: true, read: true }).in("id", eventIds);
+      await supabase.from("webhook_events").update({ archived: true, read: true, ...readStamp, ...archStamp }).in("id", eventIds);
     }
     // For media-only alerts (no backing event), persist ACK on the media row
     // so other operators' walls also drop it via realtime.
     if (!a.event && a.clip) {
-      await supabase.from("media_items").update({ archived: true }).eq("id", a.clip.id);
+      await supabase.from("media_items").update({ archived: true, ...archStamp }).eq("id", a.clip.id);
     }
   };
 
