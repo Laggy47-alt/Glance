@@ -41,8 +41,60 @@ type Settings = {
 };
 
 type CamState = { name: string; online: boolean; since: string };
+type Snapshot = { name: string; url?: string; storagePath?: string };
+type EmailAttachment = { filename: string; contentType: string; encoding: "base64"; content: string; contentID?: string };
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
+
+function safeCameraName(camera: string) {
+  return camera.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function snapshotMatchesCamera(snapshot: Snapshot, camera: string) {
+  return snapshot.name === camera || snapshot.name === safeCameraName(camera);
+}
+
+function displaySnapshotName(snapshot: Snapshot, cameras: string[]) {
+  return cameras.find((camera) => snapshotMatchesCamera(snapshot, camera)) ?? snapshot.name;
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function buildSnapshotAttachment(supabase: any, snapshot: Snapshot, index: number): Promise<EmailAttachment | null> {
+  let blob: Blob | null = null;
+  if (snapshot.storagePath) {
+    const { data, error } = await supabase.storage.from("camera-snapshots").download(snapshot.storagePath);
+    if (error) console.log(`[snapshot] download ${snapshot.name} failed: ${error.message}`);
+    else blob = data as Blob;
+  }
+  if (!blob && snapshot.url) {
+    try {
+      const r = await fetch(snapshot.url, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) blob = await r.blob();
+      else console.log(`[snapshot] attach fetch ${snapshot.name} -> HTTP ${r.status}`);
+    } catch (e) {
+      console.log(`[snapshot] attach fetch ${snapshot.name} threw: ${(e as Error).message}`);
+    }
+  }
+  if (!blob || !blob.type.startsWith("image/")) return null;
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (!bytes.length) return null;
+  const safe = safeCameraName(snapshot.name) || `camera_${index + 1}`;
+  return {
+    filename: `${safe}.jpg`,
+    contentType: blob.type || "image/jpeg",
+    encoding: "base64",
+    content: bytesToBase64(bytes),
+    contentID: `snapshot-${index}-${safe}@glance`,
+  };
+}
 
 function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—";
@@ -78,7 +130,7 @@ async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; of
   }
 }
 
-async function fetchAndUploadSnapshot(supabase: any, inst: Instance, camera: string): Promise<{ name: string; url: string } | null> {
+async function fetchAndUploadSnapshot(supabase: any, inst: Instance, camera: string): Promise<Snapshot | null> {
   const url = `${trimUrl(inst.base_url)}/api/${encodeURIComponent(camera)}/latest.jpg?h=400`;
   try {
     const headers: Record<string, string> = {};
@@ -87,12 +139,12 @@ async function fetchAndUploadSnapshot(supabase: any, inst: Instance, camera: str
     if (!r.ok) { console.log(`[snapshot] fetch ${camera} -> HTTP ${r.status} @ ${url}`); return null; }
     const blob = await r.blob();
     if (!blob.type.startsWith("image/")) { console.log(`[snapshot] ${camera} non-image content-type: ${blob.type}`); return null; }
-    const safe = camera.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const safe = safeCameraName(camera);
     const path = `${inst.id}/${safe}.jpg`;
     const { error: upErr } = await supabase.storage.from("camera-snapshots").upload(path, blob, { upsert: true, contentType: "image/jpeg", cacheControl: "60" });
     if (upErr) { console.log(`[snapshot] upload ${camera} failed: ${upErr.message}`); return null; }
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    return { name: camera, url: `${supabaseUrl}/storage/v1/object/public/camera-snapshots/${path}` };
+    return { name: camera, url: `${supabaseUrl}/storage/v1/object/public/camera-snapshots/${path}?t=${Date.now()}`, storagePath: path };
   } catch (e) { console.log(`[snapshot] fetch ${camera} threw: ${(e as Error).message} @ ${url}`); return null; }
 }
 
@@ -142,7 +194,7 @@ async function fetchPositiveIncidents(supabase: any, instanceId: string, since: 
   }));
 }
 
-async function listStoredSnapshots(supabase: any, instanceId: string): Promise<Array<{ name: string; url: string }>> {
+async function listStoredSnapshots(supabase: any, instanceId: string): Promise<Snapshot[]> {
   const { data: files } = await supabase.storage.from("camera-snapshots").list(instanceId, { limit: 1000 });
   if (!files?.length) return [];
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -150,7 +202,8 @@ async function listStoredSnapshots(supabase: any, instanceId: string): Promise<A
     .filter((f: any) => f.name?.endsWith(".jpg"))
     .map((f: any) => ({
       name: f.name.replace(/\.jpg$/, ""),
-      url: `${supabaseUrl}/storage/v1/object/public/camera-snapshots/${instanceId}/${f.name}`,
+      url: `${supabaseUrl}/storage/v1/object/public/camera-snapshots/${instanceId}/${f.name}?t=${Date.now()}`,
+      storagePath: `${instanceId}/${f.name}`,
     }));
 }
 
@@ -166,7 +219,7 @@ function nl2br(s: string) {
   return s.split("\n").map((l) => esc(l)).join("<br/>");
 }
 
-async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ name: string; url: string }>) {
+async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Snapshot[]) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const [statsAll, incidentsAll] = await Promise.all([
@@ -211,13 +264,12 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
   let snapshots = providedSnapshots?.length
     ? providedSnapshots
     : await listStoredSnapshots(supabase, inst.id);
-  if (filter) snapshots = snapshots.filter((s) => filter.has(s.name));
+  if (filter) snapshots = snapshots.filter((s) => [...filter].some((camera) => snapshotMatchesCamera(s, camera)));
   console.log(`[report] ${inst.name} reachable=${statsAll.reachable} online=${stats.online.length} offline=${stats.offline.length} storedSnapshots=${snapshots.length}`);
 
   // If reachable and missing snapshots for some online cameras, fetch them now.
   if (statsAll.reachable) {
-    const have = new Set(snapshots.map((s) => s.name));
-    const missing = stats.online.filter((c) => !have.has(c));
+    const missing = stats.online.filter((camera) => !snapshots.some((s) => snapshotMatchesCamera(s, camera)));
     if (missing.length) {
       console.log(`[report] ${inst.name} fetching ${missing.length} missing snapshots: ${missing.join(", ")}`);
       const fetched = await Promise.all(missing.map((c) => fetchAndUploadSnapshot(supabase, inst, c)));
@@ -228,6 +280,9 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
   } else {
     console.log(`[report] ${inst.name} NVR unreachable from edge function — relying on browser-uploaded snapshots only`);
   }
+
+  const allCameras = [...stats.online, ...stats.offline];
+  snapshots = snapshots.map((s) => ({ ...s, name: displaySnapshotName(s, allCameras) }));
 
 
   const date = new Date().toISOString().slice(0, 10);
@@ -250,10 +305,17 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
 
   const text = render(cfg.body_template, data);
 
-  // Build HTML with snapshots gallery
-  const snapsHtml = snapshots.map((s) => `
+  const snapshotsWithAttachments = await Promise.all(snapshots.map(async (snapshot, index) => ({
+    ...snapshot,
+    attachment: await buildSnapshotAttachment(supabase, snapshot, index),
+  })));
+  const attachments = snapshotsWithAttachments.map((s) => s.attachment).filter(Boolean) as EmailAttachment[];
+  console.log(`[report] ${inst.name} attaching ${attachments.length}/${snapshots.length} snapshots`);
+
+  // Build HTML with snapshots gallery. Prefer cid: URLs so email clients receive the visual as an attachment too.
+  const snapsHtml = snapshotsWithAttachments.map((s) => `
     <div style="display:inline-block;margin:4px;text-align:center;vertical-align:top;">
-      <img src="${esc(s.url)}" alt="${esc(s.name)}" style="max-width:240px;height:auto;border-radius:6px;border:1px solid #ddd;display:block;" />
+      <img src="${esc(s.attachment?.contentID ? `cid:${s.attachment.contentID}` : (s.url ?? ""))}" alt="${esc(s.name)}" style="max-width:240px;height:auto;border-radius:6px;border:1px solid #ddd;display:block;" />
       <div style="font-size:12px;color:#444;margin-top:2px;">${esc(s.name)}</div>
     </div>`).join("");
   const offlineHtml = offlineWithDur.length
@@ -266,7 +328,7 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Array<{ 
     ${snapsHtml ? `<h3 style="margin-top:20px;">Latest snapshots</h3><div>${snapsHtml}</div>` : ""}
   </div>`;
 
-  return { subject: render(cfg.subject, data), text, html };
+  return { subject: render(cfg.subject, data), text, html, attachments };
 }
 
 async function sendViaSmtp(s: Settings, opts: { from: string; to: string[]; replyTo?: string | null; subject: string; html: string; text: string; }) {
