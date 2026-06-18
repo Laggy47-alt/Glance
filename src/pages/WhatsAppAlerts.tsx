@@ -497,7 +497,7 @@ export default function WhatsAppAlerts() {
                 </div>
               </div>
               <div className="pt-4 border-t border-border">
-                <Header icon={Megaphone} title="Custom broadcast" subtitle="One-time message to WhatsApp recipients of the NVRs you select. Quiet hours & rate limits bypassed." />
+                <Header icon={Megaphone} title="Send to assigned NVR recipients" subtitle="Sends only to the recipients assigned to the NVRs you pick — global recipients are NOT included. Quiet hours & rate limits bypassed." />
                 <div className="space-y-3 mt-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs">Message</Label>
