@@ -13,10 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   MessageCircle, Save, Send, Plus, X, Server, Megaphone, Inbox,
-  Settings2, Users, FileText, Clock, Radio, Activity,
+  Settings2, Users, FileText, Clock, Radio, Activity, UserCheck, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import WhatsAppInbox from "@/components/WhatsAppInbox";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 function parseOfflineCams(stats: unknown): string[] {
@@ -75,6 +76,7 @@ type Nvr = {
   name: string;
   whatsapp_alert_enabled: boolean;
   whatsapp_recipients: string[];
+  master_alert_recipients: string[];
   whatsapp_alert_minutes: number | null;
   offline_alert_minutes: number;
   multi_client: boolean;
@@ -177,13 +179,15 @@ export default function WhatsAppAlerts() {
       const [{ data: s }, { data: n }] = await Promise.all([
         supabase.from("whatsapp_settings").select("*").eq("organization_id", activeOrg.id).maybeSingle(),
         supabase.from("frigate_instances")
-          .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients, daily_broadcast_enabled")
+          .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, master_alert_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients, daily_broadcast_enabled")
           .eq("organization_id", activeOrg.id).order("name"),
       ]);
       if (cancelled) return;
       if (s) setSettings({ ...DEFAULTS, ...(s as any) });
       const list = ((n ?? []) as any[]).map((x) => ({
         ...x,
+        whatsapp_recipients: x.whatsapp_recipients ?? [],
+        master_alert_recipients: x.master_alert_recipients ?? [],
         camera_whatsapp_recipients: (x.camera_whatsapp_recipients ?? {}) as Record<string, string[]>,
       })) as Nvr[];
       setNvrs(list);
@@ -229,11 +233,12 @@ export default function WhatsAppAlerts() {
     const { error } = await supabase.from("frigate_instances").update({
       whatsapp_alert_enabled: n.whatsapp_alert_enabled,
       whatsapp_recipients: n.whatsapp_recipients,
+      master_alert_recipients: n.master_alert_recipients,
       whatsapp_alert_minutes: n.whatsapp_alert_minutes,
       multi_client: n.multi_client,
       camera_whatsapp_recipients: n.camera_whatsapp_recipients,
       daily_broadcast_enabled: n.daily_broadcast_enabled,
-    }).eq("id", n.id);
+    } as any).eq("id", n.id);
     if (error) { toast.error(error.message); return; }
     toast.success(`Saved ${n.name}`);
   };
@@ -410,9 +415,9 @@ export default function WhatsAppAlerts() {
 
           {section === "recipients" && (
             <div className="space-y-4">
-              <Header icon={Users} title="Global recipients" subtitle="Receive the daily broadcast and every offline / online notification from all NVRs. Not included in custom 'Send message' sends." />
+              <Header icon={Users} title="Global recipients" subtitle="Receive ONLY the daily 8am consolidated broadcast of every offline device/NVR. They do NOT get individual offline/online alerts and are not included in custom 'Send message' sends." />
               <RecipientList value={settings.default_recipients} onChange={(v) => setSettings({ ...settings, default_recipients: v })} />
-              <p className="text-[11px] text-muted-foreground">If you also set dedicated daily broadcast recipients below, those take priority for the daily report; otherwise this list is used.</p>
+              <p className="text-[11px] text-muted-foreground">Per-event offline/online alerts go only to the recipients you configure under each NVR (Client and Master tabs).</p>
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}
@@ -542,7 +547,7 @@ export default function WhatsAppAlerts() {
 
           {section === "nvrs" && (
             <div className="space-y-3">
-              <Header icon={Server} title="Per-NVR recipients" subtitle={`${nvrs.length} NVR${nvrs.length === 1 ? "" : "s"} — each NVR's recipients receive its offline/online alerts and (if enabled) its daily report. Global recipients are added automatically to offline/online events.`} />
+              <Header icon={Server} title="Per-NVR recipients" subtitle={`${nvrs.length} NVR${nvrs.length === 1 ? "" : "s"} — each NVR has two recipient groups: the Client (daily report + offline alerts) and the Master (offline alerts only).`} />
               {nvrs.length === 0 && <p className="text-sm text-muted-foreground italic">No NVRs configured.</p>}
               {nvrs.length > 0 && (
                 <Input placeholder="Filter NVRs…" value={nvrFilter} onChange={(e) => setNvrFilter(e.target.value)} className="bg-secondary border-border h-9 max-w-xs" />
@@ -550,6 +555,8 @@ export default function WhatsAppAlerts() {
               <div className="space-y-2">
                 {filteredNvrs.map((n, idx) => {
                   const i = nvrs.indexOf(n);
+                  const clientCount = (n.whatsapp_recipients ?? []).filter(isValidRecipient).length;
+                  const masterCount = (n.master_alert_recipients ?? []).filter(isValidRecipient).length;
                   return (
                     <details key={n.id} className="rounded-md border border-border group" open={idx === 0 && filteredNvrs.length <= 3}>
                       <summary className="flex items-center gap-2 p-3 cursor-pointer hover:bg-secondary/40 list-none">
@@ -558,50 +565,80 @@ export default function WhatsAppAlerts() {
                         {n.whatsapp_alert_enabled && <Badge variant="secondary" className="text-[10px]">WA on</Badge>}
                         {n.daily_broadcast_enabled && <Badge variant="secondary" className="text-[10px]">Daily</Badge>}
                         {n.multi_client && <Badge variant="secondary" className="text-[10px]">Multi</Badge>}
-                        <span className="text-[11px] text-muted-foreground">{(n.whatsapp_recipients ?? []).filter(isValidRecipient).length} recip</span>
+                        <span className="text-[11px] text-muted-foreground">{clientCount} client · {masterCount} master</span>
                       </summary>
                       <div className="p-3 pt-0 space-y-3 border-t border-border">
                         <div className="grid md:grid-cols-2 gap-3 pt-3">
                           <ToggleRow label="WhatsApp alerts on" checked={n.whatsapp_alert_enabled}
                             onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, whatsapp_alert_enabled: v } : x))} />
-                          <Field label="Alert after (minutes)" hint={`Blank = ${n.offline_alert_minutes}m (email threshold)`}>
+                          <Field label="Alert after (minutes)" hint={`Blank = ${n.offline_alert_minutes}m (email threshold). Recommended: 5`}>
                             <Input type="number" min={1} value={n.whatsapp_alert_minutes ?? ""} placeholder={String(n.offline_alert_minutes)}
                               onChange={(e) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, whatsapp_alert_minutes: e.target.value === "" ? null : Number(e.target.value) } : x))}
                               className="bg-secondary border-border" />
                           </Field>
                         </div>
-                        <Field label="Assigned recipients" hint="Get this NVR's offline/online alerts plus daily report (if enabled). Global recipients are added automatically to offline/online events.">
-                          <RecipientList value={n.whatsapp_recipients ?? []}
-                            onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, whatsapp_recipients: v } : x))} />
-                        </Field>
-                        <div className="grid md:grid-cols-2 gap-2">
-                          <ToggleRow label="Send daily report" hint="Per-NVR summary at the daily broadcast time"
-                            checked={n.daily_broadcast_enabled}
-                            onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, daily_broadcast_enabled: v } : x))} />
-                          <ToggleRow label="Multi-client NVR" hint="Route each camera to its own recipients"
-                            checked={n.multi_client}
-                            onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, multi_client: v } : x))} />
-                        </div>
-                        {n.multi_client && (
-                          <div className="rounded-md border border-border p-3 space-y-2">
-                            <div className="text-xs font-medium">Per-camera recipients</div>
-                            {(nvrCameras[n.id] ?? []).length === 0 && (
-                              <p className="text-[11px] text-muted-foreground italic">No cameras seen yet. They'll appear after the next poll.</p>
-                            )}
-                            <div className="space-y-2">
-                              {(nvrCameras[n.id] ?? []).map((cam) => (
-                                <div key={cam} className="grid md:grid-cols-[180px_1fr] gap-2 items-start">
-                                  <div className="text-xs font-mono pt-2">{cam}</div>
-                                  <RecipientList value={n.camera_whatsapp_recipients?.[cam] ?? []}
-                                    onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? {
-                                      ...x, camera_whatsapp_recipients: { ...(x.camera_whatsapp_recipients ?? {}), [cam]: v },
-                                    } : x))}
-                                    placeholder="+27821234567 or 12345-67890@g.us" />
+
+                        <Tabs defaultValue="client" className="w-full">
+                          <TabsList className="grid grid-cols-2 w-full">
+                            <TabsTrigger value="client" className="gap-1.5">
+                              <UserCheck className="h-3.5 w-3.5" />
+                              Client report & alerts
+                              <Badge variant="secondary" className="ml-1 text-[10px]">{clientCount}</Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="master" className="gap-1.5">
+                              <ShieldAlert className="h-3.5 w-3.5" />
+                              Master alerts
+                              <Badge variant="secondary" className="ml-1 text-[10px]">{masterCount}</Badge>
+                            </TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent value="client" className="space-y-3 pt-3">
+                            <p className="text-[11px] text-muted-foreground">
+                              The site/customer contact. Receives a daily 8am summary of offline cameras on <span className="font-medium">{n.name}</span> (if enabled below) AND gets an alert as soon as a device on this NVR is offline for the threshold above.
+                            </p>
+                            <Field label="Client recipients">
+                              <RecipientList value={n.whatsapp_recipients ?? []}
+                                onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, whatsapp_recipients: v } : x))} />
+                            </Field>
+                            <ToggleRow label="Send daily report to client" hint="Per-NVR summary at the global daily broadcast time"
+                              checked={n.daily_broadcast_enabled}
+                              onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, daily_broadcast_enabled: v } : x))} />
+                            <ToggleRow label="Multi-client NVR" hint="Route each camera to its own client recipients"
+                              checked={n.multi_client}
+                              onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, multi_client: v } : x))} />
+                            {n.multi_client && (
+                              <div className="rounded-md border border-border p-3 space-y-2">
+                                <div className="text-xs font-medium">Per-camera client recipients</div>
+                                {(nvrCameras[n.id] ?? []).length === 0 && (
+                                  <p className="text-[11px] text-muted-foreground italic">No cameras seen yet. They'll appear after the next poll.</p>
+                                )}
+                                <div className="space-y-2">
+                                  {(nvrCameras[n.id] ?? []).map((cam) => (
+                                    <div key={cam} className="grid md:grid-cols-[180px_1fr] gap-2 items-start">
+                                      <div className="text-xs font-mono pt-2">{cam}</div>
+                                      <RecipientList value={n.camera_whatsapp_recipients?.[cam] ?? []}
+                                        onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? {
+                                          ...x, camera_whatsapp_recipients: { ...(x.camera_whatsapp_recipients ?? {}), [cam]: v },
+                                        } : x))}
+                                        placeholder="+27821234567 or 12345-67890@g.us" />
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                              </div>
+                            )}
+                          </TabsContent>
+
+                          <TabsContent value="master" className="space-y-3 pt-3">
+                            <p className="text-[11px] text-muted-foreground">
+                              Internal operator / monitoring contact. Only receives offline / online alerts for devices on <span className="font-medium">{n.name}</span> within the threshold above. They will NOT get the daily report.
+                            </p>
+                            <Field label="Master alert recipients">
+                              <RecipientList value={n.master_alert_recipients ?? []}
+                                onChange={(v) => setNvrs(nvrs.map((x, j) => j === i ? { ...x, master_alert_recipients: v } : x))} />
+                            </Field>
+                          </TabsContent>
+                        </Tabs>
+
                         <div className="flex justify-end">
                           <Button size="sm" variant="secondary" onClick={() => saveNvr(n)}><Save className="h-3.5 w-3.5 mr-1" />Save NVR</Button>
                         </div>

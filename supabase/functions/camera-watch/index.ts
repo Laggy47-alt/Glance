@@ -23,6 +23,7 @@ type Instance = {
   offline_alert_recipients: string[];
   whatsapp_alert_enabled: boolean;
   whatsapp_recipients: string[];
+  master_alert_recipients: string[] | null;
   whatsapp_alert_minutes: number | null;
   multi_client: boolean;
   camera_whatsapp_recipients: Record<string, string[]> | null;
@@ -106,44 +107,39 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: instances, error } = await supabase
     .from("frigate_instances")
-    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, whatsapp_alert_minutes, multi_client, camera_whatsapp_recipients, nvr_unreachable_since, nvr_unreachable_alerted_since")
+    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, master_alert_recipients, whatsapp_alert_minutes, multi_client, camera_whatsapp_recipients, nvr_unreachable_since, nvr_unreachable_alerted_since")
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  // Fetch global WhatsApp settings per org once.
+  // Fetch WhatsApp settings per org once.
   const orgIds = Array.from(new Set((instances ?? []).map((i: any) => i.organization_id)));
   const { data: waSettings } = orgIds.length
-    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template, default_recipients, daily_broadcast_recipients").in("organization_id", orgIds)
+    ? await supabase.from("whatsapp_settings").select("organization_id, enabled, include_nvr_unreachable, send_recovery, recovery_template").in("organization_id", orgIds)
     : { data: [] as any[] };
-  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string; globalRecipients: string[] }>(
-    (waSettings ?? []).map((s: any) => {
-      const global = (Array.isArray(s.daily_broadcast_recipients) && s.daily_broadcast_recipients.length
-        ? s.daily_broadcast_recipients
-        : (s.default_recipients ?? [])
-      ).map((r: string) => String(r).trim()).filter(isWaRecipient);
-      return [s.organization_id, {
-        enabled: !!s.enabled,
-        include_nvr_unreachable: !!s.include_nvr_unreachable,
-        send_recovery: !!s.send_recovery,
-        recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
-        globalRecipients: global,
-      }];
-    }),
+  const waByOrg = new Map<string, { enabled: boolean; include_nvr_unreachable: boolean; send_recovery: boolean; recovery_template: string }>(
+    (waSettings ?? []).map((s: any) => [s.organization_id, {
+      enabled: !!s.enabled,
+      include_nvr_unreachable: !!s.include_nvr_unreachable,
+      send_recovery: !!s.send_recovery,
+      recovery_template: s.recovery_template ?? "✅ *{{nvr}}* — {{camera}} back online",
+    }]),
   );
 
-  // Merge per-NVR recipients with the org's global recipients (dedup, preserve order).
-  // Used so every offline/online notification reaches assigned + global recipients.
-  const mergeWithGlobal = (orgId: string, perNvr: string[]) => {
-    const g = waByOrg.get(orgId)?.globalRecipients ?? [];
+  // Merge per-NVR client recipients with the NVR's master-alert recipients (dedup).
+  // Global recipients are NOT included for per-event offline/online alerts — they only
+  // receive the daily 8am consolidated broadcast.
+  const mergeWithMaster = (inst: Instance, perNvr: string[]) => {
+    const master = (inst.master_alert_recipients ?? []).map((r) => String(r).trim()).filter(isWaRecipient);
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const r of [...perNvr, ...g]) {
+    for (const r of [...perNvr, ...master]) {
       if (!isWaRecipient(r)) continue;
       if (seen.has(r)) continue;
       seen.add(r); out.push(r);
     }
     return out;
   };
+
 
   const renderRecovery = (tpl: string, vars: Record<string, string | number>) =>
     tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? ""));
@@ -177,7 +173,7 @@ Deno.serve(async (req) => {
         inst.nvr_unreachable_alerted_since !== sinceIso;
 
       const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
-      const unreachableRecipients = mergeWithGlobal(inst.organization_id, nvrWa);
+      const unreachableRecipients = mergeWithMaster(inst, nvrWa);
       let waResult: any = null;
       if (shouldAlert && unreachableRecipients.length) {
         try {
@@ -211,7 +207,7 @@ Deno.serve(async (req) => {
     const waCfg = waByOrg.get(inst.organization_id);
     if (wasUnreachableAlerted && waCfg?.enabled && waCfg.send_recovery && inst.whatsapp_alert_enabled) {
       const nvrWa = (inst.whatsapp_recipients ?? []).map((r) => r.trim()).filter(isWaRecipient);
-      const recoveryRecipients = mergeWithGlobal(inst.organization_id, nvrWa);
+      const recoveryRecipients = mergeWithMaster(inst, nvrWa);
       if (recoveryRecipients.length) {
         const msg = `✅ *${inst.name}* — NVR reachable again.`;
         await sendWaMessage(inst.organization_id, recoveryRecipients, msg);
@@ -246,10 +242,10 @@ Deno.serve(async (req) => {
         } else if (nvrWa.length) {
           buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: recoveredCams });
         }
-        // Global recipients always get a consolidated summary across all recovered cameras.
-        const globalRecips = waByOrg.get(inst.organization_id)?.globalRecipients ?? [];
-        if (globalRecips.length && recoveredCams.length) {
-          buckets.set("__global__", { recipients: globalRecips, cameras: recoveredCams });
+        // Master-alert recipients always get a consolidated summary across recovered cameras.
+        const masterRecips = (inst.master_alert_recipients ?? []).map((r) => String(r).trim()).filter(isWaRecipient);
+        if (masterRecips.length && recoveredCams.length) {
+          buckets.set("__master__", { recipients: masterRecips, cameras: recoveredCams });
         }
         for (const { recipients, cameras } of buckets.values()) {
           const msg = cameras
@@ -338,10 +334,10 @@ Deno.serve(async (req) => {
       } else if (nvrWa.length) {
         buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: toAlert });
       }
-      // Global recipients always get a consolidated summary across all offline cameras for this NVR.
-      const globalRecips = waByOrg.get(inst.organization_id)?.globalRecipients ?? [];
-      if (globalRecips.length && toAlert.length) {
-        buckets.set("__global__", { recipients: globalRecips, cameras: toAlert });
+      // Master-alert recipients always get a consolidated summary across all offline cameras for this NVR.
+      const masterRecips = (inst.master_alert_recipients ?? []).map((r) => String(r).trim()).filter(isWaRecipient);
+      if (masterRecips.length && toAlert.length) {
+        buckets.set("__master__", { recipients: masterRecips, cameras: toAlert });
       }
 
       const waOut: any[] = [];
