@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { frigateAuthHeaders, invalidateFrigateToken, type FrigateAuthRow } from "../_shared/frigateAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,11 +23,8 @@ type Cfg = {
   label: string | null;
 };
 
-type Instance = {
-  id: string;
+type Instance = FrigateAuthRow & {
   name: string;
-  base_url: string;
-  api_key: string | null;
 };
 
 type Settings = {
@@ -110,11 +108,22 @@ function formatDuration(ms: number): string {
   return remH ? `${d}d ${remH}h` : `${d}d`;
 }
 
-async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; offline: string[]; reachable: boolean }> {
+async function fetchFrigateStats(supabase: any, inst: Instance): Promise<{ online: string[]; offline: string[]; reachable: boolean }> {
+  const doFetch = async (force: boolean) => {
+    const auth = await frigateAuthHeaders(supabase, inst, force);
+    return fetch(`${trimUrl(inst.base_url)}/api/stats`, {
+      headers: { Accept: "application/json", ...auth },
+      signal: AbortSignal.timeout(10000),
+    });
+  };
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (inst.api_key) headers["Authorization"] = `Bearer ${inst.api_key}`;
-    const r = await fetch(`${trimUrl(inst.base_url)}/api/stats`, { headers, signal: AbortSignal.timeout(10000) });
+    let r = await doFetch(false);
+    if (r.status === 401 && inst.auth_username && inst.auth_password) {
+      await invalidateFrigateToken(supabase, inst.id);
+      inst.auth_token_cache = null;
+      inst.auth_token_expires_at = null;
+      r = await doFetch(true);
+    }
     if (!r.ok) return { online: [], offline: [], reachable: false };
     const j: any = await r.json();
     const cams = j?.cameras ?? {};
@@ -132,10 +141,18 @@ async function fetchFrigateStats(inst: Instance): Promise<{ online: string[]; of
 
 async function fetchAndUploadSnapshot(supabase: any, inst: Instance, camera: string): Promise<Snapshot | null> {
   const url = `${trimUrl(inst.base_url)}/api/${encodeURIComponent(camera)}/latest.jpg?h=400`;
+  const doFetch = async (force: boolean) => {
+    const auth = await frigateAuthHeaders(supabase, inst, force);
+    return fetch(url, { headers: auth, signal: AbortSignal.timeout(8000) });
+  };
   try {
-    const headers: Record<string, string> = {};
-    if (inst.api_key) headers["Authorization"] = `Bearer ${inst.api_key}`;
-    const r = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+    let r = await doFetch(false);
+    if (r.status === 401 && inst.auth_username && inst.auth_password) {
+      await invalidateFrigateToken(supabase, inst.id);
+      inst.auth_token_cache = null;
+      inst.auth_token_expires_at = null;
+      r = await doFetch(true);
+    }
     if (!r.ok) { console.log(`[snapshot] fetch ${camera} -> HTTP ${r.status} @ ${url}`); return null; }
     const blob = await r.blob();
     if (!blob.type.startsWith("image/")) { console.log(`[snapshot] ${camera} non-image content-type: ${blob.type}`); return null; }
