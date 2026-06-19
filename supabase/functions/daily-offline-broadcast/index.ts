@@ -63,17 +63,11 @@ Deno.serve(async (req) => {
         .select("instance_id, camera, online, since")
         .in("instance_id", instIds)
         .eq("online", false);
-      // Filter out disarmed cameras
-      const { data: disarmedRows } = await supabase
-        .from("camera_armed_state")
-        .select("instance_id, camera, armed")
-        .in("instance_id", instIds)
-        .eq("armed", false);
-      const disarmed = new Set<string>((disarmedRows ?? []).map((r: any) => `${r.instance_id}|${r.camera}`));
+      // Note: offline alerts fire regardless of armed state — clients need to
+      // know when cameras are offline even during scheduled disarm windows.
       const grouped = new Map<string, string[]>();
       const nowMs = Date.now();
       for (const s of states ?? []) {
-        if (disarmed.has(`${s.instance_id}|${s.camera}`)) continue;
         const mins = Math.max(0, Math.floor((nowMs - new Date(s.since).getTime()) / 60_000));
         const list = grouped.get(s.instance_id) ?? [];
         list.push(`${s.camera} (offline ${mins}m)`);
