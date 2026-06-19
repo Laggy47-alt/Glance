@@ -26,7 +26,11 @@ const Frigate = () => {
   const [editing, setEditing] = useState<FrigateInstance | null>(null);
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  type AuthMode = "none" | "api_key" | "userpass";
+  const [authMode, setAuthMode] = useState<AuthMode>("none");
   const [apiKey, setApiKey] = useState("");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [color, setColor] = useState(PALETTE[0]);
   const [isLocal, setIsLocal] = useState(false);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
@@ -56,24 +60,68 @@ const Frigate = () => {
     setTimeout(tryScroll, 50);
   }, [location.hash, store.frigates.length]);
 
-  const reset = () => { setEditing(null); setName(""); setBaseUrl(""); setApiKey(""); setColor(PALETTE[0]); setIsLocal(false); };
+  const reset = () => {
+    setEditing(null); setName(""); setBaseUrl("");
+    setAuthMode("none"); setApiKey(""); setAuthUsername(""); setAuthPassword("");
+    setColor(PALETTE[0]); setIsLocal(false);
+  };
 
   const openNew = () => { reset(); setOpen(true); };
   const openEdit = (f: FrigateInstance) => {
-    setEditing(f); setName(f.name); setBaseUrl(f.base_url); setApiKey(f.api_key ?? ""); setColor(f.color); setIsLocal(f.is_local); setOpen(true);
+    setEditing(f); setName(f.name); setBaseUrl(f.base_url);
+    setApiKey(f.api_key ?? "");
+    setAuthUsername(f.auth_username ?? "");
+    setAuthPassword(""); // never prefill — empty means "keep existing"
+    if (f.auth_username) setAuthMode("userpass");
+    else if (f.api_key) setAuthMode("api_key");
+    else setAuthMode("none");
+    setColor(f.color); setIsLocal(f.is_local); setOpen(true);
   };
 
   const save = async () => {
 
     if (!name.trim() || !baseUrl.trim()) { toast.error("Name and base URL are required"); return; }
     if (!/^https?:\/\//i.test(baseUrl.trim())) { toast.error("Base URL must start with http:// or https://"); return; }
+    if (authMode === "userpass" && !authUsername.trim()) { toast.error("Username is required"); return; }
+    if (authMode === "userpass" && !editing && !authPassword.trim()) { toast.error("Password is required"); return; }
     try {
+      // Build credential patch based on selected mode. Editing without changing
+      // an existing password is supported: leaving the password field blank
+      // keeps the stored value.
+      const credPatch: {
+        api_key: string | null;
+        auth_username: string | null;
+        auth_password?: string | null;
+      } = authMode === "userpass"
+        ? {
+            api_key: null,
+            auth_username: authUsername.trim(),
+            ...(authPassword.trim() ? { auth_password: authPassword.trim() } : {}),
+          }
+        : authMode === "api_key"
+        ? { api_key: apiKey.trim() || null, auth_username: null, auth_password: null }
+        : { api_key: null, auth_username: null, auth_password: null };
+
       if (editing) {
-        await store.updateFrigate(editing.id, { name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || null, color, is_local: isLocal });
+        await store.updateFrigate(editing.id, {
+          name: name.trim(),
+          base_url: baseUrl.trim(),
+          color,
+          is_local: isLocal,
+          ...credPatch,
+        });
         await store.refreshAll();
         toast.success("Instance updated");
       } else {
-        await store.createFrigate({ name: name.trim(), base_url: baseUrl.trim(), api_key: apiKey.trim() || undefined, color, is_local: isLocal });
+        await store.createFrigate({
+          name: name.trim(),
+          base_url: baseUrl.trim(),
+          api_key: credPatch.api_key ?? undefined,
+          auth_username: credPatch.auth_username ?? undefined,
+          auth_password: (credPatch as { auth_password?: string | null }).auth_password ?? undefined,
+          color,
+          is_local: isLocal,
+        });
         await store.refreshAll();
         toast.success("Frigate instance added");
       }
