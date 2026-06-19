@@ -196,8 +196,59 @@ const Frigate = () => {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">API key <span className="text-muted-foreground">(optional)</span></Label>
-                <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Bearer token if Frigate auth is enabled" className="bg-secondary border-border font-mono" />
+                <Label className="text-xs">Authentication</Label>
+                <div className="flex gap-1 rounded-md bg-secondary border border-border p-1">
+                  {([
+                    { v: "none", l: "None" },
+                    { v: "api_key", l: "API key" },
+                    { v: "userpass", l: "Username + password" },
+                  ] as { v: AuthMode; l: string }[]).map((opt) => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setAuthMode(opt.v)}
+                      className={cn(
+                        "flex-1 text-[11px] px-2 py-1.5 rounded transition-colors",
+                        authMode === opt.v
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+                {authMode === "api_key" && (
+                  <Input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Bearer token from Frigate"
+                    className="bg-secondary border-border font-mono"
+                  />
+                )}
+                {authMode === "userpass" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      value={authUsername}
+                      onChange={(e) => setAuthUsername(e.target.value)}
+                      placeholder="Username"
+                      autoComplete="off"
+                      className="bg-secondary border-border font-mono"
+                    />
+                    <Input
+                      type="password"
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      placeholder={editing ? "Password (leave blank to keep)" : "Password"}
+                      autoComplete="new-password"
+                      className="bg-secondary border-border font-mono"
+                    />
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Username + password uses Frigate's JWT login (0.14+). The token is cached and refreshed automatically.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Color</Label>
