@@ -4,6 +4,7 @@
 // Runs every minute via pg_cron.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { frigateAuthHeaders, invalidateFrigateToken, type FrigateAuthRow } from "../_shared/frigateAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,12 +12,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
-type Instance = {
-  id: string;
+type Instance = FrigateAuthRow & {
   organization_id: string;
   name: string;
-  base_url: string;
-  api_key: string | null;
   is_local: boolean;
   offline_alert_enabled: boolean;
   offline_alert_minutes: number;
@@ -37,11 +35,22 @@ const isWaRecipient = (r: string) =>
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
 
-async function fetchStats(inst: Instance) {
+async function fetchStats(supabase: any, inst: Instance) {
+  const doFetch = async (force: boolean) => {
+    const auth = await frigateAuthHeaders(supabase, inst, force);
+    return fetch(`${trimUrl(inst.base_url)}/api/stats`, {
+      headers: { Accept: "application/json", ...auth },
+      signal: AbortSignal.timeout(8000),
+    });
+  };
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (inst.api_key) headers["Authorization"] = `Bearer ${inst.api_key}`;
-    const r = await fetch(`${trimUrl(inst.base_url)}/api/stats`, { headers, signal: AbortSignal.timeout(8000) });
+    let r = await doFetch(false);
+    if (r.status === 401 && inst.auth_username && inst.auth_password) {
+      await invalidateFrigateToken(supabase, inst.id);
+      inst.auth_token_cache = null;
+      inst.auth_token_expires_at = null;
+      r = await doFetch(true);
+    }
     if (!r.ok) return null;
     const j: any = await r.json();
     const online: string[] = [];
