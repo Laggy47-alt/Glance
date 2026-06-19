@@ -150,7 +150,7 @@ const Wall = () => {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
-  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set(["person"]));
   const seenRef = useRef<Set<string>>(wallAlertsStore.seen);
   const mountedAtRef = useRef<number>(wallAlertsStore.mountedAt);
   const pollOwnerRef = useRef<string>(`wall-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`);
