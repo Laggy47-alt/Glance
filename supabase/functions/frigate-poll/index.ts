@@ -3,6 +3,7 @@
 // MULTI-TENANT: every row written carries organization_id from the source frigate_instance.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { frigateAuthHeaders, invalidateFrigateToken, type FrigateAuthRow } from "../_shared/frigateAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,13 +11,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
-type FrigateInstance = {
-  id: string;
+type FrigateInstance = FrigateAuthRow & {
   source_id: string;
   organization_id: string;
   name: string;
-  base_url: string;
-  api_key: string | null;
   enabled: boolean;
   poll_enabled: boolean;
   last_event_ts: string | null;
@@ -47,10 +45,25 @@ type FrigateReview = {
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
 
-async function fetchJson<T>(url: string, apiKey: string | null): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-  const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+async function fetchJsonAuthed<T>(
+  supabase: any,
+  inst: FrigateInstance,
+  url: string,
+): Promise<T> {
+  const doFetch = async (force: boolean) => {
+    const auth = await frigateAuthHeaders(supabase, inst, force);
+    return fetch(url, {
+      headers: { Accept: "application/json", ...auth },
+      signal: AbortSignal.timeout(15000),
+    });
+  };
+  let r = await doFetch(false);
+  if (r.status === 401 && inst.auth_username && inst.auth_password) {
+    await invalidateFrigateToken(supabase, inst.id);
+    inst.auth_token_cache = null;
+    inst.auth_token_expires_at = null;
+    r = await doFetch(true);
+  }
   if (!r.ok) throw new Error(`${r.status} ${r.statusText} @ ${url}`);
   return r.json() as Promise<T>;
 }
@@ -75,7 +88,7 @@ Deno.serve(async (req) => {
 
   let q = supabase
     .from("frigate_instances")
-    .select("id, source_id, organization_id, name, base_url, api_key, enabled, poll_enabled, last_event_ts")
+    .select(`id, source_id, organization_id, name, enabled, poll_enabled, last_event_ts, base_url, api_key, auth_username, auth_password, auth_token_cache, auth_token_expires_at`)
     .eq("enabled", true)
     .eq("poll_enabled", true);
   if (onlyId) q = q.eq("id", onlyId);
@@ -127,7 +140,7 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   );
 
   const evUrl = `${base}/api/events?after=${sinceSec}&limit=100&include_thumbnails=0`;
-  const events = await fetchJson<FrigateEvent[]>(evUrl, inst.api_key);
+  const events = await fetchJsonAuthed<FrigateEvent[]>(supabase, inst, evUrl);
 
 
   let insertedEvents = 0;
@@ -214,7 +227,7 @@ async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateI
   let insertedReviews = 0;
   try {
     const revUrl = `${base}/api/review?after=${sinceSec}&limit=100`;
-    const reviews = await fetchJson<FrigateReview[]>(revUrl, inst.api_key);
+    const reviews = await fetchJsonAuthed<FrigateReview[]>(supabase, inst, revUrl);
     for (const rv of reviews) {
       const startMs = Math.floor((rv.start_time ?? 0) * 1000);
       if (startMs > maxStart) maxStart = startMs;

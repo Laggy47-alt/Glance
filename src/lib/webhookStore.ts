@@ -70,6 +70,8 @@ export type FrigateInstance = {
   name: string;
   base_url: string;
   api_key: string | null;
+  auth_username: string | null;
+  auth_password: string | null;
   color: string;
   enabled: boolean;
   poll_enabled: boolean;
@@ -421,7 +423,7 @@ class WebhookStore {
   }
 
   // ─── Frigate instances ───
-  async createFrigate(input: { name: string; base_url: string; api_key?: string; color?: string; is_local?: boolean }) {
+  async createFrigate(input: { name: string; base_url: string; api_key?: string; auth_username?: string | null; auth_password?: string | null; color?: string; is_local?: boolean }) {
     if (!this.activeOrgId) throw new Error("No active organization");
     const slugBase = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "frigate";
     const slug = `frigate-${slugBase}-${crypto.randomUUID().slice(0, 6)}`;
@@ -444,33 +446,38 @@ class WebhookStore {
       name: input.name,
       base_url: input.base_url.replace(/\/+$/, ""),
       api_key: input.api_key || null,
+      auth_username: input.auth_username || null,
+      auth_password: input.auth_password || null,
       color,
       is_local: input.is_local ?? false,
       poll_enabled: false,
       mute_enabled: true,
       mute_start: "06:00:00",
       mute_end: "17:30:00",
-    });
+    } as never);
     if (error) {
       await supabase.from("webhook_sources").delete().eq("id", src.id).eq("organization_id", this.activeOrgId);
       throw error;
     }
   }
 
-  async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local" | "mute_enabled" | "mute_start" | "mute_end" | "offline_alert_enabled" | "offline_alert_minutes" | "offline_alert_recipients">>) {
+  async updateFrigate(id: string, patch: Partial<Pick<FrigateInstance, "name" | "base_url" | "api_key" | "auth_username" | "auth_password" | "color" | "enabled" | "poll_enabled" | "poll_interval_seconds" | "is_local" | "mute_enabled" | "mute_start" | "mute_end" | "offline_alert_enabled" | "offline_alert_minutes" | "offline_alert_recipients">>) {
     const cleaned = {
       ...patch,
       ...(patch.base_url !== undefined ? { base_url: patch.base_url.replace(/\/+$/, "") } : {}),
     };
-    const connectionChanged = "base_url" in patch || "api_key" in patch || "is_local" in patch;
+    const connectionChanged = "base_url" in patch || "api_key" in patch || "auth_username" in patch || "auth_password" in patch || "is_local" in patch;
+    // Force JWT cache refresh on any credential change so a wrong password isn't masked by a stale token.
+    const authChanged = "auth_username" in patch || "auth_password" in patch;
+    const credUpdate = authChanged ? { auth_token_cache: null, auth_token_expires_at: null } : {};
     const update = connectionChanged
-      ? { ...cleaned, last_error: null, last_polled_at: null }
-      : cleaned;
-    const q = supabase.from("frigate_instances").update(update).eq("id", id);
+      ? { ...cleaned, ...credUpdate, last_error: null, last_polled_at: null }
+      : { ...cleaned, ...credUpdate };
+    const q = supabase.from("frigate_instances").update(update as never).eq("id", id);
     const { data, error } = await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q).select("*").single();
     if (error) throw error;
     if (data) {
-      this.frigates = this.frigates.map((x) => x.id === id ? data as FrigateInstance : x);
+      this.frigates = this.frigates.map((x) => x.id === id ? (data as unknown as FrigateInstance) : x);
       this.emit();
     }
   }

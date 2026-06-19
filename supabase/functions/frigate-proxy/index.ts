@@ -6,6 +6,9 @@
 // No external imports: avoid cold-start fetches that can blow the
 // self-hosted edge-runtime wall-clock budget. We talk to PostgREST directly.
 
+import { frigateAuthHeaders, type FrigateAuthRow } from "../_shared/frigateAuth.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type, range, apikey, x-client-info, accept, cache-control, pragma",
@@ -52,12 +55,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "proxy_not_configured", message: "Missing backend proxy secrets." }, 500);
     }
 
-    let inst: { base_url: string; api_key: string | null; enabled: boolean } | null = null;
+    let inst: (FrigateAuthRow & { enabled: boolean }) | null = null;
     try {
       const lookupCtrl = new AbortController();
       const lookupTimer = setTimeout(() => lookupCtrl.abort(), 3000);
       const lookupRes = await fetch(
-        `${supabaseUrl}/rest/v1/frigate_instances?id=eq.${encodeURIComponent(instanceId)}&select=base_url,api_key,enabled&limit=1`,
+        `${supabaseUrl}/rest/v1/frigate_instances?id=eq.${encodeURIComponent(instanceId)}&select=id,base_url,api_key,enabled,auth_username,auth_password,auth_token_cache,auth_token_expires_at&limit=1`,
         {
           headers: {
             apikey: serviceKey,
@@ -71,7 +74,7 @@ Deno.serve(async (req) => {
         const body = await lookupRes.text().catch(() => "");
         return jsonResponse({ error: "instance_lookup_failed", status: lookupRes.status, message: body.slice(0, 300) }, 500);
       }
-      const rows = (await lookupRes.json()) as Array<{ base_url: string; api_key: string | null; enabled: boolean }>;
+      const rows = (await lookupRes.json()) as Array<FrigateAuthRow & { enabled: boolean }>;
       inst = rows[0] ?? null;
     } catch (e) {
       const aborted = (e as Error).name === "AbortError";
@@ -87,10 +90,19 @@ Deno.serve(async (req) => {
     const base = (inst.base_url as string).replace(/\/+$/, "");
     const target = `${base}/${rest}${url.search}`;
 
-    const upstreamHeaders: Record<string, string> = {};
-    const range = req.headers.get("range");
-    if (range) upstreamHeaders["Range"] = range;
-    if (inst.api_key) upstreamHeaders["Authorization"] = `Bearer ${inst.api_key}`;
+    // Lazy admin client only when we actually need to mint/refresh a token.
+    const sb = (inst.auth_username && inst.auth_password)
+      ? createClient(supabaseUrl, serviceKey)
+      : null;
+
+    const buildUpstreamHeaders = async (force: boolean): Promise<Record<string, string>> => {
+      const h: Record<string, string> = {};
+      const range = req.headers.get("range");
+      if (range) h["Range"] = range;
+      const auth = await frigateAuthHeaders(sb, inst!, force);
+      return { ...h, ...auth };
+    };
+    let upstreamHeaders = await buildUpstreamHeaders(false);
 
     let upstream: Response;
     const controller = new AbortController();
@@ -111,6 +123,28 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "nvr_unreachable", message, target }, aborted ? 504 : 502);
     } finally {
       clearTimeout(timeoutId);
+    }
+
+    // On 401 with username/password auth, drop the cached JWT and retry once.
+    if (upstream.status === 401 && sb && inst.auth_username && inst.auth_password) {
+      try {
+        await sb.from("frigate_instances")
+          .update({ auth_token_cache: null, auth_token_expires_at: null })
+          .eq("id", inst.id);
+        inst.auth_token_cache = null;
+        inst.auth_token_expires_at = null;
+        upstreamHeaders = await buildUpstreamHeaders(true);
+        await upstream.body?.cancel();
+        const retryCtrl = new AbortController();
+        const retryTimer = setTimeout(() => retryCtrl.abort(), 7000);
+        try {
+          upstream = await fetch(target, {
+            method: req.method === "HEAD" ? "HEAD" : "GET",
+            headers: upstreamHeaders,
+            signal: retryCtrl.signal,
+          });
+        } finally { clearTimeout(retryTimer); }
+      } catch { /* fall through with original 401 */ }
     }
 
     const upstreamContentType = upstream.headers.get("content-type") ?? "";
