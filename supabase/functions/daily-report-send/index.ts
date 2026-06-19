@@ -240,7 +240,7 @@ async function buildEmail(cfg: Cfg, inst: Instance, providedSnapshots?: Snapshot
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const [statsAll, incidentsAll] = await Promise.all([
-    fetchFrigateStats(inst),
+    fetchFrigateStats(supabase, inst),
     fetchPositiveIncidents(supabase, inst.id, since),
   ]);
 
@@ -418,7 +418,7 @@ Deno.serve(async (req) => {
 
   const results: any[] = [];
   for (const cfg of (cfgs ?? []) as (Cfg & { organization_id: string })[]) {
-    const { data: inst } = await supabase.from("frigate_instances").select("id, name, base_url, api_key").eq("id", cfg.instance_id).maybeSingle();
+    const { data: inst } = await supabase.from("frigate_instances").select("id, name, base_url, api_key, auth_username, auth_password, auth_token_cache, auth_token_expires_at").eq("id", cfg.instance_id).maybeSingle();
     if (!inst) { results.push({ config_id: cfg.id, status: "skipped", error: "instance missing" }); continue; }
     const s = await getSettingsForOrg(cfg.organization_id);
     const fromHeader = `${s.from_name} <${s.from_email}>`;
