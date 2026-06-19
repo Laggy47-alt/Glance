@@ -55,12 +55,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "proxy_not_configured", message: "Missing backend proxy secrets." }, 500);
     }
 
-    let inst: { base_url: string; api_key: string | null; enabled: boolean } | null = null;
+    let inst: (FrigateAuthRow & { enabled: boolean }) | null = null;
     try {
       const lookupCtrl = new AbortController();
       const lookupTimer = setTimeout(() => lookupCtrl.abort(), 3000);
       const lookupRes = await fetch(
-        `${supabaseUrl}/rest/v1/frigate_instances?id=eq.${encodeURIComponent(instanceId)}&select=base_url,api_key,enabled&limit=1`,
+        `${supabaseUrl}/rest/v1/frigate_instances?id=eq.${encodeURIComponent(instanceId)}&select=id,base_url,api_key,enabled,auth_username,auth_password,auth_token_cache,auth_token_expires_at&limit=1`,
         {
           headers: {
             apikey: serviceKey,
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
         const body = await lookupRes.text().catch(() => "");
         return jsonResponse({ error: "instance_lookup_failed", status: lookupRes.status, message: body.slice(0, 300) }, 500);
       }
-      const rows = (await lookupRes.json()) as Array<{ base_url: string; api_key: string | null; enabled: boolean }>;
+      const rows = (await lookupRes.json()) as Array<FrigateAuthRow & { enabled: boolean }>;
       inst = rows[0] ?? null;
     } catch (e) {
       const aborted = (e as Error).name === "AbortError";
@@ -90,10 +90,19 @@ Deno.serve(async (req) => {
     const base = (inst.base_url as string).replace(/\/+$/, "");
     const target = `${base}/${rest}${url.search}`;
 
-    const upstreamHeaders: Record<string, string> = {};
-    const range = req.headers.get("range");
-    if (range) upstreamHeaders["Range"] = range;
-    if (inst.api_key) upstreamHeaders["Authorization"] = `Bearer ${inst.api_key}`;
+    // Lazy admin client only when we actually need to mint/refresh a token.
+    const sb = (inst.auth_username && inst.auth_password)
+      ? createClient(supabaseUrl, serviceKey)
+      : null;
+
+    const buildUpstreamHeaders = async (force: boolean): Promise<Record<string, string>> => {
+      const h: Record<string, string> = {};
+      const range = req.headers.get("range");
+      if (range) h["Range"] = range;
+      const auth = await frigateAuthHeaders(sb, inst!, force);
+      return { ...h, ...auth };
+    };
+    let upstreamHeaders = await buildUpstreamHeaders(false);
 
     let upstream: Response;
     const controller = new AbortController();
