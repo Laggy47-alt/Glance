@@ -266,15 +266,11 @@ Deno.serve(async (req) => {
     if (!due.length) { results.push({ instance: inst.name, alerted: 0 }); continue; }
 
 
-    // Skip disarmed cameras — don't email when a schedule has them off.
-    const { data: armedRows } = await supabase
-      .from("camera_armed_state")
-      .select("camera, armed")
-      .eq("instance_id", inst.id)
-      .in("camera", due.map((d) => d.camera));
-    const disarmed = new Set<string>((armedRows ?? []).filter((r: any) => r.armed === false).map((r: any) => r.camera));
-    if (disarmed.size) due = due.filter((d) => !disarmed.has(d.camera));
-    if (!due.length) { results.push({ instance: inst.name, alerted: 0, skipped_disarmed: disarmed.size }); continue; }
+    // Note: offline alerts fire regardless of armed state — clients still
+    // need to know when their cameras drop offline, even during scheduled
+    // disarm windows. Disarm only suppresses motion/event alerts.
+
+
 
     // Skip ones already alerted for this streak
     const { data: existingAlerts } = await supabase
