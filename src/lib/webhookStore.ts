@@ -454,7 +454,7 @@ class WebhookStore {
       mute_enabled: true,
       mute_start: "06:00:00",
       mute_end: "17:30:00",
-    });
+    } as never);
     if (error) {
       await supabase.from("webhook_sources").delete().eq("id", src.id).eq("organization_id", this.activeOrgId);
       throw error;
@@ -471,13 +471,13 @@ class WebhookStore {
     const authChanged = "auth_username" in patch || "auth_password" in patch;
     const credUpdate = authChanged ? { auth_token_cache: null, auth_token_expires_at: null } : {};
     const update = connectionChanged
-      ? { ...cleaned, last_error: null, last_polled_at: null }
-      : cleaned;
-    const q = supabase.from("frigate_instances").update(update).eq("id", id);
+      ? { ...cleaned, ...credUpdate, last_error: null, last_polled_at: null }
+      : { ...cleaned, ...credUpdate };
+    const q = supabase.from("frigate_instances").update(update as never).eq("id", id);
     const { data, error } = await (this.activeOrgId ? q.eq("organization_id", this.activeOrgId) : q).select("*").single();
     if (error) throw error;
     if (data) {
-      this.frigates = this.frigates.map((x) => x.id === id ? data as FrigateInstance : x);
+      this.frigates = this.frigates.map((x) => x.id === id ? (data as unknown as FrigateInstance) : x);
       this.emit();
     }
   }
