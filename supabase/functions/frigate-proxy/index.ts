@@ -125,6 +125,28 @@ Deno.serve(async (req) => {
       clearTimeout(timeoutId);
     }
 
+    // On 401 with username/password auth, drop the cached JWT and retry once.
+    if (upstream.status === 401 && sb && inst.auth_username && inst.auth_password) {
+      try {
+        await sb.from("frigate_instances")
+          .update({ auth_token_cache: null, auth_token_expires_at: null })
+          .eq("id", inst.id);
+        inst.auth_token_cache = null;
+        inst.auth_token_expires_at = null;
+        upstreamHeaders = await buildUpstreamHeaders(true);
+        await upstream.body?.cancel();
+        const retryCtrl = new AbortController();
+        const retryTimer = setTimeout(() => retryCtrl.abort(), 7000);
+        try {
+          upstream = await fetch(target, {
+            method: req.method === "HEAD" ? "HEAD" : "GET",
+            headers: upstreamHeaders,
+            signal: retryCtrl.signal,
+          });
+        } finally { clearTimeout(retryTimer); }
+      } catch { /* fall through with original 401 */ }
+    }
+
     const upstreamContentType = upstream.headers.get("content-type") ?? "";
     const isCloudflareTunnelError = upstream.status === 530 && upstreamContentType.includes("text/html");
 
