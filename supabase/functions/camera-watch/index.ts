@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: instances, error } = await supabase
     .from("frigate_instances")
-    .select("id, organization_id, name, base_url, api_key, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, master_alert_recipients, whatsapp_alert_minutes, multi_client, camera_whatsapp_recipients, nvr_unreachable_since, nvr_unreachable_alerted_since")
+    .select("id, organization_id, name, base_url, api_key, auth_username, auth_password, auth_token_cache, auth_token_expires_at, is_local, offline_alert_enabled, offline_alert_minutes, offline_alert_recipients, whatsapp_alert_enabled, whatsapp_recipients, master_alert_recipients, whatsapp_alert_minutes, multi_client, camera_whatsapp_recipients, nvr_unreachable_since, nvr_unreachable_alerted_since")
     .eq("enabled", true);
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
   const results: any[] = [];
 
   for (const inst of (instances ?? []) as Instance[]) {
-    const stats = await fetchStats(inst);
+    const stats = await fetchStats(supabase, inst);
     if (!stats) {
       // NVR unreachable — set since timestamp, fire one WhatsApp alert past threshold.
       const nowIso = new Date().toISOString();
