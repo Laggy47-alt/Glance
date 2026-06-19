@@ -6,6 +6,9 @@
 // No external imports: avoid cold-start fetches that can blow the
 // self-hosted edge-runtime wall-clock budget. We talk to PostgREST directly.
 
+import { frigateAuthHeaders, type FrigateAuthRow } from "../_shared/frigateAuth.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type, range, apikey, x-client-info, accept, cache-control, pragma",
