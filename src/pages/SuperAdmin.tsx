@@ -54,6 +54,58 @@ export default function SuperAdmin() {
   const [deleting, setDeleting] = useState(false);
   const [backingUp, setBackingUp] = useState<string | null>(null);
 
+  type BackupItem = {
+    path: string; name: string; instance_id: string; instance_name: string | null;
+    organization_id: string | null; size: number | null; created_at: string | null;
+  };
+  const [backups, setBackups] = useState<BackupItem[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
+
+  const loadBackups = async () => {
+    setBackupsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("frigate-list-backups", {
+        body: { action: "list" },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error ?? "Failed to load backups");
+      setBackups((data.items ?? []) as BackupItem[]);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load backups");
+    } finally {
+      setBackupsLoading(false);
+    }
+  };
+
+  const downloadBackup = async (item: BackupItem) => {
+    setDownloadingPath(item.path);
+    try {
+      const { data, error } = await supabase.functions.invoke("frigate-list-backups", {
+        body: { action: "sign", path: item.path },
+      });
+      if (error) throw error;
+      if (!data?.ok || !data?.signedUrl) throw new Error(data?.error ?? "Sign failed");
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = item.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Download failed");
+    } finally {
+      setDownloadingPath(null);
+    }
+  };
+
+  const formatBytes = (b: number | null) => {
+    if (b == null) return "—";
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / 1024 / 1024).toFixed(2)} MB`;
+  };
+
   const backupSiteConfig = async (site: Site) => {
     setBackingUp(site.id);
     try {
