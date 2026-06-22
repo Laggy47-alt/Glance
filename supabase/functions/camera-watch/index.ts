@@ -308,6 +308,12 @@ Deno.serve(async (req) => {
     }
 
     const minsFor = (since: string) => Math.floor((now - new Date(since).getTime()) / 60_000);
+    // For the alert body, list ALL cameras currently offline past threshold on this NVR
+    // (not just the newly-alerted ones), so recipients see the true scope.
+    const allOfflineList = due
+      .slice()
+      .sort((a, b) => new Date(a.since).getTime() - new Date(b.since).getTime())
+      .map((d) => `${d.camera} (offline ${minsFor(d.since)}m)`);
     const minsList = toAlert.map((d) => `${d.camera} (offline ${minsFor(d.since)}m)`);
     const channelResults: Record<string, any> = {};
 
@@ -319,9 +325,9 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             recipients,
             organization_id: inst.organization_id,
-            subject: `[Alert] ${toAlert.length} camera${toAlert.length === 1 ? "" : "s"} offline on ${inst.name}`,
+            subject: `[Alert] ${due.length} camera${due.length === 1 ? "" : "s"} offline on ${inst.name}`,
             note: `Cameras have been offline for at least ${inst.offline_alert_minutes} minute${inst.offline_alert_minutes === 1 ? "" : "s"}.`,
-            nvrs: [{ name: inst.name, reachable: true, offlineCameras: minsList }],
+            nvrs: [{ name: inst.name, reachable: true, offlineCameras: allOfflineList }],
           }),
         });
         if (!res.ok) throw new Error(`escalate-offline ${res.status}: ${await res.text()}`);
@@ -331,26 +337,37 @@ Deno.serve(async (req) => {
 
     if (inst.whatsapp_alert_enabled) {
       // Build recipient -> cameras buckets.
-      // Multi-client: route each camera to its per-camera recipients (fallback to NVR recipients if none).
-      // Single-client: one bucket using the NVR recipients.
-      const buckets = new Map<string, { recipients: string[]; cameras: typeof toAlert }>();
+      // Each bucket includes ALL currently-offline cameras visible to that recipient
+      // (not just the newly-alerted ones), so the message reflects total scope.
+      // Bucketing keys are still derived from `toAlert` so we only fire when something new triggers.
+      const buckets = new Map<string, { recipients: string[]; cameras: typeof due }>();
       if (inst.multi_client) {
         const map = (inst.camera_whatsapp_recipients ?? {}) as Record<string, string[]>;
+        // Determine which recipient sets need to be notified (any of their cams is newly due).
+        const triggeredKeys = new Set<string>();
         for (const d of toAlert) {
           const camRaw = (map[d.camera] ?? []).map((r) => r.trim()).filter(isWaRecipient);
           const recips = camRaw.length ? camRaw : nvrWa;
           if (!recips.length) continue;
+          triggeredKeys.add(recips.slice().sort().join("|"));
+        }
+        // Now populate each triggered bucket with ALL currently-offline cameras for those recipients.
+        for (const d of due) {
+          const camRaw = (map[d.camera] ?? []).map((r) => r.trim()).filter(isWaRecipient);
+          const recips = camRaw.length ? camRaw : nvrWa;
+          if (!recips.length) continue;
           const key = recips.slice().sort().join("|");
+          if (!triggeredKeys.has(key)) continue;
           if (!buckets.has(key)) buckets.set(key, { recipients: recips, cameras: [] });
           buckets.get(key)!.cameras.push(d);
         }
       } else if (nvrWa.length) {
-        buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: toAlert });
+        buckets.set(nvrWa.slice().sort().join("|"), { recipients: nvrWa, cameras: due });
       }
       // Master-alert recipients always get a consolidated summary across all offline cameras for this NVR.
       const masterRecips = (inst.master_alert_recipients ?? []).map((r) => String(r).trim()).filter(isWaRecipient);
-      if (masterRecips.length && toAlert.length) {
-        buckets.set("__master__", { recipients: masterRecips, cameras: toAlert });
+      if (masterRecips.length && due.length) {
+        buckets.set("__master__", { recipients: masterRecips, cameras: due });
       }
 
       const waOut: any[] = [];
