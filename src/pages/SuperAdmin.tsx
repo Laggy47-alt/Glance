@@ -122,6 +122,7 @@ export default function SuperAdmin() {
       a.click();
       a.remove();
       toast.success(`Backup saved: ${data.filename}`);
+      void loadBackups();
     } catch (e: any) {
       toast.error(e?.message ?? "Backup failed");
     } finally {
