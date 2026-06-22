@@ -85,6 +85,14 @@ async function reconcile(supabase: any, instId: string, orgId: string, online: s
   if (upserts.length) {
     await supabase.from("camera_status").upsert(upserts, { onConflict: "instance_id,camera" });
   }
+  // Prune cameras that no longer exist in Frigate (deleted/renamed). Otherwise
+  // stale offline rows keep generating alerts forever in the daily broadcast.
+  const current = new Set<string>([...online, ...offline]);
+  const stale = (existing ?? []).filter((r: any) => !current.has(r.camera)).map((r: any) => r.camera);
+  if (stale.length) {
+    await supabase.from("camera_status").delete().eq("instance_id", instId).in("camera", stale);
+    await supabase.from("camera_offline_alerts").delete().eq("instance_id", instId).in("camera", stale);
+  }
   return result;
 }
 
