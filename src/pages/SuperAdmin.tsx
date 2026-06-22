@@ -459,7 +459,72 @@ export default function SuperAdmin() {
             <SuperFeaturesPanel orgs={orgs} />
           </TabsContent>
 
+          {/* BACKUPS */}
+          <TabsContent value="backups" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {backups.length} backup{backups.length === 1 ? "" : "s"} in storage
+              </p>
+              <Button size="sm" variant="outline" onClick={() => void loadBackups()} disabled={backupsLoading} className="gap-1.5">
+                {backupsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Refresh
+              </Button>
+            </div>
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Site</TableHead>
+                    <TableHead>Organization</TableHead>
+                    <TableHead>File</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="w-20 text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {backupsLoading && backups.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                      <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading backups…
+                    </TableCell></TableRow>
+                  ) : backups.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                      No backups yet. Use the download icon on a site to create one.
+                    </TableCell></TableRow>
+                  ) : backups.map((b) => (
+                    <TableRow key={b.path}>
+                      <TableCell className="text-sm font-medium">{b.instance_name ?? <span className="text-muted-foreground italic">unknown</span>}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {b.organization_id ? (orgById[b.organization_id]?.name ?? "—") : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono">{b.name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatBytes(b.size)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {b.created_at ? new Date(b.created_at).toLocaleString() : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          title="Download"
+                          disabled={downloadingPath === b.path}
+                          onClick={() => void downloadBackup(b)}
+                        >
+                          {downloadingPath === b.path
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Download className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
+
           {/* CUSTOMIZATION */}
+
 
           <TabsContent value="customization" className="space-y-6 mt-4">
             <SuperBrandingEditor
