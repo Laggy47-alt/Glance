@@ -78,11 +78,25 @@ Deno.serve(async (req) => {
     .createSignedUrl(path, 60 * 10); // 10 minutes
   if (sErr || !signed) return json({ error: "sign failed", detail: sErr?.message }, 500);
 
+  // On self-hosted Supabase the signed URL uses the internal Docker host
+  // (e.g. http://kong:8000), which browsers can't resolve. Rewrite the host
+  // to the public origin the request came in on.
+  let publicSignedUrl = signed.signedUrl;
+  try {
+    const incoming = new URL(req.url);
+    const publicBase = Deno.env.get("PUBLIC_SUPABASE_URL") ?? `${incoming.protocol}//${incoming.host}`;
+    const signedParsed = new URL(signed.signedUrl);
+    const publicParsed = new URL(publicBase);
+    signedParsed.protocol = publicParsed.protocol;
+    signedParsed.host = publicParsed.host;
+    publicSignedUrl = signedParsed.toString();
+  } catch { /* fall back to original */ }
+
   return json({
     ok: true,
     path,
     filename,
     bytes: configText.length,
-    signedUrl: signed.signedUrl,
+    signedUrl: publicSignedUrl,
   });
 });
