@@ -1,0 +1,12 @@
+# Infrastructure Reference
+
+## Frontend
+- IP: 10.7.11.15
+- User: glance
+- App Directory: /srv/abc-glance/Glance
+
+## Backend
+- IP: 10.7.14.147
+- User: charl
+- Supabase Directory: ~/supabase-project
+- Supabase Type: Docker container
