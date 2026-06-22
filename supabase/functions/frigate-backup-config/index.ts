@@ -15,6 +15,20 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const isInternalDockerHost = (hostname: string) =>
+  hostname === "kong" || hostname === "functions" || hostname.endsWith(".docker.internal");
+
+const getPublicBackendBase = (req: Request) => {
+  const configured =
+    Deno.env.get("PUBLIC_SUPABASE_URL") ||
+    Deno.env.get("API_EXTERNAL_URL") ||
+    Deno.env.get("SUPABASE_PUBLIC_URL");
+  if (configured) return configured;
+
+  const incoming = new URL(req.url);
+  return isInternalDockerHost(incoming.hostname) ? null : `${incoming.protocol}//${incoming.host}`;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -78,18 +92,19 @@ Deno.serve(async (req) => {
     .createSignedUrl(path, 60 * 10); // 10 minutes
   if (sErr || !signed) return json({ error: "sign failed", detail: sErr?.message }, 500);
 
-  // On self-hosted Supabase the signed URL uses the internal Docker host
-  // (e.g. http://kong:8000), which browsers can't resolve. Rewrite the host
-  // to the public origin the request came in on.
+  // On self-hosted Supabase the signed URL can use an internal Docker host
+  // (e.g. http://kong:8000 or http://functions:9000), which browsers can't resolve.
+  // Rewrite to the configured/public backend origin when available.
   let publicSignedUrl = signed.signedUrl;
   try {
-    const incoming = new URL(req.url);
-    const publicBase = Deno.env.get("PUBLIC_SUPABASE_URL") ?? `${incoming.protocol}//${incoming.host}`;
-    const signedParsed = new URL(signed.signedUrl);
-    const publicParsed = new URL(publicBase);
-    signedParsed.protocol = publicParsed.protocol;
-    signedParsed.host = publicParsed.host;
-    publicSignedUrl = signedParsed.toString();
+    const publicBase = getPublicBackendBase(req);
+    if (publicBase) {
+      const signedParsed = new URL(signed.signedUrl);
+      const publicParsed = new URL(publicBase);
+      signedParsed.protocol = publicParsed.protocol;
+      signedParsed.host = publicParsed.host;
+      publicSignedUrl = signedParsed.toString();
+    }
   } catch { /* fall back to original */ }
 
   return json({
