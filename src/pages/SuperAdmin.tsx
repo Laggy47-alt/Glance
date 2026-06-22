@@ -150,6 +150,7 @@ export default function SuperAdmin() {
 
   useEffect(() => {
     void load();
+    void loadBackups();
     const ch = supabase
       .channel("super-admin")
       .on("postgres_changes", { event: "*", schema: "public", table: "super_callout_requests" }, () => void load())
