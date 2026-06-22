@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.unifi-webhook]
 verify_jwt = false
+
+[functions.frigate-backup-config]
+verify_jwt = false
