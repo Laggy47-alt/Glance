@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2, Download } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2, Download, Archive, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlatformBranding } from "@/hooks/usePlatformBranding";
@@ -54,6 +54,58 @@ export default function SuperAdmin() {
   const [deleting, setDeleting] = useState(false);
   const [backingUp, setBackingUp] = useState<string | null>(null);
 
+  type BackupItem = {
+    path: string; name: string; instance_id: string; instance_name: string | null;
+    organization_id: string | null; size: number | null; created_at: string | null;
+  };
+  const [backups, setBackups] = useState<BackupItem[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
+
+  const loadBackups = async () => {
+    setBackupsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("frigate-list-backups", {
+        body: { action: "list" },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error ?? "Failed to load backups");
+      setBackups((data.items ?? []) as BackupItem[]);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load backups");
+    } finally {
+      setBackupsLoading(false);
+    }
+  };
+
+  const downloadBackup = async (item: BackupItem) => {
+    setDownloadingPath(item.path);
+    try {
+      const { data, error } = await supabase.functions.invoke("frigate-list-backups", {
+        body: { action: "sign", path: item.path },
+      });
+      if (error) throw error;
+      if (!data?.ok || !data?.signedUrl) throw new Error(data?.error ?? "Sign failed");
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = item.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Download failed");
+    } finally {
+      setDownloadingPath(null);
+    }
+  };
+
+  const formatBytes = (b: number | null) => {
+    if (b == null) return "—";
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / 1024 / 1024).toFixed(2)} MB`;
+  };
+
   const backupSiteConfig = async (site: Site) => {
     setBackingUp(site.id);
     try {
@@ -70,6 +122,7 @@ export default function SuperAdmin() {
       a.click();
       a.remove();
       toast.success(`Backup saved: ${data.filename}`);
+      void loadBackups();
     } catch (e: any) {
       toast.error(e?.message ?? "Backup failed");
     } finally {
@@ -98,6 +151,7 @@ export default function SuperAdmin() {
 
   useEffect(() => {
     void load();
+    void loadBackups();
     const ch = supabase
       .channel("super-admin")
       .on("postgres_changes", { event: "*", schema: "public", table: "super_callout_requests" }, () => void load())
@@ -225,6 +279,7 @@ export default function SuperAdmin() {
               {openCallouts.length > 0 && <Badge variant="secondary" className="ml-1">{openCallouts.length}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="features" className="gap-1.5"><ToggleLeft className="h-4 w-4" /> Features</TabsTrigger>
+            <TabsTrigger value="backups" className="gap-1.5"><Archive className="h-4 w-4" /> Backups</TabsTrigger>
             <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
 
           </TabsList>
@@ -406,7 +461,72 @@ export default function SuperAdmin() {
             <SuperFeaturesPanel orgs={orgs} />
           </TabsContent>
 
+          {/* BACKUPS */}
+          <TabsContent value="backups" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {backups.length} backup{backups.length === 1 ? "" : "s"} in storage
+              </p>
+              <Button size="sm" variant="outline" onClick={() => void loadBackups()} disabled={backupsLoading} className="gap-1.5">
+                {backupsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Refresh
+              </Button>
+            </div>
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Site</TableHead>
+                    <TableHead>Organization</TableHead>
+                    <TableHead>File</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="w-20 text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {backupsLoading && backups.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                      <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading backups…
+                    </TableCell></TableRow>
+                  ) : backups.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                      No backups yet. Use the download icon on a site to create one.
+                    </TableCell></TableRow>
+                  ) : backups.map((b) => (
+                    <TableRow key={b.path}>
+                      <TableCell className="text-sm font-medium">{b.instance_name ?? <span className="text-muted-foreground italic">unknown</span>}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {b.organization_id ? (orgById[b.organization_id]?.name ?? "—") : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono">{b.name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatBytes(b.size)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {b.created_at ? new Date(b.created_at).toLocaleString() : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          title="Download"
+                          disabled={downloadingPath === b.path}
+                          onClick={() => void downloadBackup(b)}
+                        >
+                          {downloadingPath === b.path
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Download className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          </TabsContent>
+
           {/* CUSTOMIZATION */}
+
 
           <TabsContent value="customization" className="space-y-6 mt-4">
             <SuperBrandingEditor
