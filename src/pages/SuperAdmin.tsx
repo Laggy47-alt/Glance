@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2 } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlatformBranding } from "@/hooks/usePlatformBranding";
@@ -52,6 +52,30 @@ export default function SuperAdmin() {
   const [deleteOrg, setDeleteOrg] = useState<Org | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [backingUp, setBackingUp] = useState<string | null>(null);
+
+  const backupSiteConfig = async (site: Site) => {
+    setBackingUp(site.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("frigate-backup-config", {
+        body: { instance_id: site.id },
+      });
+      if (error) throw error;
+      if (!data?.ok || !data?.signedUrl) throw new Error(data?.error ?? "Backup failed");
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.download = data.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success(`Backup saved: ${data.filename}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Backup failed");
+    } finally {
+      setBackingUp(null);
+    }
+  };
 
   const orgById = useMemo(() => Object.fromEntries(orgs.map((o) => [o.id, o])), [orgs]);
 
@@ -243,19 +267,35 @@ export default function SuperAdmin() {
                         ) : (
                           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                             {orgSites.map((s) => (
-                              <button
+                              <div
                                 key={s.id}
-                                onClick={() => enterSite(s)}
-                                className="text-left rounded-md border border-border bg-card hover:bg-accent/40 transition-colors p-3 flex items-center gap-3"
+                                className="text-left rounded-md border border-border bg-card hover:bg-accent/40 transition-colors p-3 flex items-center gap-2"
                               >
-                                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-sm font-medium text-foreground truncate">{s.name}</div>
-                                  <div className="text-[11px] text-muted-foreground truncate">{s.base_url}</div>
-                                </div>
-                                {!s.enabled && <Badge variant="secondary" className="text-[9px]">OFF</Badge>}
-                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                              </button>
+                                <button
+                                  onClick={() => enterSite(s)}
+                                  className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                                >
+                                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-foreground truncate">{s.name}</div>
+                                    <div className="text-[11px] text-muted-foreground truncate">{s.base_url}</div>
+                                  </div>
+                                  {!s.enabled && <Badge variant="secondary" className="text-[9px]">OFF</Badge>}
+                                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Backup config.yml"
+                                  disabled={backingUp === s.id}
+                                  onClick={(e) => { e.stopPropagation(); void backupSiteConfig(s); }}
+                                >
+                                  {backingUp === s.id
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <Download className="h-4 w-4" />}
+                                </Button>
+                              </div>
                             ))}
                           </div>
                         )}
