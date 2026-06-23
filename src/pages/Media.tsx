@@ -208,11 +208,33 @@ const Media = () => {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-1 ml-auto rounded-md border border-border bg-secondary/50 p-1">
+          <button
+            onClick={() => setGroupMode("date")}
+            className={cn(
+              "px-2 py-1 text-[11px] font-medium rounded transition-colors",
+              groupMode === "date" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+            title="Group by date"
+          >
+            By date
+          </button>
+          <button
+            onClick={() => setGroupMode("date-camera")}
+            className={cn(
+              "px-2 py-1 text-[11px] font-medium rounded transition-colors",
+              groupMode === "date-camera" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+            title="Group by date and camera"
+          >
+            Date + camera
+          </button>
+        </div>
         <Button
           size="sm"
           variant={onlyTagged ? "default" : "outline"}
           onClick={() => setOnlyTagged((v) => !v)}
-          className="gap-1.5 h-8 ml-auto"
+          className="gap-1.5 h-8"
         >
           <TagIcon className="h-3.5 w-3.5" /> Tagged only
         </Button>
@@ -223,6 +245,75 @@ const Media = () => {
           className="bg-secondary border-border max-w-xs"
         />
       </div>
+
+      {items.length === 0 ? (
+        <Card className="bg-gradient-card border-border shadow-card p-12 text-center">
+          <ImageOff className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+          <p className="text-sm text-foreground font-medium">No media yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Snapshots and clips arriving via webhooks will appear here.</p>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {groups.map((g) => {
+            const dateCollapsed = collapsed[`d:${g.dateKey}`];
+            return (
+              <section key={g.dateKey} className="space-y-3">
+                <button
+                  onClick={() => toggle(`d:${g.dateKey}`)}
+                  className="w-full flex items-center gap-2 sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border py-2 text-left"
+                >
+                  {dateCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  <h2 className="text-sm font-semibold text-foreground">{formatDateLabel(g.dateKey)}</h2>
+                  <span className="text-[11px] text-muted-foreground tabular-nums">{g.dateKey}</span>
+                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] tabular-nums">{g.total}</Badge>
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    {g.cameras.length} {g.cameras.length === 1 ? "camera" : "cameras"}
+                  </span>
+                </button>
+
+                {!dateCollapsed && (
+                  groupMode === "date" ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                      {g.cameras.flatMap((c) => c.items).map(renderTile)}
+                    </div>
+                  ) : (
+                    <div className="space-y-4 pl-1">
+                      {g.cameras.map((c) => {
+                        const ck = `dc:${g.dateKey}:${c.camera}`;
+                        const camCollapsed = collapsed[ck];
+                        return (
+                          <div key={ck} className="space-y-2">
+                            <button
+                              onClick={() => toggle(ck)}
+                              className="w-full flex items-center gap-2 text-left"
+                            >
+                              {camCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                              <Camera className="h-3.5 w-3.5 text-muted-foreground" />
+                              <h3 className="text-xs font-medium text-foreground capitalize">{c.camera}</h3>
+                              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums">{c.items.length}</Badge>
+                            </button>
+                            {!camCollapsed && (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                                {c.items.map(renderTile)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
+      <MediaLightbox item={selected} onClose={() => setSelected(null)} />
+    </DashboardLayout>
+  );
+};
+
 
       {items.length === 0 ? (
         <Card className="bg-gradient-card border-border shadow-card p-12 text-center">
