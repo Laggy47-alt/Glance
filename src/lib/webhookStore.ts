@@ -338,7 +338,7 @@ class WebhookStore {
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, (p) => {
         const row = (p.new ?? p.old) as MediaItem;
         if (!this.matchesOrg(row)) return;
-        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 200);
+        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 5000);
         else if (p.eventType === "UPDATE") this.media = this.media.map((x) => x.id === (p.new as MediaItem).id ? (p.new as MediaItem) : x);
         else if (p.eventType === "DELETE") this.media = this.media.filter((x) => x.id !== (p.old as MediaItem).id);
         this.emit();
