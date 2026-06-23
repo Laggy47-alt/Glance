@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
 
   const { data: inst, error: instErr } = await supabase
     .from("hikvision_instances")
-    .select("id, organization_id, webhook_secret, enabled")
+    .select("id, organization_id, webhook_secret, enabled, source_id, name, color")
     .eq("id", instanceId)
     .maybeSingle();
   if (instErr || !inst) {
@@ -175,6 +175,50 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "insert failed", detail: insErr.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  // Mirror into webhook_events + media_items so the Live Wall, Media page,
+  // auto-read rules, WhatsApp alerts and daily reports surface Hikvision
+  // alerts via the same pipelines that already drive Frigate.
+  if (inst.source_id) {
+    const label = targetType ?? eventType;
+    await supabase.from("webhook_events").insert({
+      organization_id: inst.organization_id,
+      source_id: inst.source_id,
+      topic: eventType,
+      payload: {
+        event: eventType,
+        channel: channelId,
+        camera: finalCameraName,
+        target_type: targetType,
+        detection_targets: detectionTargets,
+        event_time: eventTime,
+        instance_id: inst.id,
+      },
+      payload_text: null,
+      headers: {},
+      camera: finalCameraName,
+      label,
+      kind: "hikvision",
+      ts: eventTime,
+    });
+
+    if (thumbnailPath) {
+      const { data: pub } = supabase.storage.from("camera-snapshots").getPublicUrl(thumbnailPath);
+      if (pub?.publicUrl) {
+        await supabase.from("media_items").insert({
+          organization_id: inst.organization_id,
+          source_id: inst.source_id,
+          event_id: null,
+          kind: "snapshot",
+          url: pub.publicUrl,
+          camera: finalCameraName,
+          topic: eventType,
+          ts: eventTime,
+          instance_id: inst.id,
+        });
+      }
+    }
   }
 
   // Bump heartbeat for the instance & mark this channel online.

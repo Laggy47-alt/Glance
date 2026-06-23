@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
+import { HikvisionSection } from "@/components/HikvisionSection";
 
 
 
@@ -145,8 +146,8 @@ const Frigate = () => {
   return (
     <DashboardLayout
 
-      title="Frigate NVR"
-      subtitle="Connect multiple Frigate instances — events stream in via push and polling"
+      title="NVRs"
+      subtitle="Frigate + Hikvision AcuSense — events stream into the same Live Wall"
       actions={
         <div className="flex items-center gap-2">
           {store.frigates.length > 0 && (
@@ -266,6 +267,24 @@ const Frigate = () => {
       }
     >
       <LocalhostHelp />
+
+      <div className="mt-4 mb-6">
+        <HikvisionSection />
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-7 w-7 rounded-md grid place-items-center bg-primary/15 text-primary">
+            <Server className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Frigate NVRs</h2>
+            <p className="text-[11px] text-muted-foreground">JSON webhooks + polling for events, reviews and snapshots.</p>
+          </div>
+        </div>
+      </div>
+
+
 
       {store.frigates.length === 0 ? (
         <Card className="bg-gradient-card border-border shadow-card p-12 text-center mt-4">

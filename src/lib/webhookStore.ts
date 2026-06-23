@@ -89,6 +89,43 @@ export type FrigateInstance = {
   created_at: string;
 };
 
+export type HikvisionInstance = {
+  id: string;
+  organization_id?: string | null;
+  source_id: string | null;
+  name: string;
+  base_url: string;
+  auth_username: string | null;
+  auth_password: string | null;
+  verify_tls: boolean;
+  color: string;
+  enabled: boolean;
+  poll_enabled: boolean;
+  is_local: boolean;
+  webhook_secret: string;
+  last_polled_at: string | null;
+  last_seen_at: string | null;
+  last_event_ts: string | null;
+  last_error: string | null;
+  nvr_unreachable_since: string | null;
+  offline_alert_enabled: boolean;
+  offline_alert_minutes: number;
+  offline_alert_recipients: string[];
+  created_at: string;
+};
+
+export type HikvisionChannel = {
+  id: string;
+  organization_id?: string | null;
+  instance_id: string;
+  channel_id: string;
+  name: string;
+  enabled: boolean;
+  last_event_ts: string | null;
+  last_snapshot_path: string | null;
+  created_at: string;
+};
+
 /**
  * Returns true if the NVR's alert mute window covers `now` (local time).
  * Supports overnight windows (e.g. 22:00 → 06:00).
@@ -146,6 +183,8 @@ class WebhookStore {
   rules: AutoReadRule[] = [];
   media: MediaItem[] = [];
   frigates: FrigateInstance[] = [];
+  hikvisions: HikvisionInstance[] = [];
+  hikvisionChannels: HikvisionChannel[] = [];
   loaded = false;
   error: string | null = null;
   activeOrgId: string | null = null;
@@ -304,18 +343,22 @@ class WebhookStore {
 
   async refreshAll() {
     try {
-      const [s, e, r, m, f] = await Promise.all([
+      const [s, e, r, m, f, hi, hc] = await Promise.all([
         this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
         this.fetchPaged<WebhookEvent>("webhook_events", "ts", false, 10000),
         this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
         this.fetchPaged<MediaItem>("media_items", "ts", false, 10000),
         this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("hikvision_instances").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("hikvision_channels").select("*")).order("channel_id", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = e;
       this.rules = (r.data ?? []) as AutoReadRule[];
       this.media = m;
       this.frigates = (f.data ?? []) as FrigateInstance[];
+      this.hikvisions = (hi.data ?? []) as unknown as HikvisionInstance[];
+      this.hikvisionChannels = (hc.data ?? []) as unknown as HikvisionChannel[];
       this.loaded = true;
       this.error = null;
     } catch (err) {
@@ -368,6 +411,22 @@ class WebhookStore {
         if (p.eventType === "INSERT") this.frigates = [...this.frigates, p.new as FrigateInstance];
         else if (p.eventType === "UPDATE") this.frigates = this.frigates.map((x) => x.id === (p.new as FrigateInstance).id ? (p.new as FrigateInstance) : x);
         else if (p.eventType === "DELETE") this.frigates = this.frigates.filter((x) => x.id !== (p.old as FrigateInstance).id);
+        this.emit();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "hikvision_instances" }, (p) => {
+        const row = (p.new ?? p.old) as HikvisionInstance;
+        if (!this.matchesOrg(row)) return;
+        if (p.eventType === "INSERT") this.hikvisions = [...this.hikvisions, p.new as unknown as HikvisionInstance];
+        else if (p.eventType === "UPDATE") this.hikvisions = this.hikvisions.map((x) => x.id === (p.new as { id: string }).id ? (p.new as unknown as HikvisionInstance) : x);
+        else if (p.eventType === "DELETE") this.hikvisions = this.hikvisions.filter((x) => x.id !== (p.old as { id: string }).id);
+        this.emit();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "hikvision_channels" }, (p) => {
+        const row = (p.new ?? p.old) as HikvisionChannel;
+        if (!this.matchesOrg(row)) return;
+        if (p.eventType === "INSERT") this.hikvisionChannels = [...this.hikvisionChannels, p.new as unknown as HikvisionChannel];
+        else if (p.eventType === "UPDATE") this.hikvisionChannels = this.hikvisionChannels.map((x) => x.id === (p.new as { id: string }).id ? (p.new as unknown as HikvisionChannel) : x);
+        else if (p.eventType === "DELETE") this.hikvisionChannels = this.hikvisionChannels.filter((x) => x.id !== (p.old as { id: string }).id);
         this.emit();
       })
       .subscribe();
@@ -524,6 +583,70 @@ class WebhookStore {
     if (error) throw error;
     return data;
   }
+
+  // ─── Hikvision instances ───
+  async createHikvision(input: {
+    name: string;
+    base_url: string;
+    auth_username?: string | null;
+    auth_password?: string | null;
+    verify_tls?: boolean;
+    color?: string;
+  }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
+    const { error } = await supabase.from("hikvision_instances").insert({
+      organization_id: this.activeOrgId,
+      name: input.name,
+      base_url: input.base_url.replace(/\/+$/, ""),
+      auth_username: input.auth_username || null,
+      auth_password: input.auth_password || null,
+      verify_tls: input.verify_tls ?? true,
+      color: input.color ?? "#ef4444",
+    } as never);
+    if (error) throw error;
+  }
+  async updateHikvision(id: string, patch: Partial<Pick<HikvisionInstance,
+    "name" | "base_url" | "auth_username" | "auth_password" | "verify_tls" | "color" |
+    "enabled" | "poll_enabled" | "offline_alert_enabled" | "offline_alert_minutes" | "offline_alert_recipients"
+  >>) {
+    const cleaned = {
+      ...patch,
+      ...(patch.base_url !== undefined ? { base_url: patch.base_url.replace(/\/+$/, "") } : {}),
+    };
+    const q = supabase.from("hikvision_instances").update(cleaned as never).eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) throw error;
+  }
+  async deleteHikvision(id: string) {
+    const inst = this.hikvisions.find((h) => h.id === id);
+    this.hikvisions = this.hikvisions.filter((h) => h.id !== id);
+    if (inst?.source_id) this.sources = this.sources.filter((s) => s.id !== inst.source_id);
+    this.emit();
+    const q = supabase.from("hikvision_instances").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) { await this.refreshAll(); throw error; }
+    if (inst?.source_id) {
+      const srcQ = supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+      await (this.activeOrgId ? srcQ.eq("organization_id", this.activeOrgId) : srcQ);
+    }
+  }
+  async discoverHikvisionChannels(id: string) {
+    const { data, error } = await supabase.functions.invoke("hikvision-discover", {
+      method: "POST",
+      body: { instance_id: id },
+    });
+    if (error) throw error;
+    await this.refreshAll();
+    return data;
+  }
+  async pollHikvisionNow(id?: string) {
+    const { data, error } = await supabase.functions.invoke(
+      id ? `hikvision-watch?instance_id=${id}` : "hikvision-watch",
+      { method: "POST" },
+    );
+    if (error) throw error;
+    return data;
+  }
 }
 
 export const webhookStore = new WebhookStore();
@@ -564,4 +687,21 @@ export function frigateUrl(instance: { id: string; base_url: string; is_local: b
 export function resolveMediaUrl(url: string) {
   if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
   return frigateProxyUrl(url);
+}
+
+/** Public URL the Hikvision NVR posts ISAPI events to (HTTP Host Notification). */
+export function hikvisionIngestUrl(instanceId: string, secret: string) {
+  return `${supabaseBaseUrl()}/functions/v1/hikvision-ingest/${instanceId}/${secret}`;
+}
+
+/** URL for a live snapshot through the auth-bearing Hikvision proxy. */
+export function hikvisionProxyUrl(instanceId: string, path: string) {
+  const p = path.startsWith("/") ? path : "/" + path;
+  return `${supabaseBaseUrl()}/functions/v1/hikvision-proxy/${instanceId}${p}`;
+}
+
+/** Public URL of a snapshot stored in the camera-snapshots bucket. */
+export function hikvisionSnapshotPublicUrl(path: string) {
+  if (!path) return null;
+  return `${supabaseBaseUrl()}/storage/v1/object/public/camera-snapshots/${path}`;
 }

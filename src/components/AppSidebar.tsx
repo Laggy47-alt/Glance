@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const adminItems = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/wall", label: "Live Wall", icon: Bell },
-  { to: "/frigate", label: "Frigate NVR", icon: Server },
+  { to: "/frigate", label: "NVRs", icon: Server },
   { to: "/nvr-status", label: "NVR Status", icon: HeartPulse },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
   { to: "/media", label: "Media", icon: Film },
@@ -44,7 +44,10 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
-  const sites = [...store.frigates].sort((a, b) =>
+  const sites = [
+    ...store.frigates.map((f) => ({ id: f.id, name: f.name, color: f.color, enabled: f.enabled, base_url: f.base_url, kind: "frigate" as const })),
+    ...store.hikvisions.map((h) => ({ id: h.id, name: h.name, color: h.color, enabled: h.enabled, base_url: h.base_url, kind: "hikvision" as const })),
+  ].sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
   );
   const [sitesOpen, setSitesOpen] = useState(true);
