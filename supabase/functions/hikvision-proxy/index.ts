@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   const authed = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: auth } },
   });
-  const { data: claims, error: claimsErr } = await authed.auth.getClaims(auth.replace("Bearer ", ""));
+  const { data: userData, error: claimsErr } = await authed.auth.getUser();
   if (claimsErr || !claims?.claims) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
