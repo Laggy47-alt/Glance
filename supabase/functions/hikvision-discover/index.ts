@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     .eq("id", body.instance_id).maybeSingle();
   if (!inst) return new Response(JSON.stringify({ error: "instance not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  const userId = (claims.claims as any).sub;
+  const userId = userData.user.id;
   const { data: member } = await admin.from("organization_members")
     .select("user_id, role").eq("user_id", userId).eq("organization_id", inst.organization_id).maybeSingle();
   if (!member) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
