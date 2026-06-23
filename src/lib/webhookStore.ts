@@ -413,6 +413,22 @@ class WebhookStore {
         else if (p.eventType === "DELETE") this.frigates = this.frigates.filter((x) => x.id !== (p.old as FrigateInstance).id);
         this.emit();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "hikvision_instances" }, (p) => {
+        const row = (p.new ?? p.old) as HikvisionInstance;
+        if (!this.matchesOrg(row)) return;
+        if (p.eventType === "INSERT") this.hikvisions = [...this.hikvisions, p.new as unknown as HikvisionInstance];
+        else if (p.eventType === "UPDATE") this.hikvisions = this.hikvisions.map((x) => x.id === (p.new as { id: string }).id ? (p.new as unknown as HikvisionInstance) : x);
+        else if (p.eventType === "DELETE") this.hikvisions = this.hikvisions.filter((x) => x.id !== (p.old as { id: string }).id);
+        this.emit();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "hikvision_channels" }, (p) => {
+        const row = (p.new ?? p.old) as HikvisionChannel;
+        if (!this.matchesOrg(row)) return;
+        if (p.eventType === "INSERT") this.hikvisionChannels = [...this.hikvisionChannels, p.new as unknown as HikvisionChannel];
+        else if (p.eventType === "UPDATE") this.hikvisionChannels = this.hikvisionChannels.map((x) => x.id === (p.new as { id: string }).id ? (p.new as unknown as HikvisionChannel) : x);
+        else if (p.eventType === "DELETE") this.hikvisionChannels = this.hikvisionChannels.filter((x) => x.id !== (p.old as { id: string }).id);
+        this.emit();
+      })
       .subscribe();
     this.channels.push(ch);
   }
