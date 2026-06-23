@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
 
   const { data: inst, error: instErr } = await supabase
     .from("hikvision_instances")
-    .select("id, organization_id, webhook_secret, enabled")
+    .select("id, organization_id, webhook_secret, enabled, source_id, name, color")
     .eq("id", instanceId)
     .maybeSingle();
   if (instErr || !inst) {
