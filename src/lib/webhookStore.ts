@@ -266,7 +266,7 @@ class WebhookStore {
         const existing = new Set(this.media.map((m) => m.id));
         const fresh = (md.data as MediaItem[]).filter((m) => !existing.has(m.id));
         if (fresh.length) {
-          this.media = [...fresh, ...this.media].slice(0, 200);
+          this.media = [...fresh, ...this.media].slice(0, 5000);
           changed = true;
         }
         for (const m of md.data as MediaItem[]) {
