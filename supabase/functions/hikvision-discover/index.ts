@@ -90,6 +90,17 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Discovery succeeded → mark NVR reachable so the UI leaves "Pending first contact".
+  if (xml || deviceInfo) {
+    await admin.from("hikvision_instances")
+      .update({
+        last_seen_at: new Date().toISOString(),
+        nvr_unreachable_since: null,
+        last_error: null,
+      })
+      .eq("id", inst.id);
+  }
+
   return new Response(JSON.stringify({ ok: true, deviceInfo, channels }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
