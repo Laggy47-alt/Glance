@@ -131,6 +131,18 @@ export function HikvisionSection() {
     finally { setPolling((s) => ({ ...s, [id]: false })); }
   };
 
+  const [registering, setRegistering] = useState<Record<string, boolean>>({});
+  const registerListener = async (h: HikvisionInstance) => {
+    setRegistering((s) => ({ ...s, [h.id]: true }));
+    try {
+      const url = hikvisionIngestUrl(h.id, h.webhook_secret);
+      const r = await store.registerHikvisionListener(h.id, url);
+      toast.success(`HTTP listener registered on NVR (slot ${r?.host_id ?? 1})`);
+    } catch (e) { toast.error(`Register failed: ${(e as Error).message}`); }
+    finally { setRegistering((s) => ({ ...s, [h.id]: false })); }
+  };
+
+
   const copy = (s: string) => { navigator.clipboard.writeText(s); toast.success("Copied"); };
 
   return (
