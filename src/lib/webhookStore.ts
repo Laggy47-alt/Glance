@@ -343,18 +343,22 @@ class WebhookStore {
 
   async refreshAll() {
     try {
-      const [s, e, r, m, f] = await Promise.all([
+      const [s, e, r, m, f, hi, hc] = await Promise.all([
         this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
         this.fetchPaged<WebhookEvent>("webhook_events", "ts", false, 10000),
         this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
         this.fetchPaged<MediaItem>("media_items", "ts", false, 10000),
         this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("hikvision_instances").select("*")).order("created_at", { ascending: true }),
+        this.scoped(supabase.from("hikvision_channels").select("*")).order("channel_id", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = e;
       this.rules = (r.data ?? []) as AutoReadRule[];
       this.media = m;
       this.frigates = (f.data ?? []) as FrigateInstance[];
+      this.hikvisions = (hi.data ?? []) as unknown as HikvisionInstance[];
+      this.hikvisionChannels = (hc.data ?? []) as unknown as HikvisionChannel[];
       this.loaded = true;
       this.error = null;
     } catch (err) {
