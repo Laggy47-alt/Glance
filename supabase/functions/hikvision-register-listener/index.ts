@@ -57,37 +57,52 @@ Deno.serve(async (req) => {
   const port = parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80);
   const pathAndQuery = parsed.pathname + (parsed.search || "");
 
-  const jsonPayload = JSON.stringify({
-    HttpHostNotification: {
-      id: hostId,
-      url: pathAndQuery,
-      protocolType: isHttps ? "HTTPS" : "HTTP",
-      parameterFormatType: "XML",
-      addressingFormatType: "hostname",
-      hostName: parsed.hostname,
-      portNo: port,
-      userName: "",
-      httpAuthenticationMethod: "none",
-    },
-  });
+  const hostConfig = {
+    id: String(hostId),
+    url: pathAndQuery || "/",
+    protocolType: isHttps ? "HTTPS" : "HTTP",
+    parameterFormatType: "XML",
+    addressingFormatType: "hostname",
+    hostName: parsed.hostname,
+    portNo: String(port),
+    httpAuthenticationMethod: "none",
+  };
 
-  const xmlPayload =
+  const jsonPayloads = {
+    list: JSON.stringify({
+      HttpHostNotificationList: {
+        "@version": "2.0",
+        "@xmlns": "http://www.isapi.org/ver20/XMLSchema",
+        HttpHostNotification: {
+          ...hostConfig,
+          Extensions: { "@xmlns": "urn:selfextension:psiaext-ver10-xsd", intervalBetweenEvents: "0" },
+        },
+      },
+    }),
+    single: JSON.stringify({ HttpHostNotification: hostConfig }),
+  };
+
+  const xmlHost =
     `<HttpHostNotification version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">` +
-    `<id>${hostId}</id>` +
-    `<url>${xmlEscape(pathAndQuery)}</url>` +
-    `<protocolType>${isHttps ? "HTTPS" : "HTTP"}</protocolType>` +
-    `<parameterFormatType>XML</parameterFormatType>` +
-    `<addressingFormatType>hostname</addressingFormatType>` +
-    `<hostName>${xmlEscape(parsed.hostname)}</hostName>` +
-    `<portNo>${port}</portNo>` +
-    `<userName></userName>` +
-    `<httpAuthenticationMethod>none</httpAuthenticationMethod>` +
+    `<id>${hostConfig.id}</id>` +
+    `<url>${xmlEscape(hostConfig.url)}</url>` +
+    `<protocolType>${hostConfig.protocolType}</protocolType>` +
+    `<parameterFormatType>${hostConfig.parameterFormatType}</parameterFormatType>` +
+    `<addressingFormatType>${hostConfig.addressingFormatType}</addressingFormatType>` +
+    `<hostName>${xmlEscape(hostConfig.hostName)}</hostName>` +
+    `<portNo>${hostConfig.portNo}</portNo>` +
+    `<httpAuthenticationMethod>${hostConfig.httpAuthenticationMethod}</httpAuthenticationMethod>` +
+    `<Extensions xmlns="urn:selfextension:psiaext-ver10-xsd"><intervalBetweenEvents>0</intervalBetweenEvents></Extensions>` +
     `</HttpHostNotification>`;
+  const xmlPayloads = {
+    list: `<HttpHostNotificationList version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">${xmlHost}</HttpHostNotificationList>`,
+    single: xmlHost,
+  };
 
-  async function tryPut(payload: string, contentType: "application/json" | "application/xml") {
+  async function tryPut(path: string, payload: string, contentType: "application/json" | "application/xml") {
     const r = await hikvisionFetch(
       inst,
-      `/ISAPI/Event/notification/httpHosts/${hostId}${contentType === "application/json" ? "?format=json" : ""}`,
+      path,
       { method: "PUT", headers: { "Content-Type": contentType }, body: payload },
       10000,
     );
@@ -95,29 +110,50 @@ Deno.serve(async (req) => {
     return { status: r.status, text };
   }
 
+  const attempts = [
+    {
+      label: "xml-list",
+      path: "/ISAPI/Event/notification/httpHosts",
+      contentType: "application/xml" as const,
+      payload: xmlPayloads.list,
+    },
+    {
+      label: "json-list",
+      path: "/ISAPI/Event/notification/httpHosts?format=json",
+      contentType: "application/json" as const,
+      payload: jsonPayloads.list,
+    },
+    {
+      label: "xml-slot",
+      path: `/ISAPI/Event/notification/httpHosts/${hostId}`,
+      contentType: "application/xml" as const,
+      payload: xmlPayloads.single,
+    },
+    {
+      label: "json-slot",
+      path: `/ISAPI/Event/notification/httpHosts/${hostId}?format=json`,
+      contentType: "application/json" as const,
+      payload: jsonPayloads.single,
+    },
+  ];
+
   let status = 0;
   let respText = "";
-  let lastErr = "";
+  const failures: string[] = [];
   try {
-    // Most NVRs accept JSON cleanly and avoid XML parser quirks.
-    const jsonRes = await tryPut(jsonPayload, "application/json");
-    status = jsonRes.status;
-    respText = jsonRes.text;
-    if (status >= 400) {
-      lastErr = respText;
-      const xmlRes = await tryPut(xmlPayload, "application/xml");
-      status = xmlRes.status;
-      respText = xmlRes.text;
+    for (const attempt of attempts) {
+      const res = await tryPut(attempt.path, attempt.payload, attempt.contentType);
+      status = res.status;
+      respText = res.text;
+      const ok = status >= 200 && status < 300 && !/statusCode>\s*[^1<]/.test(respText);
+      if (ok) {
+        return json({ ok: true, host_id: hostId, ingest_url: body.ingest_url, mode: attempt.label, response: respText.slice(0, 500) });
+      }
+      failures.push(`${attempt.label}: HTTP ${status} ${respText.replace(/\s+/g, " ").slice(0, 240)}`);
     }
   } catch (e) {
     return json({ error: `NVR unreachable: ${(e as Error).message}` }, 502);
   }
 
-  // Hikvision returns 200 + a <ResponseStatus> XML; statusCode "1" is success.
-  const ok = status >= 200 && status < 300 && !/statusCode>\s*[^1<]/.test(respText);
-  if (!ok) {
-    return json({ error: `NVR rejected config (HTTP ${status})`, response: respText.slice(0, 500) }, 400);
-  }
-
-  return json({ ok: true, host_id: hostId, ingest_url: body.ingest_url, response: respText.slice(0, 500) });
+  return json({ error: `NVR rejected config (HTTP ${status})`, response: failures.join(" | ").slice(0, 900) }, 400);
 });
