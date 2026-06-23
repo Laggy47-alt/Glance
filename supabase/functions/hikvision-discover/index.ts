@@ -27,8 +27,8 @@ Deno.serve(async (req) => {
   const authed = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: auth } },
   });
-  const { data: claims, error: cErr } = await authed.auth.getClaims(auth.replace("Bearer ", ""));
-  if (cErr || !claims?.claims) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const { data: userData, error: cErr } = await authed.auth.getUser();
+  if (cErr || !userData?.user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   let body: { instance_id?: string };
   try { body = await req.json(); } catch { body = {}; }
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     .eq("id", body.instance_id).maybeSingle();
   if (!inst) return new Response(JSON.stringify({ error: "instance not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  const userId = (claims.claims as any).sub;
+  const userId = userData.user.id;
   const { data: member } = await admin.from("organization_members")
     .select("user_id, role").eq("user_id", userId).eq("organization_id", inst.organization_id).maybeSingle();
   if (!member) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });

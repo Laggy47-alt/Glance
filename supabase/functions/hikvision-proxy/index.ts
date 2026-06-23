@@ -23,8 +23,8 @@ Deno.serve(async (req) => {
   const authed = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: auth } },
   });
-  const { data: claims, error: claimsErr } = await authed.auth.getClaims(auth.replace("Bearer ", ""));
-  if (claimsErr || !claims?.claims) {
+  const { data: userData, error: claimsErr } = await authed.auth.getUser();
+  if (claimsErr || !userData?.user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   }
 
   // Membership check.
-  const userId = (claims.claims as any).sub as string;
+  const userId = userData.user.id;
   const { data: member } = await admin.from("organization_members")
     .select("user_id").eq("user_id", userId).eq("organization_id", inst.organization_id).maybeSingle();
   if (!member) {
