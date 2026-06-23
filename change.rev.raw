@@ -1,0 +1,1286 @@
+c50d4b1|2025-01-01|template: vite_react_shadcn_ts_2026-04-20
+37219ab|2026-04-22|Work in progress
+1c32144|2026-04-22|Defined UI design & scope
+107f701|2026-04-22|Changes
+9712b46|2026-04-22|Changes
+462938d|2026-04-22|Changes
+642977a|2026-04-22|Changes
+83d6306|2026-04-22|Added MQTT dashboard with UniFi theme
+70de719|2026-04-22|Changes
+a95f49c|2026-04-22|Changes
+2979e69|2026-04-22|Changes
+98692ab|2026-04-22|Changes
+7a0a8cb|2026-04-22|Changes
+030d48a|2026-04-22|Changes
+621580b|2026-04-22|Added Cameras & Media pages
+70e1a9d|2026-04-22|Update site info for publish
+cb29971|2026-04-22|Changes
+bebadf2|2026-04-22|Changed broker to WebSockets
+fbcadbf|2026-04-23|Work in progress
+e631260|2026-04-23|Changes
+8cb2dc6|2026-04-23|Changes
+3d854c1|2026-04-23|Changes
+48fd1a3|2026-04-23|Changes
+4b9c4e6|2026-04-23|Changes
+676cad7|2026-04-23|Deployed webhook edge func
+330fac6|2026-04-23|Work in progress
+939139c|2026-04-23|Changes
+0e3a3a9|2026-04-23|Changes
+40b26cc|2026-04-23|Changes
+f18b38c|2026-04-23|Changes
+1310b9b|2026-04-23|Added Frigate ingestion support
+966ec7b|2026-04-23|Changes
+b7261cc|2026-04-23|Changes
+3de972c|2026-04-23|Added frigate-notify parsing
+a73c799|2026-04-23|Changes
+e81bee9|2026-04-23|Changes
+dec2b92|2026-04-23|Added webhook section to Frigate card
+f04386b|2026-04-23|Changes
+ed0bfd4|2026-04-23|Added Live Wall dashboard
+5b53c5b|2026-04-23|Changes
+809be8d|2026-04-23|Changes
+637a5f1|2026-04-23|Fixed snap/clip pairing
+109d621|2026-04-23|Changes
+c99a7fc|2026-04-23|Changes
+434191c|2026-04-23|Used snapshot+bbox, centered
+390ed3a|2026-04-23|Changes
+d1c86b9|2026-04-23|Changes
+3125086|2026-04-23|Filtered alerts to Frigate only
+bfef01e|2026-04-23|Reverted to commit 434191cffc0f06e6248986d7ab8e1d76e3b2d3b1
+8636b2c|2026-04-23|Changes
+12d9125|2026-04-23|Changes
+7c0520b|2026-04-23|Changes
+f760ced|2026-04-23|Changes
+c6f7897|2026-04-23|Changes
+5f23d97|2026-04-23|Changes
+2f77f15|2026-04-23|Added alert filter button
+7be4ab6|2026-04-23|Changes
+2eb79a8|2026-04-23|Changes
+d733b59|2026-04-23|Changes
+4bb6c5a|2026-04-23|Changes
+9f5f9a9|2026-04-23|Changes
+c14cd4e|2026-04-23|Fixed alerts: ACK, lightbox, no auto-archive
+edfb93a|2026-04-23|Changes
+78bd23a|2026-04-23|Changes
+887ceed|2026-04-23|Changes
+78c682b|2026-04-23|Changes
+5e39720|2026-04-23|Added scrolling alert grid
+5cb50bc|2026-04-23|Changes
+f3c9420|2026-04-23|Changes
+30e466a|2026-04-23|Changes
+1f39a84|2026-04-23|Changes
+819e4ff|2026-04-23|Changes
+b571ff8|2026-04-23|Changes
+d158a62|2026-04-23|Changes
+e16b2c3|2026-04-23|Changes
+7fdffc9|2026-04-23|Changes
+66c2304|2026-04-23|Changes
+997f62d|2026-04-23|Added sidebar toggle & audit
+6f5f257|2026-04-23|Changes
+6795ec5|2026-04-23|Changes
+987ee21|2026-04-23|Changes
+14174f2|2026-04-23|Changes
+d58fabe|2026-04-23|Implemented auth system
+e823e14|2026-04-23|Changes
+85a3a23|2026-04-23|Fixed admin auth flow
+81bd307|2026-04-23|Changes
+b571972|2026-04-23|set nvr poll to 5s
+14bc7e7|2026-04-23|Changes
+8e88d72|2026-04-23|Persisted alerts on wall nav
+d72e71b|2026-04-23|Changes
+c99ff49|2026-04-23|Changes
+4f817b6|2026-04-23|Changes
+aee69a2|2026-04-23|Auto-archived low-sig alerts
+5fe7820|2026-04-23|Changes
+fd6312e|2026-04-23|Fixed admin password reset
+bd7c7e3|2026-04-23|Changes
+392c8bd|2026-04-23|Added manual poll interval
+ee44b31|2026-04-23|Changes
+6b26c60|2026-04-23|Changes
+a3c82cf|2026-04-23|Changes
+78778fc|2026-04-23|Updated lightbox link target
+39a1603|2026-04-23|Changes
+e1c0c78|2026-04-23|Changes
+e055593|2026-04-23|Changes
+5c8d36c|2026-04-23|Changes
+ca4ba15|2026-04-23|Changes
+8d5c2d5|2026-04-23|Changes
+c59650e|2026-04-23|Added media tagging system
+14ea3f9|2026-04-23|Changes
+88498cd|2026-04-23|Changes
+2cd95a0|2026-04-23|Changes
+9a7e1b5|2026-04-23|Changes
+22442bd|2026-04-23|Added Tag button to Live Wall
+5ebd6f9|2026-04-23|Changes
+d8b38f2|2026-04-23|Changes
+ee71171|2026-04-23|Changes
+352b57b|2026-04-23|Changes
+a61f76b|2026-04-23|Changes
+1a7e226|2026-04-23|Changes
+719c905|2026-04-23|Added audit trail & page
+6dcc601|2026-04-23|Changes
+5935550|2026-04-23|Changes
+5602bdc|2026-04-23|Changes
+7dd944c|2026-04-23|Changes
+6f25a47|2026-04-23|Added ack metadata to tiles
+7866a75|2026-04-23|Changes
+6d72f16|2026-04-23|Changes
+79f11dd|2026-04-23|Changes
+e4308c2|2026-04-23|Changes
+1a3f694|2026-04-23|Changes
+f21adff|2026-04-23|Changes
+35c7d28|2026-04-23|Changes
+5c3eda3|2026-04-23|Changes
+3193d59|2026-04-23|Changes
+d69fcd0|2026-04-23|Added ACK + duration to UI
+e3519f7|2026-04-23|Changes
+6e42ed8|2026-04-23|Changes
+02f2371|2026-04-23|Changes
+e6b5363|2026-04-23|Changes
+5233e15|2026-04-23|Changes
+25457f3|2026-04-23|Changes
+1da693e|2026-04-23|Added camera & snapshot to audit
+37290a3|2026-04-23|Changes
+d3bee9e|2026-04-23|Changes
+9bccfff|2026-04-23|Added poster thumbnail generation
+0ebade1|2026-04-23|Changes
+1ef06f5|2026-04-23|Removed Messages tab and route
+29b9c7a|2026-04-23|Changes
+2e86539|2026-04-23|Removed snapshot column block
+af5854e|2026-04-23|Changes
+88d5258|2026-04-23|Grouped Frigate cameras by NVR
+233c9ec|2026-04-23|Changes
+0d4d6cf|2026-04-23|Restricted user access
+5e0b195|2026-04-23|Changes
+6082e47|2026-04-23|Changes
+3eb11ec|2026-04-23|Changes
+8d8399a|2026-04-23|Added branding customization
+48e6511|2026-04-24|Changes
+c9b778e|2026-04-24|Added NVR Status tab
+2c5fc7d|2026-04-24|Changes
+8c62431|2026-04-24|Changes
+354448f|2026-04-24|Changes
+b33f951|2026-04-24|Changes
+7f1be6b|2026-04-24|Changes
+7323916|2026-04-24|Changes
+65cd864|2026-04-24|Changes
+bfd6894|2026-04-24|Changes
+879ba8c|2026-04-24|Added Local NVR support
+3b2f9c7|2026-04-24|Changes
+b9b9f27|2026-04-24|Changes
+ab6d299|2026-04-24|Added SSL warning to Frigate
+d58adb3|2026-04-24|Work in progress
+5e728da|2026-04-24|Changes
+4e1f2dc|2026-04-24|Changes
+9bd30cc|2026-04-24|Added hidden author button
+180f887|2026-04-24|Changes
+9f06883|2026-04-24|Revamped Overview tab
+5123a79|2026-04-24|Changes
+fc2010b|2026-04-24|Changes
+b6e81ff|2026-04-24|Changes
+d1aca20|2026-04-24|Filtered operators, added reset
+3c6873f|2026-04-24|Changes
+f3b1489|2026-04-24|Changes
+593cb12|2026-04-24|Changes
+994378c|2026-04-24|Added webhook sources link
+8bc1bfb|2026-04-24|Changes
+313be4f|2026-04-24|Changes
+d2d9299|2026-04-24|Changes
+2154798|2026-04-24|Showed only logged-in viewers
+7a0e1f9|2026-04-24|Changes
+d897a9a|2026-04-24|Changes
+4d4ab06|2026-04-24|Changes
+073c0d0|2026-04-24|Changes
+17e6fe9|2026-04-24|Added positive tag stats
+6409a2c|2026-04-24|Changes
+bbd17b8|2026-04-24|Changes
+004cb3c|2026-04-24|Changes
+3be3813|2026-04-24|Changes
+d700d72|2026-04-24|Changes
+c7d2d1b|2026-04-24|Changes
+0406f95|2026-04-24|Added ABC Sites dropdown
+0347aa2|2026-04-24|Changes
+a3cbdf7|2026-04-24|Added Frigate instance URL
+311fd4a|2026-04-24|Changes
+7426a2e|2026-04-24|Changes
+8805a92|2026-04-24|Filtered audit trail by users
+45102e3|2026-04-24|Changes
+0930ec1|2026-04-24|Changes
+5d8d24e|2026-04-24|Changes
+cc0a8c4|2026-04-24|Changes
+83aac85|2026-04-24|Changes
+5164bf7|2026-04-24|Added Site column to audit log
+8e0fc82|2026-04-24|Changes
+fa91e82|2026-04-24|Mapped Site to Frigate NVR
+031a09e|2026-04-24|Changes
+bd23363|2026-04-24|Hid auto-archive entries
+3089cfc|2026-04-24|Changes
+6a77b62|2026-04-24|Made email domain configurable
+fbdf075|2026-04-24|Changes
+0c19463|2026-04-24|Changes
+b59a803|2026-04-24|Changes
+088ea2f|2026-04-24|Changes
+1f2ae9a|2026-04-24|Changes
+1a1359f|2026-04-24|Changes
+b871f9d|2026-04-24|Changes
+21116f5|2026-04-24|Implemented Daily Reports tab
+626336e|2026-04-24|Changes
+a7af21b|2026-04-24|Changes
+50354f7|2026-04-24|Changes
+d7f9ef5|2026-04-24|Changes
+e392a1e|2026-04-24|Changes
+94c78cb|2026-04-24|Changes
+3edc680|2026-04-24|Changes
+863c7ee|2026-04-24|Changes
+c0d5baa|2026-04-24|Added SMTP to settings panel
+ad9ad6e|2026-04-24|Changes
+5f8fc79|2026-04-24|Fixed test email recipient bug
+4e64028|2026-04-24|Changes
+79cddec|2026-04-24|Changes
+e440d25|2026-04-24|Added snapshots & offline tracking
+a199107|2026-04-24|Changes
+b64f5f3|2026-04-24|Changes
+bd355ba|2026-04-24|Changes
+41e838e|2026-04-24|Changes
+78d6a05|2026-04-24|Changes
+f2db718|2026-04-24|Added client-side snapshots
+efaa09c|2026-04-24|Changes
+0841232|2026-04-24|Changes
+74f0bee|2026-04-24|Changes
+29be801|2026-04-24|Changes
+9fc0401|2026-04-24|Changes
+88d1964|2026-04-24|Changes
+38c38cd|2026-04-24|Changes
+04c88bc|2026-04-24|Changes
+bb73bf2|2026-04-24|Added cloud snapshot storage
+4160ffe|2026-04-24|Changes
+f13c174|2026-04-24|Hardened snapshot refresher
+78a4b3c|2026-04-24|Changes
+85555df|2026-04-24|Skipped car events in charts
+a5ceeb2|2026-04-24|Changes
+92f69e9|2026-04-24|Restricted refresher to local
+00df024|2026-04-24|Changes
+797b1f3|2026-04-24|Changes
+3547629|2026-04-24|Changes
+29d47c9|2026-04-24|Changes
+3db918f|2026-04-24|Fixed audit log visibility
+c79a872|2026-04-28|Changes
+e593a65|2026-04-28|Changes
+1bdcddd|2026-04-28|Changes
+c7ac7b5|2026-04-28|Changes
+c2819ae|2026-04-28|Added NVR alert mute schedules
+d10aff8|2026-04-28|Changes
+7c153c7|2026-04-28|Fixed mute toggle re-render
+84cd8fe|2026-04-28|Changes
+492002d|2026-04-28|Set default alert mute window
+3d8b1c3|2026-04-28|Changes
+4040eae|2026-04-28|Changes
+418e41a|2026-04-28|Added per-camera alert throttling
+0ec3fbf|2026-04-28|Changes
+0feff4a|2026-04-28|Added offline camera status page
+04ea8a5|2026-04-28|Changes
+5d5057c|2026-04-28|Hid Auto-Read Rules from menu
+7281266|2026-04-28|Changes
+b353349|2026-04-28|Changes
+054f6c2|2026-04-28|Changes
+85d077e|2026-04-28|Added offline notif. popup
+96ca4c0|2026-04-28|Changes
+ef0adb0|2026-04-28|Changes
+5d59a4c|2026-04-28|Changes
+1a7126b|2026-04-28|Changes
+a716b91|2026-04-28|Added email customizations
+0cfc6ad|2026-04-30|Changes
+9033187|2026-04-30|Changes
+f742006|2026-04-30|Fixed NVR edit save failure
+a0bcb98|2026-04-30|Changes
+919961b|2026-04-30|Updated NVR base URL save
+913f5fd|2026-05-04|Changes
+c45a8c5|2026-05-04|Changes
+3b095f3|2026-05-04|Changes
+b1d8fa7|2026-05-04|Changes
+838d1c6|2026-05-04|Changes
+8c3dacc|2026-05-04|Changes
+542afe2|2026-05-04|Changes
+d02b432|2026-05-04|Changes
+dac622f|2026-05-04|Changes
+6ac17fa|2026-05-04|Changes
+56a6e42|2026-05-04|Changes
+dff2f7c|2026-05-04|Changes
+f1ab15a|2026-05-04|Changes
+b143584|2026-05-04|Changes
+e518046|2026-05-04|Added customer role flow
+0b2176c|2026-05-04|Changes
+6c5b94f|2026-05-04|Changes
+4899df1|2026-05-04|Added snapshot thumbnails
+af7d755|2026-05-04|Changes
+2d7d211|2026-05-04|Changes
+d6daa0d|2026-05-04|Added bulk arm/disarm toggle
+99d076c|2026-05-04|Changes
+938aaf8|2026-05-04|Changes
+a30bc8d|2026-05-04|Changes
+b875210|2026-05-04|Changes
+2ccc9af|2026-05-04|Added recent events panel
+38b1ace|2026-05-04|Changes
+ed689f8|2026-05-04|Changes
+a432288|2026-05-04|Changes
+529003b|2026-05-04|Changes
+d93349a|2026-05-04|Changes
+325dfdc|2026-05-04|Moved events to its own tab
+4779286|2026-05-04|Changes
+a78350d|2026-05-04|Bundled events & snapshot view
+0991fa7|2026-05-04|Changes
+2046ffa|2026-05-04|Fixed openSnapshot edge case
+9726cd6|2026-05-04|Changes
+3f29472|2026-05-04|Changes
+e92be23|2026-05-04|Changes
+a9aeb3b|2026-05-04|Changes
+96347d2|2026-05-04|Changes
+756473b|2026-05-04|Changes
+51e36cc|2026-05-04|Changes
+80080e7|2026-05-04|Changes
+2be38d7|2026-05-04|Deduped alerts by camera only
+83502dd|2026-05-04|Changes
+fb1ba3b|2026-05-04|Disabled JWT for images
+52e541b|2026-05-04|Changes
+be3d3ce|2026-05-04|Changes
+d21ddfd|2026-05-04|Changes
+7e16332|2026-05-04|Changes
+2199e3f|2026-05-04|Changes
+cb8afdd|2026-05-04|Fixed lightbox snapshot loading
+79d5b6f|2026-05-04|Changes
+c7526d1|2026-05-04|Changes
+5d600cc|2026-05-04|Removed offline popup
+5845c72|2026-05-04|Changes
+8aeb1ec|2026-05-04|Added header sign out for cust.
+69b37a7|2026-05-04|Changes
+b75d7b2|2026-05-04|Changes
+75d4201|2026-05-04|Added logo to all headers
+bcff2e7|2026-05-04|Changes
+d8e570e|2026-05-04|Changes
+7077e35|2026-05-04|Added callout fee checkbox
+3341f1e|2026-05-04|Changes
+3c919a5|2026-05-04|Changes
+08920d3|2026-05-04|Changes
+294fe46|2026-05-04|Changes
+db11925|2026-05-04|Changes
+2542517|2026-05-04|Changes
+2134a82|2026-05-04|Changes
+2199d48|2026-05-04|Changes
+6516281|2026-05-04|Changes
+db290e7|2026-05-04|Added contact email to users
+d845527|2026-05-04|Changes
+427fc41|2026-05-04|Changes
+046a992|2026-05-04|Changes
+a7f4053|2026-05-04|Changes
+26c44f0|2026-05-04|Fixed NVR callout email & flow
+eb8a4d2|2026-05-05|Changes
+e0c990b|2026-05-05|Dropped live alerts on archive
+d630f7e|2026-05-05|Changes
+aafd474|2026-05-05|Changes
+47e3f5d|2026-05-05|Changes
+c64fee7|2026-05-05|Changes
+e4e7dd1|2026-05-05|Added site/cam to alert card
+eac8b78|2026-05-05|Changes
+0db8166|2026-05-05|Changes
+3198abc|2026-05-05|Changes
+9d68cd4|2026-05-05|Skipped old Wall alerts
+4b76676|2026-05-05|Changes
+960849d|2026-05-05|Changes
+e3565c3|2026-05-05|Changes
+94e9670|2026-05-05|Changes
+3894ea6|2026-05-05|Changes
+14a5fa5|2026-05-05|Changes
+aa2fd0b|2026-05-05|Made Frigate NVRCards collapsible
+cce87cb|2026-05-05|Changes
+2c89531|2026-05-05|Changes
+398c054|2026-05-05|Changes
+3b019c9|2026-05-05|Changes
+a4306ba|2026-05-05|Changes
+4f8736a|2026-05-05|Changes
+6493c24|2026-05-05|Added per-camera assignments
+b7a9d2c|2026-05-05|Changes
+5c4caf9|2026-05-05|Wrapped catch-all route with auth
+7125ee5|2026-05-05|Changes
+2c97426|2026-05-05|Changes
+d5f4a86|2026-05-05|Changes
+816ccf4|2026-05-05|Changes
+699b97c|2026-05-05|Revamped Overview layout
+ea92eb9|2026-05-05|Changes
+6eb3d6f|2026-05-05|Changes
+52d7e47|2026-05-05|Changes
+4540bb2|2026-05-05|Changes
+6bc0cf7|2026-05-05|Changes
+94b2353|2026-05-05|Changes
+1723204|2026-05-05|Changes
+acecdc7|2026-05-05|Added NVR instruction UI
+89cdba3|2026-05-05|Changes
+38d873f|2026-05-05|Changes
+e871c19|2026-05-05|Scoped NVR-wide notes per customer
+bac2b52|2026-05-05|Changes
+640f40b|2026-05-05|Changes
+714cf39|2026-05-05|Added instructions tab & route
+c9b736f|2026-05-05|Changes
+568edc7|2026-05-05|Changes
+762d8c9|2026-05-05|Changes
+25a59e5|2026-05-05|Changes
+de52118|2026-05-05|Added per-camera schedule UI
+fa71d6c|2026-05-05|Changes
+3e3bc02|2026-05-05|Changes
+af8241f|2026-05-05|Changes
+4717514|2026-05-05|Changes
+b8f5c11|2026-05-05|Changes
+f9c3ff0|2026-05-05|Changes
+de247d0|2026-05-05|Changes
+c63a074|2026-05-05|made schedules admin-only
+e5d25fa|2026-05-05|Changes
+0c92ea1|2026-05-05|Removed mute alerts schedule
+cc6c258|2026-05-05|Changes
+11da859|2026-05-05|Force-armed cameras w/o schedule
+8670ed8|2026-05-05|Changes
+e021025|2026-05-05|Changes
+8a1596c|2026-05-05|Changes
+ca4845d|2026-05-05|Changes
+800e5ab|2026-05-05|Changes
+4539565|2026-05-05|Changes
+7fd8c04|2026-05-05|Added copy schedules feature
+3dc60fd|2026-05-05|Changes
+1671cba|2026-05-05|Changes
+79f67d0|2026-05-05|Changes
+067cc46|2026-05-05|Fixed arm-scheduler deploy
+8192ad8|2026-05-06|Changes
+0f88bfa|2026-05-06|Changes
+cb83473|2026-05-06|Changes
+7c8ee61|2026-05-06|Changes
+da9278f|2026-05-06|Enforced operator ACKs
+4164f03|2026-05-06|Changes
+6725505|2026-05-06|Changes
+9951653|2026-05-06|Set supersede window to 40s
+bef3361|2026-05-06|Changes
+288932e|2026-05-06|Changes
+cde8ed3|2026-05-06|Changes
+85825f1|2026-05-06|Disabled NVR-level mute
+f124bb4|2026-05-06|Changes
+7adddf5|2026-05-06|Changes
+cd2d2e6|2026-05-06|Changes
+967bcd1|2026-05-06|Filtered out disarmed cameras
+ade460c|2026-05-06|Changes
+809e0ef|2026-05-06|Changes
+b479f18|2026-05-06|Changes
+e0be5cc|2026-05-06|Changes
+b4d960a|2026-05-06|Fixed scheduler override issues
+df5319d|2026-05-06|Changes
+bbe6099|2026-05-06|Changes
+6c4758e|2026-05-06|Changes
+c44c230|2026-05-06|Changes
+99e3b6f|2026-05-06|Changes
+ee4dc02|2026-05-06|Gated wall events on disarm load
+80c5d74|2026-05-06|Changes
+dfe9b41|2026-05-06|Added camera name header
+5b2989d|2026-05-06|Changes
+43edc45|2026-05-06|Changes
+56609cd|2026-05-06|Changes
+98b89f5|2026-05-06|Secured auth policies
+a3c45ef|2026-05-06|Changes
+0ac0135|2026-05-06|Changes
+f2ca0a6|2026-05-06|Changes
+ace9967|2026-05-06|Changes
+32a4df8|2026-05-06|Changes
+e34b518|2026-05-06|Changes
+0d9389f|2026-05-06|Changes
+e29395c|2026-05-06|Changes
+a941fd5|2026-05-06|Changes
+ab74692|2026-05-06|Changes
+feb0147|2026-05-06|Added multi-config support
+97995dc|2026-05-06|Changes
+76215dc|2026-05-06|Auto-saved camera selection
+40678c7|2026-05-07|Changes
+3f45ec3|2026-05-07|Changes
+36c44c3|2026-05-07|Changes
+5bf3e39|2026-05-07|Changes
+133abaa|2026-05-07|Changes
+b066f9b|2026-05-07|Changes
+e27e938|2026-05-07|Changes
+fcaaa6b|2026-05-07|Changes
+91779c2|2026-05-07|Migrated org slug system
+130dcf4|2026-05-07|Changes
+eea1bf5|2026-05-07|Changes
+667ba7b|2026-05-07|Changes
+4d732ed|2026-05-07|Changes
+b479513|2026-05-07|Changes
+72bcfbf|2026-05-07|Changes
+1e14cdb|2026-05-07|Changes
+f5d9f91|2026-05-07|Changes
+0a484e4|2026-05-07|Built super admin portal UI
+ceb36e6|2026-05-07|Changes
+b4d7c2b|2026-05-07|Changes
+bac3640|2026-05-07|Changes
+382d29b|2026-05-07|Polished login slug display
+ec39e91|2026-05-07|Changes
+87f10a8|2026-05-07|Changes
+9ce1db3|2026-05-07|Changes
+6e570fa|2026-05-07|Changes
+ad9c59e|2026-05-07|Changes
+f0466c2|2026-05-07|Changes
+5b53bf9|2026-05-07|Added org callout admin page
+a68b72d|2026-05-07|Changes
+5e08cbc|2026-05-07|Changes
+8107a4e|2026-05-07|Changes
+35f0048|2026-05-07|Changes
+ad48616|2026-05-07|Changes
+59d9f80|2026-05-07|Changes
+44980e6|2026-05-07|Added org-scoped edge-funcs
+4f43d4f|2026-05-07|Changes
+08282d6|2026-05-07|Changes
+160971c|2026-05-07|Changes
+316afbb|2026-05-07|Changes
+da98232|2026-05-07|Changes
+b2eddc9|2026-05-07|Added Org Switcher UI
+034779c|2026-05-07|Changes
+c77764b|2026-05-07|Changes
+7a6c0f7|2026-05-07|Changes
+5b12d20|2026-05-07|Changes
+5f3f087|2026-05-07|Changes
+0c1a2ad|2026-05-07|Changes
+6a37137|2026-05-07|Added Customization tab
+c0f20e4|2026-05-07|Changes
+fb4540f|2026-05-07|Changes
+0ec1dc1|2026-05-07|Made sites collapsible
+f4b121f|2026-05-07|Changes
+ecd3536|2026-05-07|Changes
+55716cf|2026-05-07|Changes
+e4c2bb5|2026-05-07|Fixed create user org selection
+c605fab|2026-05-07|Changes
+7bf2f87|2026-05-07|Added live wall auth guard
+1de72fb|2026-05-07|Changes
+b42aba7|2026-05-07|Changes
+3cc0c56|2026-05-07|Changes
+9a4d87f|2026-05-07|Fixed operators role mapping
+9a45401|2026-05-07|Changes
+c4d86c0|2026-05-07|Changes
+a4e10c6|2026-05-07|Changes
+67d9f98|2026-05-07|Changes
+e09069c|2026-05-07|Removed auto-ack on alerts
+a4fe41c|2026-05-07|Changes
+84785b8|2026-05-07|Removed org ID hint from login
+218550e|2026-05-07|Changes
+50cce1f|2026-05-07|Changes
+d376a45|2026-05-07|Set burst auto-ack to 5s
+ced545f|2026-05-07|Changes
+c2ebca3|2026-05-07|Added thumbnail fallback
+0c3ee15|2026-05-08|Changes
+532dfb9|2026-05-08|Added demo route with seed data
+c2185f5|2026-05-08|Changes
+a164bf8|2026-05-08|Changes
+df4450a|2026-05-08|Seeded demo with 5 ABC clips
+c81d462|2026-05-08|Changes
+8c8e14a|2026-05-08|Made demo public and saved assets
+560c211|2026-05-08|Changes
+3fe3b41|2026-05-08|Changes
+6ea0d25|2026-05-08|Added demo admin tabs
+9039d4b|2026-05-08|Changes
+96f3c4c|2026-05-08|Restored Live Wall demo
+f07ad27|2026-05-08|Changes
+fde5bc6|2026-05-08|Updated alerts to use dummy names
+11d9c06|2026-05-08|Changes
+36ee4da|2026-05-08|Updated Daily Report template
+2a66a26|2026-05-08|Changes
+1381d6f|2026-05-08|Updated default subject line
+d294b74|2026-05-08|Changes
+4715d1a|2026-05-08|Changes
+dd4d2f9|2026-05-08|Changes
+abb22b2|2026-05-08|Changes
+40ee224|2026-05-08|Added collapsible report cards
+2e118ee|2026-05-08|Changes
+700ab36|2026-05-08|Changes
+b34f2ea|2026-05-08|Changes
+54e2246|2026-05-08|Changes
+9d8d61d|2026-05-08|Changes
+3e79e8e|2026-05-08|Changes
+fac3d92|2026-05-08|Scoped realtime to active org
+d77c8f6|2026-05-08|Changes
+7be915d|2026-05-08|Organized users by active org
+992c995|2026-05-08|Changes
+7f69bcc|2026-05-08|Changes
+afbf4ae|2026-05-08|Changes
+10734fc|2026-05-08|Changes
+83d616f|2026-05-08|Changes
+6c77c8b|2026-05-08|Changes
+984d064|2026-05-08|Changes
+9a37631|2026-05-08|Changes
+5d30fc6|2026-05-08|Changes
+d89363b|2026-05-08|Changes
+c9096af|2026-05-08|Changes
+e25c9b5|2026-05-08|Changes
+585dde0|2026-05-08|Changes
+5c1eb2f|2026-05-08|Scoped admin pages by org
+db189a4|2026-05-08|Changes
+9ec427d|2026-05-08|Copied prior org settings on new
+e5cfc5a|2026-05-08|Changes
+3e961d7|2026-05-08|Changes
+018b74f|2026-05-08|Changes
+01eec19|2026-05-08|Changes
+08b9cd6|2026-05-08|Changes
+27588b7|2026-05-08|Changes
+67eee53|2026-05-08|Added delete org support
+a09f1dd|2026-05-11|Changes
+7284ae1|2026-05-11|Extended bundle window to 10s
+43345a4|2026-05-11|Changes
+b82d434|2026-05-11|Changes
+afb72fd|2026-05-11|Changes
+3d17b17|2026-05-11|Changes
+28032e6|2026-05-11|Added offline NVR badge
+c53b5c6|2026-05-11|Changes
+457c800|2026-05-11|Changes
+381d87e|2026-05-11|Changes
+5d1d0d4|2026-05-11|Added email on form submit
+ec4ee41|2026-05-11|Changes
+05f0b22|2026-05-11|Changes
+0aa1113|2026-05-11|Changes
+0f4caab|2026-05-11|Changes
+e67ab36|2026-05-11|Added offline route & redirect
+e92ecb5|2026-05-11|Changes
+799291e|2026-05-11|Changes
+0f09068|2026-05-11|Changes
+a5f2115|2026-05-11|Added self-hosting config
+c5f136e|2026-05-11|Changes
+1593ecd|2026-05-11|Polyfilled crypto.randomUUID
+a47be0b|2026-05-11|Changes
+07faae9|2026-05-11|Fixed null org constraint
+f0db9b4|2026-05-11|Changes
+e63adeb|2026-05-11|Changes
+83b87b8|2026-05-11|Changes
+cddb6ae|2026-05-11|Changes
+b1de62d|2026-05-11|Changes
+5e60288|2026-05-11|Scoped Overview & audit to org
+ed2f884|2026-05-11|Changes
+121a875|2026-05-11|Enabled payments & billing
+d45ccab|2026-05-11|Changes
+5aafd27|2026-05-11|Created Pro product schema
+993b136|2026-05-11|Changes
+5e7bcf1|2026-05-11|Changes
+3c1055d|2026-05-11|Changes
+106a7ac|2026-05-11|Changes
+7b61292|2026-05-11|Changes
+a8f2e8c|2026-05-11|Changes
+d2b6f26|2026-05-11|Changes
+94ced33|2026-05-11|Added trial/Paddle flow
+0a472d6|2026-05-11|Changes
+9d5b018|2026-05-11|Changes
+f073d5b|2026-05-11|Changes
+d9deb1c|2026-05-11|Changes
+6589517|2026-05-11|Changes
+528190c|2026-05-11|Changes
+5bb4bf9|2026-05-11|Added legal pages to app
+8b0401d|2026-05-11|Changes
+9586fe3|2026-05-11|Changes
+9b981e1|2026-05-11|Handled 530 tunnel errors
+6b7833a|2026-05-11|Changes
+1b98e56|2026-05-11|Hid emergency admin link
+f24e15b|2026-05-11|Changes
+982d5b7|2026-05-11|Added public pricing page
+216f90c|2026-05-11|Changes
+2eae337|2026-05-11|Fixed admin username collision
+0ce4b19|2026-05-12|Changes
+3b92f75|2026-05-12|Updated self-hosting guide
+a7bb3fa|2026-05-12|Changes
+87afec1|2026-05-12|Changes
+c8e1138|2026-05-12|Changes
+23f179c|2026-05-12|Changes
+d210e40|2026-05-12|Refactored keygen and acks per cam
+a5add26|2026-05-12|Changes
+b48a1b1|2026-05-12|Changes
+41b25e5|2026-05-12|Changes
+4eed5cd|2026-05-12|Changes
+5ed8527|2026-05-12|Added upgrade ack dialog
+90783e4|2026-05-12|Changes
+70d1fd4|2026-05-12|Changes
+7e6b55b|2026-05-12|Fixed Paddle undefined email
+1313a40|2026-05-12|Changes
+e373536|2026-05-12|Changes
+dab8194|2026-05-12|Changes
+01e0b7e|2026-05-12|Changes
+5ae2301|2026-05-12|Removed SMTP UI & set defaults
+245e694|2026-05-12|Changes
+d776ad3|2026-05-12|Changes
+5a74892|2026-05-12|Changes
+002bc46|2026-05-12|Changes
+b820c83|2026-05-12|Changes
+125f693|2026-05-12|Restored blank SMTP fields
+01610c2|2026-05-13|Changes
+f680818|2026-05-13|Changes
+c3afd43|2026-05-13|Changes
+3351516|2026-05-13|Changes
+7d42186|2026-05-13|Changes
+89d5012|2026-05-13|Changes
+d03f9e6|2026-05-13|Added per-NVR license model
+bd4358f|2026-05-13|Changes
+366b815|2026-05-13|Changes
+8af6a2e|2026-05-13|Changes
+0490432|2026-05-13|Changes
+fcec908|2026-05-13|Added auto-provisioned webhook
+d5920f7|2026-05-15|Changes
+4a2198d|2026-05-15|Changes
+54ee84c|2026-05-15|Changes
+86bda6e|2026-05-15|Changes
+5aa5ad3|2026-05-15|Changes
+6588699|2026-05-15|Changes
+6aa24f3|2026-05-15|Changes
+cf9d04d|2026-05-15|Changes
+029a8ed|2026-05-15|Deleted multi-tenancy files
+30979df|2026-05-19|Changes
+a3f9b1d|2026-05-19|Fixed real-time alert delay
+7934169|2026-05-20|Changes
+8357bf1|2026-05-20|Made login work on fresh host
+c658307|2026-05-20|Changes
+c6334e2|2026-05-20|Reset admin password
+5f0f1fb|2026-05-20|Changes
+7c80047|2026-05-20|Updated webhook URL to new backend
+4b16806|2026-05-21|Changes
+433edf4|2026-05-21|Changes
+d2b5e7e|2026-05-21|Changes
+de71e30|2026-05-21|Changes
+8dd5e53|2026-05-21|Fixed login, 401s & added guide
+1bf5415|2026-05-22|Changes
+afe288c|2026-05-22|Fixed bootstrap admin role
+ee3ea87|2026-05-22|Changes
+3ddeb11|2026-05-22|Changes
+f424265|2026-05-22|Preserved admin password on seed
+07a633f|2026-05-26|Changes
+71adc3d|2026-05-26|Changes
+ac49fcd|2026-05-26|Changes
+75e9b67|2026-05-26|Changes
+6e6cbec|2026-05-26|Changes
+33065a4|2026-05-26|Changes
+f52c463|2026-05-26|Changes
+26b460e|2026-05-26|Changes
+c905919|2026-05-26|Changes
+50177a1|2026-05-26|Added camera-watch cron job
+e3ad30e|2026-05-26|Changes
+41a0501|2026-05-26|Changes
+206d268|2026-05-26|Changes
+0a17755|2026-05-26|Changes
+e16d46b|2026-05-26|Changes
+3a0fe03|2026-05-26|Changes
+3e5d765|2026-05-26|Changes
+749fd9c|2026-05-26|Changes
+3141dc8|2026-05-26|Changes
+9a0d75d|2026-05-26|Fixed self-host bootstrap
+6bcba60|2026-05-26|Changes
+1785e22|2026-05-26|Changes
+7656cd4|2026-05-26|Changes
+da478fd|2026-05-26|Changes
+ce22601|2026-05-26|Changes
+7e200d8|2026-05-26|Added admin reset on offline
+9e8370e|2026-06-01|Changes
+c399fe8|2026-06-01|Changes
+116d221|2026-06-01|Changes
+c3aa440|2026-06-01|Changes
+129fd41|2026-06-01|Changes
+da50c51|2026-06-01|Changes
+6f3213b|2026-06-01|Added force-create admin option
+7660cbe|2026-06-01|Changes
+56b9187|2026-06-01|Wrote full NGINX self-host guide
+03e576e|2026-06-01|Changes
+4f0c25b|2026-06-01|Rewrote hosted setup guide
+8dd60c9|2026-06-01|Changes
+1b58dab|2026-06-01|Changes
+7412f8f|2026-06-01|Fixed auth edge function errors
+8c1a8b4|2026-06-01|Changes
+cbf44ef|2026-06-01|Changes
+2bceedb|2026-06-01|Changes
+5b347ac|2026-06-01|Changes
+2226423|2026-06-01|Fixed duplicate org seeding
+91961a4|2026-06-01|Changes
+6f0ab31|2026-06-01|Changes
+c2c890d|2026-06-01|Fixed admin auth create race
+69f95c3|2026-06-01|Changes
+19b021a|2026-06-01|Changes
+0f7941e|2026-06-01|Changes
+c1fa134|2026-06-01|Fixed admin reset stale login
+213285e|2026-06-01|Changes
+e94e666|2026-06-01|Changes
+9716d1a|2026-06-01|Changes
+c9d6d84|2026-06-01|Changes
+4137b58|2026-06-01|Changes
+9f42a97|2026-06-01|Changes
+fb620e5|2026-06-01|Handled auth lock errors
+f21bcf4|2026-06-01|Changes
+5a34cee|2026-06-01|Fixed admin org insert policy
+8c2ecfe|2026-06-01|Changes
+b9c7d90|2026-06-01|Fixed deleted NVR polling
+453db52|2026-06-01|Changes
+8eb6ee9|2026-06-01|Stopped stats poll on NVR remove
+0bdcc1b|2026-06-01|Changes
+bf73f47|2026-06-01|Changes
+e5050d4|2026-06-01|Changes
+ebdd1d3|2026-06-01|Changes
+8a3ab8c|2026-06-01|Changes
+a08d1f3|2026-06-01|Hardened frigate-proxy stats
+ca981a6|2026-06-01|Changes
+272881d|2026-06-01|Changes
+f09baff|2026-06-01|Fixed live wall polling
+1aaf1c8|2026-06-01|Changes
+6118ce2|2026-06-01|Changes
+8d60d92|2026-06-01|Unified cross-org alerts
+6109c79|2026-06-02|Changes
+eb914c0|2026-06-02|Changes
+cc479ad|2026-06-02|Changes
+73f509a|2026-06-02|Changes
+ac5a657|2026-06-02|Changes
+ee97708|2026-06-02|Changes
+ec24f81|2026-06-02|Changes
+4553f41|2026-06-02|Changes
+1907d4a|2026-06-02|Changes
+67d792d|2026-06-02|Flattened app to single org
+c9f37dd|2026-06-02|Changes
+816b23d|2026-06-02|Applied DB changes to Cloud
+83bd1c6|2026-06-02|Changes
+7def681|2026-06-02|Dropped FK constraints for orgs
+111aec8|2026-06-02|Changes
+7ca0e9a|2026-06-02|Changes
+779c6da|2026-06-02|Changes
+8848c4e|2026-06-02|Fixed undefined close() error
+5ba1bdd|2026-06-02|Changes
+7e0b9d8|2026-06-02|Changes
+05d387d|2026-06-02|Changes
+05ffd75|2026-06-02|Changes
+4a6ca34|2026-06-02|Changes
+785582a|2026-06-02|Enabled Frigate push mode
+bca8905|2026-06-02|Changes
+407861d|2026-06-02|Changes
+9502aeb|2026-06-02|Changes
+9dddcef|2026-06-02|Restored polling and rescheduled
+6dfef1c|2026-06-02|Changes
+4b9a6a8|2026-06-02|Changes
+1a0d05a|2026-06-02|Skipped disarmed events in poll
+3e3efa6|2026-06-02|Changes
+2000fdb|2026-06-02|Applied disarmed-skip logic
+064e700|2026-06-02|Changes
+1714a11|2026-06-02|Added armed state filter
+3281945|2026-06-02|Changes
+5c79640|2026-06-02|Added duplicate-slug fallback
+1edc85f|2026-06-02|Changes
+69202b5|2026-06-02|Changes
+803f536|2026-06-02|Changes
+0ef50de|2026-06-02|Changes
+b4d6391|2026-06-02|Changes
+653dd2f|2026-06-02|Shared wall ACKs via realtime
+0b76766|2026-06-03|Changes
+71081be|2026-06-03|Disabled offline watchdog redirect
+53101a4|2026-06-04|Changes
+2b19e6b|2026-06-04|Made the requested updates
+7e3d9f7|2026-06-04|Changes
+5e78416|2026-06-04|Added health route to proxy
+dd7d7be|2026-06-04|Changes
+4739202|2026-06-04|Clamped proxy timeout to 7s
+8b156d1|2026-06-04|Changes
+d1c42e5|2026-06-04|Changes
+ecfc26c|2026-06-04|Added direct PostgREST fetch
+f1eb127|2026-06-04|Changes
+fc3a554|2026-06-04|Fixed NVR urgency on first poll
+330a6db|2026-06-04|Changes
+6149f1c|2026-06-04|Changes
+03a9ac7|2026-06-04|Fixed wall refresh logic
+e98b478|2026-06-04|Changes
+27ac335|2026-06-04|Changes
+338b2ab|2026-06-04|Changes
+b24bd22|2026-06-04|Changes
+575807a|2026-06-04|Changes
+b84a998|2026-06-04|Fixed wall reload path
+ff36910|2026-06-04|Changes
+26262c8|2026-06-04|Changes
+210c7d5|2026-06-04|Changes
+4744f07|2026-06-04|Changes
+b2ac3f3|2026-06-04|Changes
+cbbfe83|2026-06-04|Changes
+9470479|2026-06-04|Changes
+065ee4b|2026-06-04|Changes
+5dd66f1|2026-06-04|Changes
+0707814|2026-06-04|Changes
+e6ee89f|2026-06-04|Relaxed 5s alert window
+361cf01|2026-06-04|Changes
+7acaef7|2026-06-04|Fixed duplicate alert cards
+22757ec|2026-06-04|Changes
+f0bd51b|2026-06-04|Persisted unacked alerts globally
+1feb133|2026-06-05|Changes
+e193574|2026-06-05|Changes
+aac84ad|2026-06-05|Changes
+bc183bd|2026-06-05|Fixed duplicate alert cards
+59f5bb6|2026-06-10|Changes
+42df36f|2026-06-10|Changes
+bb069ca|2026-06-10|Added WhatsApp guide to doc
+c2a19a9|2026-06-10|Changes
+6db6b80|2026-06-10|Changes
+1830afe|2026-06-10|Changes
+aed5d0f|2026-06-10|Changes
+2c177e5|2026-06-10|Changes
+804decb|2026-06-10|Added WhatsApp settings page
+8e60c42|2026-06-10|Changes
+37511c8|2026-06-10|Changes
+6565a88|2026-06-10|Changes
+91b165d|2026-06-10|Changes
+9c00e86|2026-06-10|Changes
+f1d7dc9|2026-06-10|Changes
+43d8a07|2026-06-10|Added offline broadcast feature
+e54b77c|2026-06-10|Changes
+a5a9078|2026-06-10|Added self-hosted DB push guide
+e6615cf|2026-06-10|Changes
+8e09142|2026-06-10|Changes
+44b51b1|2026-06-10|Merged self-hosted DB guide
+ac145c0|2026-06-10|Changes
+5216c88|2026-06-10|Changes
+beb6dff|2026-06-10|Changes
+341815d|2026-06-10|Fixed offline detection in broadcast
+834699e|2026-06-10|Changes
+cd915ce|2026-06-10|Added broadcast diagnostic logs
+3580f42|2026-06-10|Changes
+3f89515|2026-06-10|Changes
+f198231|2026-06-10|Changes
+5a002f9|2026-06-10|Changes
+3578723|2026-06-10|Changes
+f7609f5|2026-06-10|Added daily broadcast & alert
+55aa7f1|2026-06-10|Changes
+9f691a2|2026-06-10|Changes
+7d19e05|2026-06-10|Changes
+847ed40|2026-06-10|Changes
+9ed4802|2026-06-10|Changes
+1a54da6|2026-06-10|Changes
+90786d2|2026-06-10|Changes
+88b9da2|2026-06-10|Added multi-client NVR routing
+4edf81b|2026-06-10|Changes
+4fbd512|2026-06-10|Made the requested updates
+b6cf3ac|2026-06-10|Changes
+38c0099|2026-06-10|Changes
+15ccadd|2026-06-10|Changes
+61b1dc2|2026-06-10|Changes
+f87ecfa|2026-06-10|Added Broadcast Message tab
+870e3c8|2026-06-10|Changes
+ce3d3d1|2026-06-10|Defered camera status fetch
+67e9395|2026-06-10|Changes
+8675189|2026-06-10|Changes
+c5cb285|2026-06-10|Live-polling camera names
+f491696|2026-06-10|Changes
+33ff039|2026-06-10|Changes
+7298636|2026-06-10|Changes
+7d619f3|2026-06-10|Changes
+c3d99ac|2026-06-10|Changes
+7866e98|2026-06-10|Changes
+526e263|2026-06-10|Changes
+f70a172|2026-06-10|Changes
+8a5dc0e|2026-06-10|Changes
+a9b893b|2026-06-10|Made the requested updates
+b0fe003|2026-06-10|Changes
+d9823fb|2026-06-10|Changes
+07b55fb|2026-06-10|Changes
+b76b2bc|2026-06-10|Changes
+0378cf8|2026-06-10|Changes
+957c107|2026-06-10|Added broadcast template UI
+945a487|2026-06-11|Changes
+134d111|2026-06-11|Changes
+da23775|2026-06-11|Changes
+688be59|2026-06-11|Changes
+c6b63f3|2026-06-11|Changes
+e431d71|2026-06-11|Added heartbeat tracking
+959ffc4|2026-06-11|Changes
+67d9064|2026-06-11|Patched heartbeat 404 probe
+8644b56|2026-06-11|Changes
+828e443|2026-06-11|Extended heartbeat endpoint checks
+63cbe8e|2026-06-11|Changes
+0b26e6e|2026-06-11|Treated 404 as alive
+f2781b9|2026-06-11|Changes
+9c20840|2026-06-11|Removed Cameras, Archive, Callout
+b016fe5|2026-06-11|Changes
+3a8f945|2026-06-11|Changes
+d6a33c7|2026-06-11|Added lazy loading and split
+244646f|2026-06-11|Changes
+6ee53b6|2026-06-11|Increased Mudslide timeout to 30s
+49f7c78|2026-06-11|Changes
+dc2de10|2026-06-11|Fixed exact-time cron trigger
+369549f|2026-06-11|Changes
+fe1847d|2026-06-11|Changes
+c796f0f|2026-06-11|Changes
+d077a46|2026-06-11|Changes
+8400d7d|2026-06-11|Changes
+a430906|2026-06-11|Changes
+3675662|2026-06-11|Changes
+fac4234|2026-06-11|Added per-NVR toggle
+30c6e45|2026-06-11|Changes
+c7dc2d0|2026-06-11|Added Docker guide file
+9f2577c|2026-06-11|Changes
+e354948|2026-06-11|Changes
+0cd9888|2026-06-11|Changes
+23d8583|2026-06-11|Changes
+4a4f57d|2026-06-11|Changes
+4192542|2026-06-11|Removed audit trail completely
+c064690|2026-06-11|Changes
+5f0f13e|2026-06-11|Changes
+0af8cb2|2026-06-11|Changes
+13c91f9|2026-06-11|Changes
+bd89f31|2026-06-11|Added NVR offline alert logic
+37fbe17|2026-06-11|Changes
+bba3ea7|2026-06-11|Changes
+e911939|2026-06-11|Added WhatsApp sync guide
+ffa5897|2026-06-11|Changes
+ec7735d|2026-06-11|Changes
+53bca8b|2026-06-11|Changes
+afec4bb|2026-06-11|Changes
+7ae4a68|2026-06-11|Fixed SMTP org lookup fallback
+dbddbf7|2026-06-12|Changes
+3e55c93|2026-06-12|Changes
+759114b|2026-06-12|Added WhatsApp recovery msgs
+d99e607|2026-06-12|Changes
+34b4fd6|2026-06-12|Changes
+758be55|2026-06-12|Changes
+e592923|2026-06-12|Changes
+b3adaea|2026-06-12|Changes
+b1c5b5d|2026-06-12|Added multi-tenant org support
+0f0e07b|2026-06-12|Changes
+53b32f9|2026-06-12|Changes
+b73b875|2026-06-12|Added org FK to memberships
+f2fe733|2026-06-12|Changes
+c732f4b|2026-06-12|Changes
+d42c42f|2026-06-12|Changes
+da89514|2026-06-12|Changes
+ca2e7d6|2026-06-12|Updated login with username lookup
+7df350c|2026-06-12|Changes
+4a895bd|2026-06-12|Changes
+2a3a75f|2026-06-12|Added Super/org features
+74c05ff|2026-06-12|Changes
+f2194c9|2026-06-12|Fixed org_member_role cast
+7894b3e|2026-06-12|Changes
+d3b82da|2026-06-12|Fixed duplicate role crash
+87965eb|2026-06-12|Changes
+094c5a6|2026-06-12|Changes
+643b4c8|2026-06-12|Fixed multi-tenancy bug
+ce42996|2026-06-12|Changes
+440960c|2026-06-12|Changes
+cc818f0|2026-06-12|Changes
+a1fba68|2026-06-12|Changes
+d04e7e0|2026-06-12|Changes
+1578f12|2026-06-12|Changes
+9e6c94d|2026-06-12|Changes
+a5472c2|2026-06-12|Changes
+fa23460|2026-06-12|Changes
+7051e86|2026-06-12|Changes
+639a90b|2026-06-12|Changes
+8e5fe66|2026-06-12|Changes
+03e9f04|2026-06-12|Changes
+bdc9eb1|2026-06-12|Changes
+f9b78c9|2026-06-12|Changes
+c3b1fa7|2026-06-12|Changes
+1d9fbc3|2026-06-12|Changes
+4728d2b|2026-06-12|Changes
+9497260|2026-06-12|Changes
+0e38f7d|2026-06-12|Changes
+78db784|2026-06-12|Changes
+5e1ddbf|2026-06-12|Changes
+4ae90d5|2026-06-12|Hardened org isolation
+e77ceab|2026-06-12|Changes
+abe6a62|2026-06-12|Changes
+f90abca|2026-06-12|Changes
+0443da9|2026-06-12|Changes
+56077bf|2026-06-12|Changes
+beb4799|2026-06-12|Changes
+158d8b9|2026-06-12|Added UniFi camera support
+86d6756|2026-06-12|Reverted to commit 4ae90d52b3b698b2cd27e999f2c9901d3b8ffdc1
+f82b146|2026-06-12|Changes
+17be613|2026-06-12|Update plan
+b941dbe|2026-06-12|Changes
+570bf08|2026-06-12|Changes
+f7f561d|2026-06-12|Changes
+b78c724|2026-06-12|Changes
+45a42d4|2026-06-12|Changes
+756f940|2026-06-12|Changes
+2ebdb6e|2026-06-12|Changes
+e79643f|2026-06-12|Changes
+1a7e9b0|2026-06-12|Changes
+b318d26|2026-06-12|Changes
+1b4f60c|2026-06-12|Changes
+432ce1e|2026-06-12|Changes
+c9e10f0|2026-06-12|Added Unifi ENVR features
+3602098|2026-06-12|Changes
+7b142c0|2026-06-12|Changes
+e9beb3d|2026-06-12|Changes
+c991cf4|2026-06-12|Changes
+39fb52f|2026-06-12|Swapped Frigate to Unifi route
+ea9aee1|2026-06-12|Changes
+4ac2fdd|2026-06-12|Swapped UI to Unifi when on
+c5dda1d|2026-06-12|Changes
+bc2411d|2026-06-12|Refactored with raw fetch
+f7a4250|2026-06-12|Changes
+adb87e1|2026-06-12|Changes
+0752917|2026-06-12|Changes
+2fb1eb6|2026-06-12|Changes
+7a82963|2026-06-12|Changes
+3af9a10|2026-06-12|Added UniFi NVR proxy & cards
+b35cdb3|2026-06-12|Changes
+275e626|2026-06-12|Changes
+ae01661|2026-06-12|Changes
+abd916d|2026-06-12|Added UniFi poll edge func
+a7288f0|2026-06-12|Changes
+a5c61fd|2026-06-12|Changes
+0570025|2026-06-12|Changes
+2c8ccb5|2026-06-12|Changes
+8477517|2026-06-12|Changes
+eac92f7|2026-06-12|Changes
+21a82f6|2026-06-12|Changes
+7654620|2026-06-12|Changes
+af0e76a|2026-06-12|Staggered NVR thumbnail fetch
+4a4b1a7|2026-06-12|Changes
+3b4fdf6|2026-06-12|Changes
+e2e63a9|2026-06-12|Changes
+fcd38d7|2026-06-12|Added scroll-triggered camera fetch
+e27a8d3|2026-06-12|Changes
+0336ac7|2026-06-12|Fixed duplicate channel name
+0ad7174|2026-06-12|Changes
+934066e|2026-06-12|Changes
+11ea827|2026-06-12|Changes
+d86206a|2026-06-12|Added NVRs to Cameras tab
+64d34a6|2026-06-12|Changes
+d262820|2026-06-12|Added edit dialog for ENVRs
+6c11ab9|2026-06-12|Changes
+596b397|2026-06-12|Changes
+4ee092b|2026-06-12|Changes
+477053e|2026-06-12|Changes
+bfea198|2026-06-12|Changes
+54d3f1f|2026-06-12|Added webhook secret & edge fn
+d7f69a0|2026-06-12|Changes
+0f77682|2026-06-12|Fixed webhook auth & deploy
+ff4f5b1|2026-06-12|Changes
+15dc41b|2026-06-12|Separated UniFi from Frigate
+116b877|2026-06-12|Changes
+709b16f|2026-06-12|Changes
+4f9db51|2026-06-12|Changes
+65b3287|2026-06-12|Changes
+0ea2fa3|2026-06-12|Changes
+b92acc5|2026-06-12|Added UniFi Alerts page
+c5986ab|2026-06-12|Changes
+eb9f47c|2026-06-12|Changes
+fc8e8aa|2026-06-12|Changes
+9ac979b|2026-06-12|Updated UniFi delivery flow
+260f34b|2026-06-12|Changes
+bd82748|2026-06-12|Changes
+5770901|2026-06-12|Changes
+2318c43|2026-06-12|Fixed UniFi poll sync
+3ae3fa0|2026-06-17|Changes
+fa73e3e|2026-06-17|Created DB_DUMP guide
+9aa1c89|2026-06-17|Changes
+5fd085c|2026-06-17|Changes
+6bd69f1|2026-06-17|Changes
+9af7fa4|2026-06-17|Removed all UniFi code
+e7bc8cb|2026-06-18|Changes
+1aa5ba9|2026-06-18|Fixed ENOIDENTIFIER error
+de3a4ca|2026-06-18|Changes
+384532d|2026-06-18|Removed login page realtime
+d38fd5f|2026-06-18|Changes
+1648490|2026-06-18|Exposed NVR status to users
+ad3da4b|2026-06-18|Changes
+a5da203|2026-06-18|Fixed delete orphan cleanup
+de6c950|2026-06-18|Changes
+b542a74|2026-06-18|Auto-cleaned orphan rows
+e7b1161|2026-06-18|Changes
+ba7a9f1|2026-06-18|Changes
+3e79505|2026-06-18|Changes
+5c2aea3|2026-06-18|Changes
+aa88be8|2026-06-18|Changes
+70478d3|2026-06-18|Changes
+49cc761|2026-06-18|Changes
+25e3944|2026-06-18|Added audit badge to Media
+a6c6c94|2026-06-18|Changes
+9823703|2026-06-18|Changes
+70af3ef|2026-06-18|Changes
+e66325e|2026-06-18|Changes
+59e8d0b|2026-06-18|Changes
+81dcdc8|2026-06-18|Changes
+98783cd|2026-06-18|Changes
+4fffb70|2026-06-18|Changes
+af350ac|2026-06-18|Changes
+978d0d2|2026-06-18|Changes
+dd245f2|2026-06-18|Changes
+074f5c7|2026-06-18|Merged global recs into alerts
+d91d2e9|2026-06-18|Changes
+b56f182|2026-06-18|Changes
+dafb47b|2026-06-18|Changes
+73660ee|2026-06-18|Changes
+951e746|2026-06-18|Changes
+53a9222|2026-06-18|Changes
+d8e0cc2|2026-06-18|Changes
+d95502a|2026-06-18|Changes
+18fc53b|2026-06-18|Changes
+1764aa3|2026-06-18|Changes
+09b76e1|2026-06-18|Changes
+13facdf|2026-06-18|Changes
+d580152|2026-06-18|Changes
+ad9a67e|2026-06-18|Changes
+221ad66|2026-06-18|Rebuilt NVR UI as tabs
+1f4d037|2026-06-18|Changes
+1bd986e|2026-06-18|Changes
+8676606|2026-06-18|Added diagnostic logging
+638523a|2026-06-18|Work in progress
+a231474|2026-06-18|Work in progress
+04d55d2|2026-06-18|Made the requested updates
+3b43998|2026-06-19|Changes
+09a7daf|2026-06-19|Fixed schedule state enforcement
+0ec0769|2026-06-19|Changes
+89072ec|2026-06-19|Changes
+c4b1227|2026-06-19|Added offline alert on disarm
+b8b87a9|2026-06-19|Changes
+24c080f|2026-06-19|Set Wall default to people
+3d9fd8a|2026-06-19|Changes
+55646fa|2026-06-19|Changes
+99d1e52|2026-06-19|Changes
+44ab641|2026-06-19|Changes
+0ac4740|2026-06-19|Changes
+de3adad|2026-06-19|Changes
+1e808f9|2026-06-19|Changes
+706b650|2026-06-19|Changes
+7765dae|2026-06-19|Changes
+edfdc44|2026-06-19|Changes
+0f4e7c1|2026-06-19|Changes
+d69d0ab|2026-06-19|Changes
+ab28b86|2026-06-19|Changes
+6c575d3|2026-06-19|Changes
+b5d0fc0|2026-06-19|Changes
+e7b1b52|2026-06-19|Changes
+910721d|2026-06-19|Added auth flow to Edge Fns
+3babd50|2026-06-22|Changes
+7dd4a73|2026-06-22|Changes
+7f901a3|2026-06-22|Fixed offline camera alerts
+4ccfea5|2026-06-22|Changes
+cbff511|2026-06-22|Added ref.dev to memory
+264644c|2026-06-22|Changes
+dc79e57|2026-06-22|Changes
+1374e67|2026-06-22|Added config download flow
+b0b4ce2|2026-06-22|Changes
+145ae02|2026-06-22|Fixed self-hosted signed URL
+6a8333c|2026-06-22|Changes
+960b47c|2026-06-22|Fixed Docker host redirect
+dc8f46d|2026-06-22|Changes
+ee3213e|2026-06-22|Changes
+a73e1c0|2026-06-22|Changes
+78d727e|2026-06-22|Changes
+cf2293c|2026-06-22|Changes
+67ad0e4|2026-06-22|Changes
+ae9a42e|2026-06-22|Changes
+d99b894|2026-06-22|Added Backups tab to SuperAdmin
+1516d0a|2026-06-23|Changes
+e019b43|2026-06-23|Made WhatsApp sends sequential
+7900d12|2026-06-23|Changes
+6d50254|2026-06-23|Changes
+548217a|2026-06-23|Added 60-day alert cleanup
+e80b505|2026-06-23|Changes
+ea55a2c|2026-06-23|Changes
+e2cf45a|2026-06-23|Changes
+e81409d|2026-06-23|Changes
+fa0f8e8|2026-06-23|Changes
+4b8f5a2|2026-06-23|Separated media by date in toolbar
+278386e|2026-06-23|Changes
+c693d23|2026-06-23|Changes
+5d8484c|2026-06-23|Changes
+a27d969|2026-06-23|Increased media cap to 5000
+0031291|2026-06-23|Changes
+e682801|2026-06-23|Restructured Media to NVR flow
+c403ceb|2026-06-23|Changes
+cb1c67d|2026-06-23|Changes
+f4b68ab|2026-06-23|Changes
+1e5956f|2026-06-23|Paginated alerts to 10k
