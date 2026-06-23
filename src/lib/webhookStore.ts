@@ -266,7 +266,7 @@ class WebhookStore {
         const existing = new Set(this.media.map((m) => m.id));
         const fresh = (md.data as MediaItem[]).filter((m) => !existing.has(m.id));
         if (fresh.length) {
-          this.media = [...fresh, ...this.media].slice(0, 200);
+          this.media = [...fresh, ...this.media].slice(0, 5000);
           changed = true;
         }
         for (const m of md.data as MediaItem[]) {
@@ -291,7 +291,7 @@ class WebhookStore {
         this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
         this.scoped(supabase.from("webhook_events").select("*")).order("ts", { ascending: false }).limit(500),
         this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
-        this.scoped(supabase.from("media_items").select("*")).order("ts", { ascending: false }).limit(200),
+        this.scoped(supabase.from("media_items").select("*")).order("ts", { ascending: false }).limit(5000),
         this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
@@ -338,7 +338,7 @@ class WebhookStore {
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, (p) => {
         const row = (p.new ?? p.old) as MediaItem;
         if (!this.matchesOrg(row)) return;
-        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 200);
+        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 5000);
         else if (p.eventType === "UPDATE") this.media = this.media.map((x) => x.id === (p.new as MediaItem).id ? (p.new as MediaItem) : x);
         else if (p.eventType === "DELETE") this.media = this.media.filter((x) => x.id !== (p.old as MediaItem).id);
         this.emit();
