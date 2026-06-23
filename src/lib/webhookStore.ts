@@ -648,12 +648,23 @@ class WebhookStore {
     return data;
   }
   async registerHikvisionListener(id: string, ingestUrl: string) {
-    const { data, error } = await supabase.functions.invoke("hikvision-register-listener", {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${supabaseBaseUrl()}/functions/v1/hikvision-register-listener`, {
       method: "POST",
-      body: { instance_id: id, ingest_url: ingestUrl },
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ instance_id: id, ingest_url: ingestUrl }),
     });
-    if (error) throw error;
-    return data;
+    const text = await res.text();
+    let parsed: any = null;
+    try { parsed = text ? JSON.parse(text) : null; } catch { /* keep text */ }
+    if (!res.ok) {
+      const msg = parsed?.error || text || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return parsed;
   }
 }
 
