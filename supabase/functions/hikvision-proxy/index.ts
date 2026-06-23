@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   }
 
   // Membership check.
-  const userId = (claims.claims as any).sub as string;
+  const userId = userData.user.id;
   const { data: member } = await admin.from("organization_members")
     .select("user_id").eq("user_id", userId).eq("organization_id", inst.organization_id).maybeSingle();
   if (!member) {
