@@ -688,3 +688,20 @@ export function resolveMediaUrl(url: string) {
   if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
   return frigateProxyUrl(url);
 }
+
+/** Public URL the Hikvision NVR posts ISAPI events to (HTTP Host Notification). */
+export function hikvisionIngestUrl(instanceId: string, secret: string) {
+  return `${supabaseBaseUrl()}/functions/v1/hikvision-ingest/${instanceId}/${secret}`;
+}
+
+/** URL for a live snapshot through the auth-bearing Hikvision proxy. */
+export function hikvisionProxyUrl(instanceId: string, path: string) {
+  const p = path.startsWith("/") ? path : "/" + path;
+  return `${supabaseBaseUrl()}/functions/v1/hikvision-proxy/${instanceId}${p}`;
+}
+
+/** Public URL of a snapshot stored in the camera-snapshots bucket. */
+export function hikvisionSnapshotPublicUrl(path: string) {
+  if (!path) return null;
+  return `${supabaseBaseUrl()}/storage/v1/object/public/camera-snapshots/${path}`;
+}
