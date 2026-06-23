@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const adminItems = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/wall", label: "Live Wall", icon: Bell },
-  { to: "/frigate", label: "Frigate NVR", icon: Server },
+  { to: "/frigate", label: "NVRs", icon: Server },
   { to: "/nvr-status", label: "NVR Status", icon: HeartPulse },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
   { to: "/media", label: "Media", icon: Film },
