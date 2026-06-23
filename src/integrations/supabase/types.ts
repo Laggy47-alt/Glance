@@ -671,6 +671,217 @@ export type Database = {
         }
         Relationships: []
       }
+      hikvision_channels: {
+        Row: {
+          channel_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          instance_id: string
+          last_event_ts: string | null
+          last_snapshot_path: string | null
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          instance_id: string
+          last_event_ts?: string | null
+          last_snapshot_path?: string | null
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          instance_id?: string
+          last_event_ts?: string | null
+          last_snapshot_path?: string | null
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hikvision_channels_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "hikvision_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hikvision_events: {
+        Row: {
+          archived: boolean
+          camera_name: string
+          channel_id: string
+          created_at: string
+          detection_targets: string[]
+          event_time: string
+          event_type: string
+          id: string
+          instance_id: string
+          organization_id: string
+          raw: Json | null
+          read: boolean
+          target_type: string | null
+          thumbnail_path: string | null
+        }
+        Insert: {
+          archived?: boolean
+          camera_name: string
+          channel_id: string
+          created_at?: string
+          detection_targets?: string[]
+          event_time?: string
+          event_type: string
+          id?: string
+          instance_id: string
+          organization_id: string
+          raw?: Json | null
+          read?: boolean
+          target_type?: string | null
+          thumbnail_path?: string | null
+        }
+        Update: {
+          archived?: boolean
+          camera_name?: string
+          channel_id?: string
+          created_at?: string
+          detection_targets?: string[]
+          event_time?: string
+          event_type?: string
+          id?: string
+          instance_id?: string
+          organization_id?: string
+          raw?: Json | null
+          read?: boolean
+          target_type?: string | null
+          thumbnail_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hikvision_events_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "hikvision_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hikvision_instances: {
+        Row: {
+          auth_password: string | null
+          auth_username: string | null
+          base_url: string
+          camera_whatsapp_recipients: Json | null
+          color: string
+          created_at: string
+          enabled: boolean
+          id: string
+          is_local: boolean
+          last_error: string | null
+          last_event_ts: string | null
+          last_polled_at: string | null
+          last_seen_at: string | null
+          master_alert_recipients: string[]
+          multi_client: boolean
+          mute_enabled: boolean
+          mute_end: string | null
+          mute_start: string | null
+          name: string
+          nvr_unreachable_alerted_since: string | null
+          nvr_unreachable_since: string | null
+          offline_alert_enabled: boolean
+          offline_alert_minutes: number
+          offline_alert_recipients: string[]
+          organization_id: string
+          poll_enabled: boolean
+          updated_at: string
+          verify_tls: boolean
+          webhook_secret: string
+          whatsapp_alert_enabled: boolean
+          whatsapp_alert_minutes: number | null
+          whatsapp_recipients: string[]
+        }
+        Insert: {
+          auth_password?: string | null
+          auth_username?: string | null
+          base_url: string
+          camera_whatsapp_recipients?: Json | null
+          color?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_local?: boolean
+          last_error?: string | null
+          last_event_ts?: string | null
+          last_polled_at?: string | null
+          last_seen_at?: string | null
+          master_alert_recipients?: string[]
+          multi_client?: boolean
+          mute_enabled?: boolean
+          mute_end?: string | null
+          mute_start?: string | null
+          name: string
+          nvr_unreachable_alerted_since?: string | null
+          nvr_unreachable_since?: string | null
+          offline_alert_enabled?: boolean
+          offline_alert_minutes?: number
+          offline_alert_recipients?: string[]
+          organization_id: string
+          poll_enabled?: boolean
+          updated_at?: string
+          verify_tls?: boolean
+          webhook_secret?: string
+          whatsapp_alert_enabled?: boolean
+          whatsapp_alert_minutes?: number | null
+          whatsapp_recipients?: string[]
+        }
+        Update: {
+          auth_password?: string | null
+          auth_username?: string | null
+          base_url?: string
+          camera_whatsapp_recipients?: Json | null
+          color?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          is_local?: boolean
+          last_error?: string | null
+          last_event_ts?: string | null
+          last_polled_at?: string | null
+          last_seen_at?: string | null
+          master_alert_recipients?: string[]
+          multi_client?: boolean
+          mute_enabled?: boolean
+          mute_end?: string | null
+          mute_start?: string | null
+          name?: string
+          nvr_unreachable_alerted_since?: string | null
+          nvr_unreachable_since?: string | null
+          offline_alert_enabled?: boolean
+          offline_alert_minutes?: number
+          offline_alert_recipients?: string[]
+          organization_id?: string
+          poll_enabled?: boolean
+          updated_at?: string
+          verify_tls?: boolean
+          webhook_secret?: string
+          whatsapp_alert_enabled?: boolean
+          whatsapp_alert_minutes?: number | null
+          whatsapp_recipients?: string[]
+        }
+        Relationships: []
+      }
       media_items: {
         Row: {
           archived: boolean
