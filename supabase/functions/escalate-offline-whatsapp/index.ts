@@ -156,9 +156,16 @@ Deno.serve(async (req) => {
     }
 
     const errors: string[] = [];
-    for (const r of cleaned) {
+    // Send sequentially, one at a time, with a delay between recipients so
+    // Mudslide / WhatsApp doesn't get hit with a burst.
+    const delayMs = Number(Deno.env.get("WHATSAPP_SEND_DELAY_MS") ?? 1500);
+    for (let i = 0; i < cleaned.length; i++) {
+      const r = cleaned[i];
       try { await sendViaMudslide(s, r, message); }
       catch (e: any) { errors.push(`${r}: ${String(e?.message ?? e)}`); }
+      if (i < cleaned.length - 1 && delayMs > 0) {
+        await new Promise((res) => setTimeout(res, delayMs));
+      }
     }
 
     await supabase.from("whatsapp_settings")
