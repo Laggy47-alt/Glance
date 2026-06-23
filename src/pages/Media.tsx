@@ -13,6 +13,19 @@ import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "snapshot" | "clip";
+type GroupMode = "date" | "date-camera";
+
+const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const formatDateLabel = (key: string) => {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const today = new Date();
+  const yest = new Date(); yest.setDate(today.getDate() - 1);
+  if (dateKey(date) === dateKey(today)) return "Today";
+  if (dateKey(date) === dateKey(yest)) return "Yesterday";
+  return date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+};
 
 const Media = () => {
   const store = useWebhookStore();
@@ -22,6 +35,10 @@ const Media = () => {
   const [filter, setFilter] = useState("");
   const [tagsByMedia, setTagsByMedia] = useState<Record<string, { id: string; tag: string; note: string | null }[]>>({});
   const [onlyTagged, setOnlyTagged] = useState(false);
+  const [groupMode, setGroupMode] = useState<GroupMode>("date");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+
   
 
   useEffect(() => {
