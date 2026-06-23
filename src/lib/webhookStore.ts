@@ -662,7 +662,8 @@ class WebhookStore {
     try { parsed = text ? JSON.parse(text) : null; } catch { /* keep text */ }
     if (!res.ok) {
       const msg = parsed?.error || text || `HTTP ${res.status}`;
-      throw new Error(msg);
+      const detail = parsed?.response ? ` — ${String(parsed.response).slice(0, 300)}` : "";
+      throw new Error(msg + detail);
     }
     return parsed;
   }
