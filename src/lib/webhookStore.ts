@@ -291,7 +291,7 @@ class WebhookStore {
         this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
         this.scoped(supabase.from("webhook_events").select("*")).order("ts", { ascending: false }).limit(500),
         this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
-        this.scoped(supabase.from("media_items").select("*")).order("ts", { ascending: false }).limit(200),
+        this.scoped(supabase.from("media_items").select("*")).order("ts", { ascending: false }).limit(5000),
         this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
