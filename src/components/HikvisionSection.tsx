@@ -131,6 +131,18 @@ export function HikvisionSection() {
     finally { setPolling((s) => ({ ...s, [id]: false })); }
   };
 
+  const [registering, setRegistering] = useState<Record<string, boolean>>({});
+  const registerListener = async (h: HikvisionInstance) => {
+    setRegistering((s) => ({ ...s, [h.id]: true }));
+    try {
+      const url = hikvisionIngestUrl(h.id, h.webhook_secret);
+      const r = await store.registerHikvisionListener(h.id, url);
+      toast.success(`HTTP listener registered on NVR (slot ${r?.host_id ?? 1})`);
+    } catch (e) { toast.error(`Register failed: ${(e as Error).message}`); }
+    finally { setRegistering((s) => ({ ...s, [h.id]: false })); }
+  };
+
+
   const copy = (s: string) => { navigator.clipboard.writeText(s); toast.success("Copied"); };
 
   return (
@@ -284,7 +296,22 @@ export function HikvisionSection() {
                             <code className="flex-1 text-xs bg-secondary border border-border rounded px-3 py-2 font-mono text-accent break-all">{ingestUrl}</code>
                             <Button size="icon" variant="outline" onClick={() => copy(ingestUrl)} title="Copy URL"><Copy className="h-4 w-4" /></Button>
                           </div>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="mt-2 gap-1.5"
+                            onClick={() => registerListener(h)}
+                            disabled={registering[h.id]}
+                          >
+                            {registering[h.id] ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Webhook className="h-3.5 w-3.5" />}
+                            Register HTTP listener on NVR
+                          </Button>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Pushes this URL into the NVR's HTTP Host Notification slot 1 via ISAPI. You still need to tick
+                            <strong> Notify Surveillance Center</strong> on each AcuSense rule's Linkage Method.
+                          </p>
                         </div>
+
 
                         <div>
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">

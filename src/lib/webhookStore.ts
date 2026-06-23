@@ -647,6 +647,14 @@ class WebhookStore {
     if (error) throw error;
     return data;
   }
+  async registerHikvisionListener(id: string, ingestUrl: string) {
+    const { data, error } = await supabase.functions.invoke("hikvision-register-listener", {
+      method: "POST",
+      body: { instance_id: id, ingest_url: ingestUrl },
+    });
+    if (error) throw error;
+    return data;
+  }
 }
 
 export const webhookStore = new WebhookStore();
