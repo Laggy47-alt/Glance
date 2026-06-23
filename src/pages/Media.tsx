@@ -4,8 +4,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useEffect, useMemo, useState } from "react";
-import { Camera, Film, ImageOff, Play, Tag as TagIcon, CheckCircle2, ChevronDown, ChevronRight, CalendarDays } from "lucide-react";
+import { Camera, Film, ImageOff, Play, Tag as TagIcon, CheckCircle2, ChevronDown, ChevronRight, Server, CalendarDays } from "lucide-react";
 import { MediaLightbox, LightboxItem } from "@/components/MediaLightbox";
 import { resolveMediaUrl } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +14,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 type Tab = "all" | "snapshot" | "clip";
-type GroupMode = "date" | "date-camera";
+
+const ALL_NVRS = "__all__";
 
 const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -24,7 +26,12 @@ const formatDateLabel = (key: string) => {
   const yest = new Date(); yest.setDate(today.getDate() - 1);
   if (dateKey(date) === dateKey(today)) return "Today";
   if (dateKey(date) === dateKey(yest)) return "Yesterday";
-  return date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  return date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+};
+
+const formatDateLong = (key: string) => {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 };
 
 const Media = () => {
@@ -35,11 +42,10 @@ const Media = () => {
   const [filter, setFilter] = useState("");
   const [tagsByMedia, setTagsByMedia] = useState<Record<string, { id: string; tag: string; note: string | null }[]>>({});
   const [onlyTagged, setOnlyTagged] = useState(false);
-  const [groupMode, setGroupMode] = useState<GroupMode>("date");
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
-
-  
+  const [nvrId, setNvrId] = useState<string>(ALL_NVRS);
+  const [activeDate, setActiveDate] = useState<string | null>(null);
+  const [collapsedCams, setCollapsedCams] = useState<Record<string, boolean>>({});
+  const toggleCam = (k: string) => setCollapsedCams((c) => ({ ...c, [k]: !c[k] }));
 
   useEffect(() => {
     let active = true;
@@ -64,8 +70,19 @@ const Media = () => {
     return () => { active = false; supabase.removeChannel(ch); };
   }, [activeOrg?.id]);
 
+  // Map: source_id -> frigate instance (NVR)
+  const nvrBySourceId = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; color: string }>();
+    for (const f of store.frigates) {
+      if (f.source_id) m.set(f.source_id, { id: f.id, name: f.name, color: f.color });
+    }
+    return m;
+  }, [store.frigates]);
 
-  const items = useMemo(() => {
+  const nvrOfMedia = (m: { source_id: string }) => nvrBySourceId.get(m.source_id) ?? null;
+
+  // Per-tab + tag/text filtered items (NVR not yet applied — needed for NVR counts)
+  const baseItems = useMemo(() => {
     return store.media
       .filter((m) => tab === "all" || m.kind === tab)
       .filter((m) => !onlyTagged || (tagsByMedia[m.id]?.length ?? 0) > 0)
@@ -74,31 +91,66 @@ const Media = () => {
         const f = filter.toLowerCase();
         return (m.camera ?? "").toLowerCase().includes(f) ||
           (m.topic ?? "").toLowerCase().includes(f) ||
+          (nvrOfMedia(m)?.name ?? "").toLowerCase().includes(f) ||
           (tagsByMedia[m.id] ?? []).some((t) => t.tag.toLowerCase().includes(f));
       });
-  }, [store.media, tab, filter, tagsByMedia, onlyTagged]);
+  }, [store.media, tab, filter, tagsByMedia, onlyTagged, nvrBySourceId]);
 
-  const groups = useMemo(() => {
-    // Group by date, then optionally by camera. Items are already sorted by ts desc in the store; preserve order.
-    const byDate = new Map<string, Map<string, typeof items>>();
+  // NVR list with counts
+  const nvrList = useMemo(() => {
+    const counts = new Map<string, number>();
+    let unknown = 0;
+    for (const m of baseItems) {
+      const n = nvrOfMedia(m);
+      if (n) counts.set(n.id, (counts.get(n.id) ?? 0) + 1);
+      else unknown++;
+    }
+    const list = store.frigates
+      .map((f) => ({ id: f.id, name: f.name, color: f.color, count: counts.get(f.id) ?? 0 }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { list, unknown, total: baseItems.length };
+  }, [baseItems, store.frigates, nvrBySourceId]);
+
+  // Items scoped to selected NVR
+  const items = useMemo(() => {
+    if (nvrId === ALL_NVRS) return baseItems;
+    return baseItems.filter((m) => nvrOfMedia(m)?.id === nvrId);
+  }, [baseItems, nvrId, nvrBySourceId]);
+
+  // Build date list with counts (desc by date)
+  const dateList = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const m of items) {
       const dk = dateKey(new Date(m.ts));
-      const cam = m.camera ?? "Unknown camera";
-      if (!byDate.has(dk)) byDate.set(dk, new Map());
-      const camMap = byDate.get(dk)!;
-      if (!camMap.has(cam)) camMap.set(cam, [] as typeof items);
-      camMap.get(cam)!.push(m);
+      counts.set(dk, (counts.get(dk) ?? 0) + 1);
     }
-    return Array.from(byDate.entries())
+    return Array.from(counts.entries())
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .map(([dk, camMap]) => ({
-        dateKey: dk,
-        total: Array.from(camMap.values()).reduce((n, arr) => n + arr.length, 0),
-        cameras: Array.from(camMap.entries())
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([camera, arr]) => ({ camera, items: arr })),
-      }));
+      .map(([key, count]) => ({ key, count }));
   }, [items]);
+
+  // Default-select most recent date when list changes
+  useEffect(() => {
+    if (dateList.length === 0) { setActiveDate(null); return; }
+    if (!activeDate || !dateList.some((d) => d.key === activeDate)) {
+      setActiveDate(dateList[0].key);
+    }
+  }, [dateList, activeDate]);
+
+  // Items for selected date, grouped by camera
+  const camerasForDate = useMemo(() => {
+    if (!activeDate) return [] as { camera: string; items: typeof items }[];
+    const byCam = new Map<string, typeof items>();
+    for (const m of items) {
+      if (dateKey(new Date(m.ts)) !== activeDate) continue;
+      const cam = m.camera ?? "Unknown camera";
+      if (!byCam.has(cam)) byCam.set(cam, [] as typeof items);
+      byCam.get(cam)!.push(m);
+    }
+    return Array.from(byCam.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([camera, arr]) => ({ camera, items: arr }));
+  }, [items, activeDate]);
 
   const toLightbox = (m: typeof store.media[number]): LightboxItem => ({
     kind: m.kind,
@@ -183,13 +235,15 @@ const Media = () => {
     );
   };
 
+  const activeNvr = nvrId === ALL_NVRS ? null : store.frigates.find((f) => f.id === nvrId) ?? null;
 
   return (
     <DashboardLayout
       title="Media"
-      subtitle="Every snapshot and clip captured from webhooks"
+      subtitle="Browse snapshots and clips by NVR, date, and camera"
       actions={<Button variant="outline" size="sm" onClick={() => store.clearMedia()}>Clear all</Button>}
     >
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="flex bg-secondary/50 rounded-md p-1 border border-border">
           {tabs.map((t) => (
@@ -208,107 +262,157 @@ const Media = () => {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1 ml-auto rounded-md border border-border bg-secondary/50 p-1">
-          <button
-            onClick={() => setGroupMode("date")}
-            className={cn(
-              "px-2 py-1 text-[11px] font-medium rounded transition-colors",
-              groupMode === "date" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-            title="Group by date"
-          >
-            By date
-          </button>
-          <button
-            onClick={() => setGroupMode("date-camera")}
-            className={cn(
-              "px-2 py-1 text-[11px] font-medium rounded transition-colors",
-              groupMode === "date-camera" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-            title="Group by date and camera"
-          >
-            Date + camera
-          </button>
-        </div>
         <Button
           size="sm"
           variant={onlyTagged ? "default" : "outline"}
           onClick={() => setOnlyTagged((v) => !v)}
-          className="gap-1.5 h-8"
+          className="gap-1.5 h-8 ml-auto"
         >
           <TagIcon className="h-3.5 w-3.5" /> Tagged only
         </Button>
         <Input
-          placeholder="Filter by camera, topic, or tag…"
+          placeholder="Search camera, NVR, topic, tag…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="bg-secondary border-border max-w-xs"
         />
       </div>
 
-      {items.length === 0 ? (
-        <Card className="bg-gradient-card border-border shadow-card p-12 text-center">
-          <ImageOff className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-foreground font-medium">No media yet</p>
-          <p className="text-xs text-muted-foreground mt-1">Snapshots and clips arriving via webhooks will appear here.</p>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {groups.map((g) => {
-            const dateCollapsed = collapsed[`d:${g.dateKey}`];
-            return (
-              <section key={g.dateKey} className="space-y-3">
-                <button
-                  onClick={() => toggle(`d:${g.dateKey}`)}
-                  className="w-full flex items-center gap-2 sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border py-2 text-left"
-                >
-                  {dateCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                  <CalendarDays className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground">{formatDateLabel(g.dateKey)}</h2>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">{g.dateKey}</span>
-                  <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] tabular-nums">{g.total}</Badge>
-                  <span className="ml-auto text-[11px] text-muted-foreground">
-                    {g.cameras.length} {g.cameras.length === 1 ? "camera" : "cameras"}
-                  </span>
-                </button>
+      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4">
+        {/* NVR sidebar */}
+        <aside className="space-y-1">
+          <div className="flex items-center gap-1.5 px-2 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <Server className="h-3 w-3" /> NVRs
+          </div>
+          <button
+            onClick={() => setNvrId(ALL_NVRS)}
+            className={cn(
+              "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md text-xs font-medium transition-colors text-left",
+              nvrId === ALL_NVRS ? "bg-primary text-primary-foreground shadow-glow" : "bg-secondary/40 hover:bg-secondary text-foreground"
+            )}
+          >
+            <span>All NVRs</span>
+            <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums bg-background/40 text-inherit border-0">
+              {nvrList.total}
+            </Badge>
+          </button>
+          {nvrList.list.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => setNvrId(n.id)}
+              className={cn(
+                "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md text-xs font-medium transition-colors text-left",
+                nvrId === n.id ? "bg-primary text-primary-foreground shadow-glow" : "bg-secondary/40 hover:bg-secondary text-foreground"
+              )}
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: n.color }} />
+                <span className="truncate">{n.name}</span>
+              </span>
+              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums bg-background/40 text-inherit border-0">
+                {n.count}
+              </Badge>
+            </button>
+          ))}
+          {nvrList.unknown > 0 && (
+            <div className="px-2.5 py-1 text-[10px] text-muted-foreground">
+              {nvrList.unknown} unassigned
+            </div>
+          )}
+        </aside>
 
-                {!dateCollapsed && (
-                  groupMode === "date" ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                      {g.cameras.flatMap((c) => c.items).map(renderTile)}
-                    </div>
-                  ) : (
-                    <div className="space-y-4 pl-1">
-                      {g.cameras.map((c) => {
-                        const ck = `dc:${g.dateKey}:${c.camera}`;
-                        const camCollapsed = collapsed[ck];
-                        return (
-                          <div key={ck} className="space-y-2">
-                            <button
-                              onClick={() => toggle(ck)}
-                              className="w-full flex items-center gap-2 text-left"
-                            >
-                              {camCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                              <Camera className="h-3.5 w-3.5 text-muted-foreground" />
-                              <h3 className="text-xs font-medium text-foreground capitalize">{c.camera}</h3>
-                              <Badge variant="secondary" className="h-4 px-1.5 text-[10px] tabular-nums">{c.items.length}</Badge>
-                            </button>
-                            {!camCollapsed && (
-                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                                {c.items.map(renderTile)}
-                              </div>
-                            )}
+        {/* Main content */}
+        <div className="space-y-4 min-w-0">
+          {items.length === 0 ? (
+            <Card className="bg-gradient-card border-border shadow-card p-12 text-center">
+              <ImageOff className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-foreground font-medium">No media for this selection</p>
+              <p className="text-xs text-muted-foreground mt-1">Try another NVR or clear the filters.</p>
+            </Card>
+          ) : (
+            <>
+              {/* Date strip */}
+              <Card className="bg-gradient-card border-border shadow-card p-2">
+                <div className="flex items-center gap-2 px-1 pb-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Dates {activeNvr ? `· ${activeNvr.name}` : ""}
+                  </span>
+                  <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+                    {dateList.length} {dateList.length === 1 ? "day" : "days"}
+                  </span>
+                </div>
+                <ScrollArea className="w-full">
+                  <div className="flex gap-2 pb-2">
+                    {dateList.map((d) => (
+                      <button
+                        key={d.key}
+                        onClick={() => setActiveDate(d.key)}
+                        className={cn(
+                          "flex-shrink-0 px-3 py-1.5 rounded-md border text-left transition-colors",
+                          activeDate === d.key
+                            ? "bg-primary text-primary-foreground border-primary shadow-glow"
+                            : "bg-secondary/40 border-border hover:border-primary/50 text-foreground"
+                        )}
+                      >
+                        <div className="text-xs font-semibold leading-tight">{formatDateLabel(d.key)}</div>
+                        <div className={cn(
+                          "text-[10px] tabular-nums leading-tight",
+                          activeDate === d.key ? "text-primary-foreground/80" : "text-muted-foreground"
+                        )}>
+                          {d.key} · {d.count}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              </Card>
+
+              {/* Cameras for date */}
+              {activeDate && (
+                <div className="space-y-4">
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="text-base font-semibold text-foreground">{formatDateLong(activeDate)}</h2>
+                    <span className="text-xs text-muted-foreground">
+                      · {camerasForDate.length} {camerasForDate.length === 1 ? "camera" : "cameras"}
+                      · {camerasForDate.reduce((n, c) => n + c.items.length, 0)} items
+                    </span>
+                  </div>
+                  {camerasForDate.map((c) => {
+                    const ck = `${nvrId}:${activeDate}:${c.camera}`;
+                    const isCollapsed = collapsedCams[ck];
+                    return (
+                      <section key={ck} className="space-y-2">
+                        <button
+                          onClick={() => toggleCam(ck)}
+                          className="w-full flex items-center gap-2 text-left bg-secondary/30 hover:bg-secondary/60 border border-border rounded-md px-3 py-2 transition-colors"
+                        >
+                          {isCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                          <Camera className="h-4 w-4 text-primary" />
+                          <h3 className="text-sm font-medium text-foreground capitalize">{c.camera}</h3>
+                          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] tabular-nums">{c.items.length}</Badge>
+                          <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+                            {new Date(c.items[c.items.length - 1].ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {" – "}
+                            {new Date(c.items[0].ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                            {c.items.map(renderTile)}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )
-                )}
-              </section>
-            );
-          })}
+                        )}
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+      </div>
+
       <MediaLightbox item={selected} onClose={() => setSelected(null)} />
     </DashboardLayout>
   );
