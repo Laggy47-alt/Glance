@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<HttpHostNotification version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">` +
+    `<HttpHostNotification version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">` +
     `<id>${hostId}</id>` +
     `<url>${xmlEscape(pathAndQuery)}</url>` +
     `<protocolType>${isHttps ? "HTTPS" : "HTTP"}</protocolType>` +
