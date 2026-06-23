@@ -183,6 +183,8 @@ class WebhookStore {
   rules: AutoReadRule[] = [];
   media: MediaItem[] = [];
   frigates: FrigateInstance[] = [];
+  hikvisions: HikvisionInstance[] = [];
+  hikvisionChannels: HikvisionChannel[] = [];
   loaded = false;
   error: string | null = null;
   activeOrgId: string | null = null;
