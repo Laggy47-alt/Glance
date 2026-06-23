@@ -50,3 +50,9 @@ verify_jwt = false
 
 [functions.frigate-backup-config]
 verify_jwt = false
+
+[functions.hikvision-ingest]
+verify_jwt = false
+
+[functions.hikvision-watch]
+verify_jwt = false
