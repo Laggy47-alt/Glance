@@ -89,6 +89,43 @@ export type FrigateInstance = {
   created_at: string;
 };
 
+export type HikvisionInstance = {
+  id: string;
+  organization_id?: string | null;
+  source_id: string | null;
+  name: string;
+  base_url: string;
+  auth_username: string | null;
+  auth_password: string | null;
+  verify_tls: boolean;
+  color: string;
+  enabled: boolean;
+  poll_enabled: boolean;
+  is_local: boolean;
+  webhook_secret: string;
+  last_polled_at: string | null;
+  last_seen_at: string | null;
+  last_event_ts: string | null;
+  last_error: string | null;
+  nvr_unreachable_since: string | null;
+  offline_alert_enabled: boolean;
+  offline_alert_minutes: number;
+  offline_alert_recipients: string[];
+  created_at: string;
+};
+
+export type HikvisionChannel = {
+  id: string;
+  organization_id?: string | null;
+  instance_id: string;
+  channel_id: string;
+  name: string;
+  enabled: boolean;
+  last_event_ts: string | null;
+  last_snapshot_path: string | null;
+  created_at: string;
+};
+
 /**
  * Returns true if the NVR's alert mute window covers `now` (local time).
  * Supports overnight windows (e.g. 22:00 → 06:00).
