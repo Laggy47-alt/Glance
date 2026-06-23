@@ -57,8 +57,21 @@ Deno.serve(async (req) => {
   const port = parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80);
   const pathAndQuery = parsed.pathname + (parsed.search || "");
 
-  const xml =
-    `<?xml version="1.0" encoding="UTF-8"?>` +
+  const jsonPayload = JSON.stringify({
+    HttpHostNotification: {
+      id: hostId,
+      url: pathAndQuery,
+      protocolType: isHttps ? "HTTPS" : "HTTP",
+      parameterFormatType: "XML",
+      addressingFormatType: "hostname",
+      hostName: parsed.hostname,
+      portNo: port,
+      userName: "",
+      httpAuthenticationMethod: "none",
+    },
+  });
+
+  const xmlPayload =
     `<HttpHostNotification version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">` +
     `<id>${hostId}</id>` +
     `<url>${xmlEscape(pathAndQuery)}</url>` +
@@ -71,17 +84,31 @@ Deno.serve(async (req) => {
     `<httpAuthenticationMethod>none</httpAuthenticationMethod>` +
     `</HttpHostNotification>`;
 
-  let status = 0;
-  let respText = "";
-  try {
+  async function tryPut(payload: string, contentType: "application/json" | "application/xml") {
     const r = await hikvisionFetch(
       inst,
-      `/ISAPI/Event/notification/httpHosts/${hostId}`,
-      { method: "PUT", headers: { "Content-Type": "application/xml" }, body: xml },
+      `/ISAPI/Event/notification/httpHosts/${hostId}${contentType === "application/json" ? "?format=json" : ""}`,
+      { method: "PUT", headers: { "Content-Type": contentType }, body: payload },
       10000,
     );
-    status = r.status;
-    respText = await r.text();
+    const text = await r.text();
+    return { status: r.status, text };
+  }
+
+  let status = 0;
+  let respText = "";
+  let lastErr = "";
+  try {
+    // Most NVRs accept JSON cleanly and avoid XML parser quirks.
+    const jsonRes = await tryPut(jsonPayload, "application/json");
+    status = jsonRes.status;
+    respText = jsonRes.text;
+    if (status >= 400) {
+      lastErr = respText;
+      const xmlRes = await tryPut(xmlPayload, "application/xml");
+      status = xmlRes.status;
+      respText = xmlRes.text;
+    }
   } catch (e) {
     return json({ error: `NVR unreachable: ${(e as Error).message}` }, 502);
   }
