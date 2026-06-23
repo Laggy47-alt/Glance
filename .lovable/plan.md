@@ -1,75 +1,76 @@
-## Hikvision AcuSense NVR Integration — Plan
 
-Bring Hikvision NVRs into Glance as a first-class NVR type alongside Frigate and UniFi, with their own ingest path, status monitoring, schedules, and UI.
+# Hikvision frontend integration
 
-### 1. Database (new `hikvision_*` tables)
+## Goal
 
-**`hikvision_instances`** — one row per NVR. Mirrors the useful fields from `frigate_instances` so the rest of the app can treat it uniformly:
-- Connection: `name`, `base_url`, `is_local`, `verify_tls`, `auth_username`, `auth_password` (ISAPI Digest), `webhook_secret` (uuid path token), `color`, `enabled`
-- Polling: `poll_enabled`, `last_polled_at`, `last_error`, `last_event_ts`, `last_seen_at`
-- Offline alerting (same shape as Frigate): `offline_alert_enabled/minutes/recipients`, `whatsapp_alert_enabled/minutes/recipients`, `master_alert_recipients`, `multi_client`, `camera_whatsapp_recipients`, `nvr_unreachable_since/_alerted_since`
-- NVR-unreachable + per-channel arm reuse existing tables (`camera_status`, `camera_armed_state`, `camera_arm_schedules`, `camera_offline_alerts`) keyed by `instance_id` — these are already generic uuid+camera, so no schema change needed there.
+Make Hikvision NVRs first-class citizens alongside Frigate: managed from the same NVRs page, monitored on NVR Status, alerting into the same Live Wall, and selectable in schedules + customer assignments.
 
-**`hikvision_events`** — alert rows pushed by the NVR:
-- `instance_id`, `organization_id`, `channel_id` (ISAPI channelID), `camera_name`
-- `event_type` (lineDetection, fieldDetection, regionEntrance, regionExiting, loitering, objectRemoval, attendedBaggage, unattendedBaggage, etc. — full AcuSense set ingested raw)
-- `target_type` (human / vehicle / null), `detection_target` array
-- `event_time`, `thumbnail_path` (camera-snapshots bucket), `raw` jsonb, `read`, `archived`
+## Architectural decisions
 
-**`hikvision_channels`** — discovered channels per NVR (id, name, enabled, last snapshot path). Populated by the poll function from `/ISAPI/ContentMgmt/InputProxy/channels` or `/ISAPI/System/Video/inputs/channels`.
+1. **Rename "Frigate NVR" → "NVRs"** in the sidebar; keep the route `/frigate` so existing links don't break.
+2. **Mirror Hikvision events into `webhook_events`** (and snapshots into `media_items`) at ingest time, in addition to writing the typed `hikvision_events` row. This means the Live Wall, Media page, auto-read rules, WhatsApp alerts, daily reports, and customer events all work automatically with zero UI changes for that part.
+3. **One auto-paired `webhook_source` per Hikvision instance**, same pattern as UniFi already uses (`ensure_unifi_webhook_source` trigger). The instance row carries `source_id`; the ingest writes events scoped to that source.
+4. **Snapshots**: store under `camera-snapshots/{org}/hikvision/...` (already done) and ALSO insert a `media_items` row with the public URL so the Wall and Media page render them like Frigate snapshots.
 
-RLS: organization-scoped, same pattern as `unifi_*` / `frigate_instances`. GRANTs to `authenticated` + `service_role`.
+## Migration (small, one new SQL block)
 
-### 2. Edge functions
+- Add `source_id uuid references webhook_sources` to `hikvision_instances`.
+- Add `ensure_hikvision_webhook_source` trigger mirroring the UniFi one (creates a `webhook_sources` row on insert, syncs name/color/enabled on update).
+- GRANTs already covered by previous migration.
 
-**`hikvision-ingest`** (new, `verify_jwt = false`, public endpoint)
-- URL: `/functions/v1/hikvision-ingest/{instance_id}/{webhook_secret}`
-- Accepts `multipart/form-data` from Hikvision HTTP Host Notification:
-  - First part: `application/xml` with `<EventNotificationAlert>` (channelID, eventType, dateTime, DetectionRegionList, targetType for AcuSense)
-  - Subsequent parts: `image/jpeg` snapshot(s)
-- Parses XML, uploads JPEG to `camera-snapshots/{org}/hikvision/{instance}/{channel}/{ts}.jpg`, inserts `hikvision_events` row, updates `camera_status` to online, bumps `last_event_ts` + `last_seen_at`.
-- Validates secret; rejects mismatched instance/secret combos with 401.
+## Edge function update
 
-**`hikvision-watch`** (new, cron every minute, mirrors `camera-watch`)
-- For each enabled instance: poll `/ISAPI/System/status` (ISAPI Digest auth) to verify reachability; poll channel list to refresh `hikvision_channels` and `camera_status`.
-- Uses `last_event_ts` per channel + heartbeat to flip channels offline after configured minutes.
-- Reuses `escalate-offline` / `escalate-offline-whatsapp` and the same NVR-unreachable + recovery logic already in `camera-watch`.
-- Added to `daily-offline-broadcast` so Hikvision channels appear in the 8am summary.
+- `hikvision-ingest/index.ts`: in addition to current writes, insert:
+  - one `webhook_events` row (`source_id`, `topic = eventType`, `camera = finalCameraName`, `label = targetType ?? eventType`, `kind = "hikvision"`, `payload = { event, channel, targets, raw_excerpt }`)
+  - if a snapshot was uploaded, one `media_items` row (`kind = "snapshot"`, `url = public URL`, `camera`, `topic`, `instance_id = inst.id`)
 
-**`hikvision-proxy`** (new, authed)
-- Mirrors `frigate-proxy`: streams ISAPI live snapshots `/ISAPI/Streaming/channels/{channelID}/picture` for the status page and event lightbox, using stored Digest credentials. Keeps NVR credentials server-side.
+## Frontend changes
 
-**`hikvision-discover`** (new, authed admin-only one-shot)
-- Called from the NVR edit dialog: hits ISAPI to enumerate channels and populate `hikvision_channels`. Returns model/firmware for display.
+### Store — `src/lib/webhookStore.ts`
+- New `HikvisionInstance` + `HikvisionChannel` types.
+- `hikvisions: HikvisionInstance[]` and `hikvisionChannels: HikvisionChannel[]` fields.
+- Load + realtime subscription for both tables.
+- CRUD: `createHikvision`, `updateHikvision`, `deleteHikvision`, `discoverHikvisionChannels(id)`, `pollHikvisionNow(id)` (calls `hikvision-watch` for a single instance).
 
-### 3. Frontend
+### Sidebar — `src/components/AppSidebar.tsx`
+- Label "Frigate NVR" → "NVRs". Sites list shows both Frigate + Hikvision (sorted together).
 
-**Settings / NVRs page** — extend the existing `Frigate.tsx` / NVR settings flow:
-- "Add NVR" gets a type selector: Frigate / Hikvision.
-- Hikvision form: name, base URL, username, password, verify TLS, color, enabled. Shows the generated webhook URL + setup instructions for Hikvision Event > Notification > HTTP Listening.
-- Reuse the multi-client camera→WhatsApp recipient editor against `hikvision_channels`.
+### NVRs page — `src/pages/Frigate.tsx`
+- Title "NVRs", subtitle covers both types.
+- New "Add" dropdown: "Add Frigate" / "Add Hikvision".
+- Hikvision dialog: name, base URL, username, password, verify TLS toggle, color, offline-alert settings.
+- Hikvision card (collapsible, same visual language as Frigate cards):
+  - Status badge (healthy / unreachable / error), enable toggle, last poll/last event.
+  - **Webhook URL + secret panel** — copy button, with paste-into-NVR instructions (links to `HIKVISION_SETUP.md` summary).
+  - **Discover channels** button (calls `hikvision-discover`, refreshes channel list).
+  - Channels list with snapshot thumbnail (via `hikvision-proxy`), online badge, last event time.
+  - Delete button.
 
-**NVR Status page** — `NvrStatus.tsx` extended to render Hikvision instances and channels next to Frigate, using `hikvision-proxy` for snapshots. Same offline indicator + last-event timestamp.
+### NVR Status — `src/pages/NvrStatus.tsx`
+- Iterate `[...frigates, ...hikvisions]`. For Hikvision cards, source the channel list + online status from `camera_status` (already populated by `hikvision-watch`) and render snapshots via `hikvision-proxy`.
 
-**Events / Wall / Media** — `webhookStore` gains a `hikvision` event source. Rows render in the existing event feed with the AcuSense event type, target type chip (human/vehicle), and snapshot. Auto-read rules and archive work via the same UI.
+### Schedules — `src/components/CameraScheduleDialog.tsx`
+- Camera picker currently lists Frigate cameras only. Extend it to also list Hikvision channels (instance name + channel name), keyed the same way (instance_id + camera name) so `camera_arm_schedules` works unchanged.
 
-**Arm schedules** — `camera_arm_schedules` already keys on `(instance_id, camera)`, so the existing schedule UI (`NvrSchedulesPanel`, `CameraScheduleDialog`) just needs Hikvision channels added to its camera picker — no logic change.
+### Customer assignments — `src/pages/Customer.tsx` (+ any picker components)
+- Add Hikvision instances + channels to the assignment dropdowns (`customer_nvr_assignments` + `customer_camera_assignments`). Keys are already polymorphic on `instance_id`.
 
-**Customer assignments** — `customer_nvr_assignments` and `customer_camera_assignments` already use generic `instance_id`. Add Hikvision instances to the picker dropdowns.
+### Wall + Media + WhatsApp alerts + Daily reports + Auto-read
+- **No code changes** — they read from `webhook_events` / `media_items`, which are now populated by the Hikvision ingest mirror.
 
-### 4. Public setup helper
+## Out of scope this turn
 
-A short markdown doc + on-screen instructions explaining how to point a Hikvision NVR's HTTP Listening at the generated webhook URL (Configuration → Network → Advanced → HTTP Listening, plus per-channel Event → Smart Event → enable Notify Surveillance Center).
+- Two-way ISAPI control (arm/disarm pushed back to NVR). Glance-side arming via `camera_arm_schedules` still works because it gates alerts in the app, not on the NVR.
+- RTSP / recordings / playback.
 
-### 5. Out of scope (call out for later)
+## Suggested apply order
 
-- Two-way control (arm/disarm Hikvision channels via ISAPI) — only Glance-side arming for now.
-- Recording playback / RTSP streaming.
-- Cloud P2P / Hik-Connect; LAN/VPN reachable NVRs only.
+1. Backend: migration + ingest function update (1 migration approval).
+2. Frontend: store extensions.
+3. Frontend: sidebar rename + NVRs page Hikvision section.
+4. Frontend: NVR Status page.
+5. Frontend: schedule + customer assignment pickers.
 
-### Technical notes
+You'll need to re-run the new migration on self-hosted + redeploy `hikvision-ingest` after step 1.
 
-- All Hikvision functions live under `supabase/functions/hikvision-*/` mirroring the Frigate layout, with a `supabase/functions/_shared/hikvisionAuth.ts` helper for ISAPI Digest auth (the protocol Hikvision uses for ISAPI; not Basic).
-- Ingest function is registered with `verify_jwt = false` in `supabase/config.toml`.
-- `pg_cron` job invokes `hikvision-watch` every minute, registered via the insert tool (not migration) since it embeds the project URL + anon key — same pattern as `camera-watch`.
-- Both backends (self-hosted `ragpwpshriqnieniaapx` and Lovable Cloud `bgczubehzofjvjenozof`) will get the migration + functions on confirmation; default target is self-hosted per your standing rule.
+Approve and I'll start with step 1.

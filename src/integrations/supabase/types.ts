@@ -805,6 +805,7 @@ export type Database = {
           offline_alert_recipients: string[]
           organization_id: string
           poll_enabled: boolean
+          source_id: string | null
           updated_at: string
           verify_tls: boolean
           webhook_secret: string
@@ -839,6 +840,7 @@ export type Database = {
           offline_alert_recipients?: string[]
           organization_id: string
           poll_enabled?: boolean
+          source_id?: string | null
           updated_at?: string
           verify_tls?: boolean
           webhook_secret?: string
@@ -873,6 +875,7 @@ export type Database = {
           offline_alert_recipients?: string[]
           organization_id?: string
           poll_enabled?: boolean
+          source_id?: string | null
           updated_at?: string
           verify_tls?: boolean
           webhook_secret?: string
@@ -880,7 +883,15 @@ export type Database = {
           whatsapp_alert_minutes?: number | null
           whatsapp_recipients?: string[]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "hikvision_instances_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_sources"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       media_items: {
         Row: {
