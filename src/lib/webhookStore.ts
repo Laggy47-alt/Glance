@@ -254,7 +254,7 @@ class WebhookStore {
         const existing = new Set(this.events.map((e) => e.id));
         const fresh = (ev.data as WebhookEvent[]).filter((e) => !existing.has(e.id));
         if (fresh.length) {
-          this.events = [...fresh, ...this.events].slice(0, 500);
+          this.events = [...fresh, ...this.events].slice(0, 10000);
           changed = true;
         }
         for (const e of ev.data as WebhookEvent[]) {
@@ -266,7 +266,7 @@ class WebhookStore {
         const existing = new Set(this.media.map((m) => m.id));
         const fresh = (md.data as MediaItem[]).filter((m) => !existing.has(m.id));
         if (fresh.length) {
-          this.media = [...fresh, ...this.media].slice(0, 5000);
+          this.media = [...fresh, ...this.media].slice(0, 10000);
           changed = true;
         }
         for (const m of md.data as MediaItem[]) {
@@ -285,19 +285,36 @@ class WebhookStore {
     await this.pollIncremental();
   }
 
+  /** Paginated fetch — Supabase caps a single request at 1000 rows, so we page through with .range(). */
+  private async fetchPaged<T>(table: string, orderCol: string, ascending: boolean, target: number): Promise<T[]> {
+    const pageSize = 1000;
+    const out: T[] = [];
+    for (let from = 0; from < target; from += pageSize) {
+      const to = Math.min(from + pageSize, target) - 1;
+      const { data, error } = await this.scoped((supabase as any).from(table).select("*"))
+        .order(orderCol, { ascending })
+        .range(from, to);
+      if (error) throw error;
+      const rows = (data ?? []) as T[];
+      out.push(...rows);
+      if (rows.length < (to - from + 1)) break; // no more rows
+    }
+    return out;
+  }
+
   async refreshAll() {
     try {
       const [s, e, r, m, f] = await Promise.all([
         this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
-        this.scoped(supabase.from("webhook_events").select("*")).order("ts", { ascending: false }).limit(500),
+        this.fetchPaged<WebhookEvent>("webhook_events", "ts", false, 10000),
         this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
-        this.scoped(supabase.from("media_items").select("*")).order("ts", { ascending: false }).limit(5000),
+        this.fetchPaged<MediaItem>("media_items", "ts", false, 10000),
         this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
-      this.events = (e.data ?? []) as WebhookEvent[];
+      this.events = e;
       this.rules = (r.data ?? []) as AutoReadRule[];
-      this.media = (m.data ?? []) as MediaItem[];
+      this.media = m;
       this.frigates = (f.data ?? []) as FrigateInstance[];
       this.loaded = true;
       this.error = null;
@@ -306,6 +323,8 @@ class WebhookStore {
     }
     this.emit();
   }
+
+
 
 
   private subscribeRealtime() {
@@ -322,7 +341,7 @@ class WebhookStore {
       .on("postgres_changes", { event: "*", schema: "public", table: "webhook_events" }, (p) => {
         const row = (p.new ?? p.old) as WebhookEvent;
         if (!this.matchesOrg(row)) return;
-        if (p.eventType === "INSERT") this.events = [p.new as WebhookEvent, ...this.events].slice(0, 500);
+        if (p.eventType === "INSERT") this.events = [p.new as WebhookEvent, ...this.events].slice(0, 10000);
         else if (p.eventType === "UPDATE") this.events = this.events.map((x) => x.id === (p.new as WebhookEvent).id ? (p.new as WebhookEvent) : x);
         else if (p.eventType === "DELETE") this.events = this.events.filter((x) => x.id !== (p.old as WebhookEvent).id);
         this.emit();
@@ -338,7 +357,7 @@ class WebhookStore {
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, (p) => {
         const row = (p.new ?? p.old) as MediaItem;
         if (!this.matchesOrg(row)) return;
-        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 5000);
+        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 10000);
         else if (p.eventType === "UPDATE") this.media = this.media.map((x) => x.id === (p.new as MediaItem).id ? (p.new as MediaItem) : x);
         else if (p.eventType === "DELETE") this.media = this.media.filter((x) => x.id !== (p.old as MediaItem).id);
         this.emit();
