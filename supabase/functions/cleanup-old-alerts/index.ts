@@ -19,12 +19,17 @@ Deno.serve(async (req) => {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
   const results: Record<string, number | string> = { cutoff, days };
 
-  for (const table of ["media_items", "webhook_events", "unifi_events"]) {
+  const tables: Array<[string, string]> = [
+    ["media_items", "ts"],
+    ["webhook_events", "ts"],
+    ["unifi_events", "created_at"],
+  ];
+  for (const [table, col] of tables) {
     try {
       const { error, count } = await supabase
         .from(table)
         .delete({ count: "exact" })
-        .lt("ts", cutoff);
+        .lt(col, cutoff);
       results[table] = error ? `error: ${error.message}` : (count ?? 0);
     } catch (e) {
       results[table] = `error: ${(e as Error).message}`;
