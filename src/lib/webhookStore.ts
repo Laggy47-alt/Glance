@@ -583,6 +583,70 @@ class WebhookStore {
     if (error) throw error;
     return data;
   }
+
+  // ─── Hikvision instances ───
+  async createHikvision(input: {
+    name: string;
+    base_url: string;
+    auth_username?: string | null;
+    auth_password?: string | null;
+    verify_tls?: boolean;
+    color?: string;
+  }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
+    const { error } = await supabase.from("hikvision_instances").insert({
+      organization_id: this.activeOrgId,
+      name: input.name,
+      base_url: input.base_url.replace(/\/+$/, ""),
+      auth_username: input.auth_username || null,
+      auth_password: input.auth_password || null,
+      verify_tls: input.verify_tls ?? true,
+      color: input.color ?? "#ef4444",
+    } as never);
+    if (error) throw error;
+  }
+  async updateHikvision(id: string, patch: Partial<Pick<HikvisionInstance,
+    "name" | "base_url" | "auth_username" | "auth_password" | "verify_tls" | "color" |
+    "enabled" | "poll_enabled" | "offline_alert_enabled" | "offline_alert_minutes" | "offline_alert_recipients"
+  >>) {
+    const cleaned = {
+      ...patch,
+      ...(patch.base_url !== undefined ? { base_url: patch.base_url.replace(/\/+$/, "") } : {}),
+    };
+    const q = supabase.from("hikvision_instances").update(cleaned as never).eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) throw error;
+  }
+  async deleteHikvision(id: string) {
+    const inst = this.hikvisions.find((h) => h.id === id);
+    this.hikvisions = this.hikvisions.filter((h) => h.id !== id);
+    if (inst?.source_id) this.sources = this.sources.filter((s) => s.id !== inst.source_id);
+    this.emit();
+    const q = supabase.from("hikvision_instances").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) { await this.refreshAll(); throw error; }
+    if (inst?.source_id) {
+      const srcQ = supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+      await (this.activeOrgId ? srcQ.eq("organization_id", this.activeOrgId) : srcQ);
+    }
+  }
+  async discoverHikvisionChannels(id: string) {
+    const { data, error } = await supabase.functions.invoke("hikvision-discover", {
+      method: "POST",
+      body: { instance_id: id },
+    });
+    if (error) throw error;
+    await this.refreshAll();
+    return data;
+  }
+  async pollHikvisionNow(id?: string) {
+    const { data, error } = await supabase.functions.invoke(
+      id ? `hikvision-watch?instance_id=${id}` : "hikvision-watch",
+      { method: "POST" },
+    );
+    if (error) throw error;
+    return data;
+  }
 }
 
 export const webhookStore = new WebhookStore();
