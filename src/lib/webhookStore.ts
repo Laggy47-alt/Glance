@@ -291,7 +291,7 @@ class WebhookStore {
     const out: T[] = [];
     for (let from = 0; from < target; from += pageSize) {
       const to = Math.min(from + pageSize, target) - 1;
-      const { data, error } = await this.scoped(supabase.from(table).select("*"))
+      const { data, error } = await this.scoped((supabase as any).from(table).select("*"))
         .order(orderCol, { ascending })
         .range(from, to);
       if (error) throw error;
