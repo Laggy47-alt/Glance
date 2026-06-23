@@ -1,0 +1,336 @@
+# Glance — Change History (change.rev)
+Generated: 2026-06-23
+Source: git log (full), filtered to meaningful commits + this session's infra tuning.
+Format: <date>  <short-sha>  <subject>
+
+================================================================================
+SESSION INFRA TUNING (not in git — applied to self-hosted backend)
+================================================================================
+2026-06-23  [infra]  Expanded LVM ubuntu--vg-ubuntu--lv to use full 1.8 TB SSD
+2026-06-23  [infra]  Tuned Postgres for 121 GB / 24-core host via ALTER SYSTEM:
+                       shared_buffers       = 8GB     (was 128MB)
+                       effective_cache_size = 24GB    (was 128MB)
+                       work_mem             = 32MB    (was 4MB)
+                       maintenance_work_mem = 2GB     (was 64MB)
+                       max_connections      = 300     (was 100)
+                       max_worker_processes = 24
+                       max_parallel_workers = 24
+                       max_parallel_workers_per_gather = 4
+                       wal_buffers          = 16MB
+                       random_page_cost     = 1.1
+                       effective_io_concurrency = 200
+2026-06-23  [infra]  Identified PGRST_DB_MAX_ROWS cap (1000 -> 10000)
+2026-06-23  [infra]  Added shm_size: '2gb' to db service in docker-compose.yml
+
+================================================================================
+GIT HISTORY — MEANINGFUL COMMITS (oldest → newest)
+================================================================================
+2025-01-01   c50d4b1   template: vite_react_shadcn_ts_2026-04-20
+2026-04-22   1c32144   Defined UI design & scope
+2026-04-22   83d6306   Added MQTT dashboard with UniFi theme
+2026-04-22   621580b   Added Cameras & Media pages
+2026-04-22   70e1a9d   Update site info for publish
+2026-04-22   bebadf2   Changed broker to WebSockets
+2026-04-23   676cad7   Deployed webhook edge func
+2026-04-23   1310b9b   Added Frigate ingestion support
+2026-04-23   3de972c   Added frigate-notify parsing
+2026-04-23   dec2b92   Added webhook section to Frigate card
+2026-04-23   ed0bfd4   Added Live Wall dashboard
+2026-04-23   637a5f1   Fixed snap/clip pairing
+2026-04-23   434191c   Used snapshot+bbox, centered
+2026-04-23   3125086   Filtered alerts to Frigate only
+2026-04-23   bfef01e   Reverted to commit 434191cffc0f06e6248986d7ab8e1d76e3b2d3b1
+2026-04-23   2f77f15   Added alert filter button
+2026-04-23   c14cd4e   Fixed alerts: ACK, lightbox, no auto-archive
+2026-04-23   5e39720   Added scrolling alert grid
+2026-04-23   997f62d   Added sidebar toggle & audit
+2026-04-23   d58fabe   Implemented auth system
+2026-04-23   85a3a23   Fixed admin auth flow
+2026-04-23   b571972   set nvr poll to 5s
+2026-04-23   8e88d72   Persisted alerts on wall nav
+2026-04-23   aee69a2   Auto-archived low-sig alerts
+2026-04-23   fd6312e   Fixed admin password reset
+2026-04-23   392c8bd   Added manual poll interval
+2026-04-23   78778fc   Updated lightbox link target
+2026-04-23   c59650e   Added media tagging system
+2026-04-23   22442bd   Added Tag button to Live Wall
+2026-04-23   719c905   Added audit trail & page
+2026-04-23   6f25a47   Added ack metadata to tiles
+2026-04-23   d69fcd0   Added ACK + duration to UI
+2026-04-23   1da693e   Added camera & snapshot to audit
+2026-04-23   9bccfff   Added poster thumbnail generation
+2026-04-23   1ef06f5   Removed Messages tab and route
+2026-04-23   2e86539   Removed snapshot column block
+2026-04-23   88d5258   Grouped Frigate cameras by NVR
+2026-04-23   0d4d6cf   Restricted user access
+2026-04-23   8d8399a   Added branding customization
+2026-04-24   c9b778e   Added NVR Status tab
+2026-04-24   879ba8c   Added Local NVR support
+2026-04-24   ab6d299   Added SSL warning to Frigate
+2026-04-24   9bd30cc   Added hidden author button
+2026-04-24   9f06883   Revamped Overview tab
+2026-04-24   d1aca20   Filtered operators, added reset
+2026-04-24   994378c   Added webhook sources link
+2026-04-24   2154798   Showed only logged-in viewers
+2026-04-24   17e6fe9   Added positive tag stats
+2026-04-24   0406f95   Added ABC Sites dropdown
+2026-04-24   a3cbdf7   Added Frigate instance URL
+2026-04-24   8805a92   Filtered audit trail by users
+2026-04-24   5164bf7   Added Site column to audit log
+2026-04-24   fa91e82   Mapped Site to Frigate NVR
+2026-04-24   bd23363   Hid auto-archive entries
+2026-04-24   6a77b62   Made email domain configurable
+2026-04-24   21116f5   Implemented Daily Reports tab
+2026-04-24   c0d5baa   Added SMTP to settings panel
+2026-04-24   5f8fc79   Fixed test email recipient bug
+2026-04-24   e440d25   Added snapshots & offline tracking
+2026-04-24   f2db718   Added client-side snapshots
+2026-04-24   bb73bf2   Added cloud snapshot storage
+2026-04-24   f13c174   Hardened snapshot refresher
+2026-04-24   85555df   Skipped car events in charts
+2026-04-24   92f69e9   Restricted refresher to local
+2026-04-24   3db918f   Fixed audit log visibility
+2026-04-28   c2819ae   Added NVR alert mute schedules
+2026-04-28   7c153c7   Fixed mute toggle re-render
+2026-04-28   492002d   Set default alert mute window
+2026-04-28   418e41a   Added per-camera alert throttling
+2026-04-28   0feff4a   Added offline camera status page
+2026-04-28   5d5057c   Hid Auto-Read Rules from menu
+2026-04-28   85d077e   Added offline notif. popup
+2026-04-28   a716b91   Added email customizations
+2026-04-30   f742006   Fixed NVR edit save failure
+2026-04-30   919961b   Updated NVR base URL save
+2026-05-04   e518046   Added customer role flow
+2026-05-04   4899df1   Added snapshot thumbnails
+2026-05-04   d6daa0d   Added bulk arm/disarm toggle
+2026-05-04   2ccc9af   Added recent events panel
+2026-05-04   325dfdc   Moved events to its own tab
+2026-05-04   a78350d   Bundled events & snapshot view
+2026-05-04   2046ffa   Fixed openSnapshot edge case
+2026-05-04   2be38d7   Deduped alerts by camera only
+2026-05-04   fb1ba3b   Disabled JWT for images
+2026-05-04   cb8afdd   Fixed lightbox snapshot loading
+2026-05-04   5d600cc   Removed offline popup
+2026-05-04   8aeb1ec   Added header sign out for cust.
+2026-05-04   75d4201   Added logo to all headers
+2026-05-04   7077e35   Added callout fee checkbox
+2026-05-04   db290e7   Added contact email to users
+2026-05-04   26c44f0   Fixed NVR callout email & flow
+2026-05-05   e0c990b   Dropped live alerts on archive
+2026-05-05   e4e7dd1   Added site/cam to alert card
+2026-05-05   9d68cd4   Skipped old Wall alerts
+2026-05-05   aa2fd0b   Made Frigate NVRCards collapsible
+2026-05-05   6493c24   Added per-camera assignments
+2026-05-05   5c4caf9   Wrapped catch-all route with auth
+2026-05-05   699b97c   Revamped Overview layout
+2026-05-05   acecdc7   Added NVR instruction UI
+2026-05-05   e871c19   Scoped NVR-wide notes per customer
+2026-05-05   714cf39   Added instructions tab & route
+2026-05-05   de52118   Added per-camera schedule UI
+2026-05-05   c63a074   made schedules admin-only
+2026-05-05   0c92ea1   Removed mute alerts schedule
+2026-05-05   11da859   Force-armed cameras w/o schedule
+2026-05-05   7fd8c04   Added copy schedules feature
+2026-05-05   067cc46   Fixed arm-scheduler deploy
+2026-05-06   da9278f   Enforced operator ACKs
+2026-05-06   9951653   Set supersede window to 40s
+2026-05-06   85825f1   Disabled NVR-level mute
+2026-05-06   967bcd1   Filtered out disarmed cameras
+2026-05-06   b4d960a   Fixed scheduler override issues
+2026-05-06   ee4dc02   Gated wall events on disarm load
+2026-05-06   dfe9b41   Added camera name header
+2026-05-06   98b89f5   Secured auth policies
+2026-05-06   feb0147   Added multi-config support
+2026-05-06   76215dc   Auto-saved camera selection
+2026-05-07   91779c2   Migrated org slug system
+2026-05-07   0a484e4   Built super admin portal UI
+2026-05-07   382d29b   Polished login slug display
+2026-05-07   5b53bf9   Added org callout admin page
+2026-05-07   44980e6   Added org-scoped edge-funcs
+2026-05-07   b2eddc9   Added Org Switcher UI
+2026-05-07   6a37137   Added Customization tab
+2026-05-07   0ec1dc1   Made sites collapsible
+2026-05-07   e4c2bb5   Fixed create user org selection
+2026-05-07   7bf2f87   Added live wall auth guard
+2026-05-07   9a4d87f   Fixed operators role mapping
+2026-05-07   e09069c   Removed auto-ack on alerts
+2026-05-07   84785b8   Removed org ID hint from login
+2026-05-07   d376a45   Set burst auto-ack to 5s
+2026-05-07   c2ebca3   Added thumbnail fallback
+2026-05-08   532dfb9   Added demo route with seed data
+2026-05-08   df4450a   Seeded demo with 5 ABC clips
+2026-05-08   8c8e14a   Made demo public and saved assets
+2026-05-08   6ea0d25   Added demo admin tabs
+2026-05-08   96f3c4c   Restored Live Wall demo
+2026-05-08   fde5bc6   Updated alerts to use dummy names
+2026-05-08   36ee4da   Updated Daily Report template
+2026-05-08   1381d6f   Updated default subject line
+2026-05-08   40ee224   Added collapsible report cards
+2026-05-08   fac3d92   Scoped realtime to active org
+2026-05-08   7be915d   Organized users by active org
+2026-05-08   5c1eb2f   Scoped admin pages by org
+2026-05-08   9ec427d   Copied prior org settings on new
+2026-05-08   67eee53   Added delete org support
+2026-05-11   7284ae1   Extended bundle window to 10s
+2026-05-11   28032e6   Added offline NVR badge
+2026-05-11   5d1d0d4   Added email on form submit
+2026-05-11   e67ab36   Added offline route & redirect
+2026-05-11   a5f2115   Added self-hosting config
+2026-05-11   1593ecd   Polyfilled crypto.randomUUID
+2026-05-11   07faae9   Fixed null org constraint
+2026-05-11   5e60288   Scoped Overview & audit to org
+2026-05-11   121a875   Enabled payments & billing
+2026-05-11   5aafd27   Created Pro product schema
+2026-05-11   94ced33   Added trial/Paddle flow
+2026-05-11   5bb4bf9   Added legal pages to app
+2026-05-11   9b981e1   Handled 530 tunnel errors
+2026-05-11   1b98e56   Hid emergency admin link
+2026-05-11   982d5b7   Added public pricing page
+2026-05-11   2eae337   Fixed admin username collision
+2026-05-12   3b92f75   Updated self-hosting guide
+2026-05-12   d210e40   Refactored keygen and acks per cam
+2026-05-12   5ed8527   Added upgrade ack dialog
+2026-05-12   7e6b55b   Fixed Paddle undefined email
+2026-05-12   5ae2301   Removed SMTP UI & set defaults
+2026-05-12   125f693   Restored blank SMTP fields
+2026-05-13   d03f9e6   Added per-NVR license model
+2026-05-13   fcec908   Added auto-provisioned webhook
+2026-05-15   029a8ed   Deleted multi-tenancy files
+2026-05-19   a3f9b1d   Fixed real-time alert delay
+2026-05-20   8357bf1   Made login work on fresh host
+2026-05-20   c6334e2   Reset admin password
+2026-05-20   7c80047   Updated webhook URL to new backend
+2026-05-21   8dd5e53   Fixed login, 401s & added guide
+2026-05-22   afe288c   Fixed bootstrap admin role
+2026-05-22   f424265   Preserved admin password on seed
+2026-05-26   50177a1   Added camera-watch cron job
+2026-05-26   9a0d75d   Fixed self-host bootstrap
+2026-05-26   7e200d8   Added admin reset on offline
+2026-06-01   6f3213b   Added force-create admin option
+2026-06-01   56b9187   Wrote full NGINX self-host guide
+2026-06-01   4f0c25b   Rewrote hosted setup guide
+2026-06-01   7412f8f   Fixed auth edge function errors
+2026-06-01   2226423   Fixed duplicate org seeding
+2026-06-01   c2c890d   Fixed admin auth create race
+2026-06-01   c1fa134   Fixed admin reset stale login
+2026-06-01   fb620e5   Handled auth lock errors
+2026-06-01   5a34cee   Fixed admin org insert policy
+2026-06-01   b9c7d90   Fixed deleted NVR polling
+2026-06-01   8eb6ee9   Stopped stats poll on NVR remove
+2026-06-01   a08d1f3   Hardened frigate-proxy stats
+2026-06-01   f09baff   Fixed live wall polling
+2026-06-01   8d60d92   Unified cross-org alerts
+2026-06-02   67d792d   Flattened app to single org
+2026-06-02   816b23d   Applied DB changes to Cloud
+2026-06-02   7def681   Dropped FK constraints for orgs
+2026-06-02   8848c4e   Fixed undefined close() error
+2026-06-02   785582a   Enabled Frigate push mode
+2026-06-02   9dddcef   Restored polling and rescheduled
+2026-06-02   1a0d05a   Skipped disarmed events in poll
+2026-06-02   2000fdb   Applied disarmed-skip logic
+2026-06-02   1714a11   Added armed state filter
+2026-06-02   5c79640   Added duplicate-slug fallback
+2026-06-02   653dd2f   Shared wall ACKs via realtime
+2026-06-03   71081be   Disabled offline watchdog redirect
+2026-06-04   2b19e6b   Made the requested updates
+2026-06-04   5e78416   Added health route to proxy
+2026-06-04   4739202   Clamped proxy timeout to 7s
+2026-06-04   ecfc26c   Added direct PostgREST fetch
+2026-06-04   fc3a554   Fixed NVR urgency on first poll
+2026-06-04   03a9ac7   Fixed wall refresh logic
+2026-06-04   b84a998   Fixed wall reload path
+2026-06-04   e6ee89f   Relaxed 5s alert window
+2026-06-04   7acaef7   Fixed duplicate alert cards
+2026-06-04   f0bd51b   Persisted unacked alerts globally
+2026-06-05   bc183bd   Fixed duplicate alert cards
+2026-06-10   bb069ca   Added WhatsApp guide to doc
+2026-06-10   804decb   Added WhatsApp settings page
+2026-06-10   43d8a07   Added offline broadcast feature
+2026-06-10   a5a9078   Added self-hosted DB push guide
+2026-06-10   44b51b1   Merged self-hosted DB guide
+2026-06-10   341815d   Fixed offline detection in broadcast
+2026-06-10   cd915ce   Added broadcast diagnostic logs
+2026-06-10   f7609f5   Added daily broadcast & alert
+2026-06-10   88b9da2   Added multi-client NVR routing
+2026-06-10   4fbd512   Made the requested updates
+2026-06-10   f87ecfa   Added Broadcast Message tab
+2026-06-10   ce3d3d1   Defered camera status fetch
+2026-06-10   c5cb285   Live-polling camera names
+2026-06-10   a9b893b   Made the requested updates
+2026-06-10   957c107   Added broadcast template UI
+2026-06-11   e431d71   Added heartbeat tracking
+2026-06-11   67d9064   Patched heartbeat 404 probe
+2026-06-11   828e443   Extended heartbeat endpoint checks
+2026-06-11   0b26e6e   Treated 404 as alive
+2026-06-11   9c20840   Removed Cameras, Archive, Callout
+2026-06-11   d6a33c7   Added lazy loading and split
+2026-06-11   6ee53b6   Increased Mudslide timeout to 30s
+2026-06-11   dc2de10   Fixed exact-time cron trigger
+2026-06-11   fac4234   Added per-NVR toggle
+2026-06-11   c7dc2d0   Added Docker guide file
+2026-06-11   4192542   Removed audit trail completely
+2026-06-11   bd89f31   Added NVR offline alert logic
+2026-06-11   e911939   Added WhatsApp sync guide
+2026-06-11   7ae4a68   Fixed SMTP org lookup fallback
+2026-06-12   759114b   Added WhatsApp recovery msgs
+2026-06-12   b1c5b5d   Added multi-tenant org support
+2026-06-12   b73b875   Added org FK to memberships
+2026-06-12   ca2e7d6   Updated login with username lookup
+2026-06-12   2a3a75f   Added Super/org features
+2026-06-12   f2194c9   Fixed org_member_role cast
+2026-06-12   d3b82da   Fixed duplicate role crash
+2026-06-12   643b4c8   Fixed multi-tenancy bug
+2026-06-12   4ae90d5   Hardened org isolation
+2026-06-12   158d8b9   Added UniFi camera support
+2026-06-12   86d6756   Reverted to commit 4ae90d52b3b698b2cd27e999f2c9901d3b8ffdc1
+2026-06-12   c9e10f0   Added Unifi ENVR features
+2026-06-12   39fb52f   Swapped Frigate to Unifi route
+2026-06-12   4ac2fdd   Swapped UI to Unifi when on
+2026-06-12   bc2411d   Refactored with raw fetch
+2026-06-12   3af9a10   Added UniFi NVR proxy & cards
+2026-06-12   abd916d   Added UniFi poll edge func
+2026-06-12   af0e76a   Staggered NVR thumbnail fetch
+2026-06-12   fcd38d7   Added scroll-triggered camera fetch
+2026-06-12   0336ac7   Fixed duplicate channel name
+2026-06-12   d86206a   Added NVRs to Cameras tab
+2026-06-12   d262820   Added edit dialog for ENVRs
+2026-06-12   54d3f1f   Added webhook secret & edge fn
+2026-06-12   0f77682   Fixed webhook auth & deploy
+2026-06-12   15dc41b   Separated UniFi from Frigate
+2026-06-12   b92acc5   Added UniFi Alerts page
+2026-06-12   9ac979b   Updated UniFi delivery flow
+2026-06-12   2318c43   Fixed UniFi poll sync
+2026-06-17   fa73e3e   Created DB_DUMP guide
+2026-06-17   9af7fa4   Removed all UniFi code
+2026-06-18   1aa5ba9   Fixed ENOIDENTIFIER error
+2026-06-18   384532d   Removed login page realtime
+2026-06-18   1648490   Exposed NVR status to users
+2026-06-18   a5da203   Fixed delete orphan cleanup
+2026-06-18   b542a74   Auto-cleaned orphan rows
+2026-06-18   25e3944   Added audit badge to Media
+2026-06-18   074f5c7   Merged global recs into alerts
+2026-06-18   221ad66   Rebuilt NVR UI as tabs
+2026-06-18   8676606   Added diagnostic logging
+2026-06-18   04d55d2   Made the requested updates
+2026-06-19   09a7daf   Fixed schedule state enforcement
+2026-06-19   c4b1227   Added offline alert on disarm
+2026-06-19   24c080f   Set Wall default to people
+2026-06-19   910721d   Added auth flow to Edge Fns
+2026-06-22   7f901a3   Fixed offline camera alerts
+2026-06-22   cbff511   Added ref.dev to memory
+2026-06-22   1374e67   Added config download flow
+2026-06-22   145ae02   Fixed self-hosted signed URL
+2026-06-22   960b47c   Fixed Docker host redirect
+2026-06-22   d99b894   Added Backups tab to SuperAdmin
+2026-06-23   e019b43   Made WhatsApp sends sequential
+2026-06-23   548217a   Added 60-day alert cleanup
+2026-06-23   4b8f5a2   Separated media by date in toolbar
+2026-06-23   a27d969   Increased media cap to 5000
+2026-06-23   e682801   Restructured Media to NVR flow
+2026-06-23   1e5956f   Paginated alerts to 10k
+
+================================================================================
+Total meaningful commits: 303
+Total commits overall:    1285
+Project started:          2025-01-01
+Last commit:              2026-06-23
