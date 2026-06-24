@@ -1,12 +1,19 @@
 #!/usr/bin/env node
-// Mudslide companion listener.
-// Reuses Mudslide's Baileys auth folder, subscribes to messages.upsert,
-// and POSTs each incoming WhatsApp message to the whatsapp-incoming
-// Supabase edge function so it shows up in the in-app inbox.
+// Mudslide companion listener + sender.
+// Reuses Mudslide's Baileys auth folder for a SINGLE long-lived WhatsApp
+// socket that:
+//   1. Subscribes to messages.upsert and POSTs each incoming WhatsApp
+//      message to the whatsapp-incoming Supabase edge function.
+//   2. Exposes a tiny HTTP API (POST /send, GET /me) that the
+//      escalate-offline-whatsapp and whatsapp-heartbeat edge functions
+//      call to send messages / check session health.
+//
+// Running both inside one process avoids the "conflict: replaced" loop
+// that happens when two separate Baileys/Mudslide processes share the
+// same WhatsApp auth and fight for the device slot.
 //
 // Env vars (required):
-//   WEBHOOK_URL              e.g. https://<project>.supabase.co/functions/v1/whatsapp-incoming
-//                            (self-hosted: https://supabase.example.com/functions/v1/whatsapp-incoming)
+//   WEBHOOK_URL              e.g. https://supabase.example.com/functions/v1/whatsapp-incoming
 //   WEBHOOK_SECRET           same value stored in whatsapp_settings.incoming_webhook_secret
 //   ORG_ID                   the organization_id (uuid) the messages belong to
 //   SUPABASE_ANON_KEY        anon/publishable key for the apikey header
@@ -16,6 +23,10 @@
 //   INCLUDE_GROUPS           "1" (default) to forward @g.us messages
 //   INCLUDE_DMS              "1" (default) to forward @s.whatsapp.net messages
 //   INCLUDE_FROM_ME          "0" (default) — set "1" to also forward messages you send
+//   LISTEN_PORT              HTTP port for /send + /me (default: 3000)
+//   LISTEN_HOST              bind address (default: 127.0.0.1)
+//   SEND_TOKEN               Bearer token required by POST /send and GET /me.
+//                            Must equal whatsapp_settings.mudslide_token.
 
 import {
   default as makeWASocket,
@@ -24,6 +35,7 @@ import {
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
+import http from "node:http";
 import path from "node:path";
 import os from "node:os";
 
@@ -36,6 +48,9 @@ const AUTH_DIR =
 const INCLUDE_GROUPS = (process.env.INCLUDE_GROUPS ?? "1") === "1";
 const INCLUDE_DMS = (process.env.INCLUDE_DMS ?? "1") === "1";
 const INCLUDE_FROM_ME = (process.env.INCLUDE_FROM_ME ?? "0") === "1";
+const LISTEN_PORT = Number(process.env.LISTEN_PORT ?? 3000);
+const LISTEN_HOST = process.env.LISTEN_HOST ?? "127.0.0.1";
+const SEND_TOKEN = process.env.SEND_TOKEN ?? "";
 
 function must(k) {
   const v = process.env[k];
@@ -45,6 +60,9 @@ function must(k) {
   }
   return v;
 }
+
+let sock = null;
+let connected = false;
 
 function extractText(m) {
   const msg = m.message;
@@ -61,7 +79,7 @@ function extractText(m) {
   );
 }
 
-async function post(payload) {
+async function postWebhook(payload) {
   try {
     const res = await fetch(WEBHOOK_URL, {
       method: "POST",
@@ -83,13 +101,97 @@ async function post(payload) {
   }
 }
 
+function toJid(to) {
+  if (!to) throw new Error("missing 'to'");
+  if (to === "me") {
+    const self = sock?.user?.id;
+    if (!self) throw new Error("socket not ready");
+    // sock.user.id is "12345:NN@s.whatsapp.net" — strip the device suffix.
+    return self.replace(/:\d+(?=@)/, "");
+  }
+  if (to.includes("@")) return to;
+  const digits = String(to).replace(/[^\d]/g, "");
+  if (!digits) throw new Error("invalid 'to'");
+  return `${digits}@s.whatsapp.net`;
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (c) => {
+      data += c;
+      if (data.length > 1_000_000) {
+        req.destroy();
+        reject(new Error("body too large"));
+      }
+    });
+    req.on("end", () => {
+      if (!data) return resolve({});
+      try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+    });
+    req.on("error", reject);
+  });
+}
+
+function authOk(req) {
+  if (!SEND_TOKEN) return true; // no token configured → open (loopback only)
+  const h = req.headers["authorization"] || "";
+  return h === `Bearer ${SEND_TOKEN}`;
+}
+
+function json(res, status, body) {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+async function handleHttp(req, res) {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+
+    if (path === "/health") return json(res, 200, { ok: true, connected });
+
+    if (path === "/me") {
+      if (!authOk(req)) return json(res, 401, { error: "unauthorized" });
+      if (!connected || !sock?.user) return json(res, 503, { error: "not connected" });
+      return json(res, 200, { user: sock.user });
+    }
+
+    if (path === "/send" && req.method === "POST") {
+      if (!authOk(req)) return json(res, 401, { error: "unauthorized" });
+      if (!connected || !sock) return json(res, 503, { error: "not connected" });
+      const body = await readJsonBody(req);
+      const message = body?.message;
+      if (!message || typeof message !== "string") {
+        return json(res, 400, { error: "missing 'message'" });
+      }
+      let jid;
+      try { jid = toJid(body?.to); }
+      catch (e) { return json(res, 400, { error: e?.message ?? String(e) }); }
+
+      try {
+        const sent = await sock.sendMessage(jid, { text: message });
+        console.log(`[send] ok  ${jid}`);
+        return json(res, 200, { ok: true, id: sent?.key?.id ?? null, to: jid });
+      } catch (e) {
+        console.error(`[send] error ${jid}:`, e?.message ?? e);
+        return json(res, 502, { error: e?.message ?? String(e) });
+      }
+    }
+
+    return json(res, 404, { error: "not found" });
+  } catch (e) {
+    return json(res, 500, { error: e?.message ?? String(e) });
+  }
+}
+
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
   console.log(`Using auth dir: ${AUTH_DIR}`);
   console.log(`Baileys version: ${version.join(".")}`);
 
-  const sock = makeWASocket({
+  sock = makeWASocket({
     version,
     auth: state,
     printQRInTerminal: false,
@@ -102,8 +204,10 @@ async function start() {
   sock.ev.on("connection.update", (u) => {
     const { connection, lastDisconnect } = u;
     if (connection === "open") {
+      connected = true;
       console.log("✅ Connected. Listening for incoming messages…");
     } else if (connection === "close") {
+      connected = false;
       const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const loggedOut = code === DisconnectReason.loggedOut;
       console.log(`Connection closed (code=${code}). loggedOut=${loggedOut}`);
@@ -139,7 +243,7 @@ async function start() {
           ? `${pushName || participant}`
           : pushName || jid;
 
-        await post({
+        await postWebhook({
           organization_id: ORG_ID,
           sender: jid,
           sender_name: senderName || null,
@@ -152,6 +256,12 @@ async function start() {
     }
   });
 }
+
+const server = http.createServer((req, res) => { handleHttp(req, res); });
+server.listen(LISTEN_PORT, LISTEN_HOST, () => {
+  console.log(`HTTP API on http://${LISTEN_HOST}:${LISTEN_PORT}  (POST /send, GET /me, GET /health)`);
+  if (!SEND_TOKEN) console.warn("⚠ SEND_TOKEN not set — /send and /me are open on the bind address.");
+});
 
 start().catch((e) => {
   console.error("fatal:", e);
