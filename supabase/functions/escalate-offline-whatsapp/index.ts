@@ -57,12 +57,16 @@ function inQuietHours(s: Settings): boolean {
 }
 
 async function sendViaMudslide(s: Settings, recipient: string, message: string) {
-  const url = s.mudslide_url!.replace(/\/+$/, "") + "/send-message";
+  const url = s.mudslide_url!.replace(/\/+$/, "") + "/send";
   const headers = {
     "Content-Type": "application/json",
     ...(s.mudslide_token ? { "Authorization": `Bearer ${s.mudslide_token}` } : {}),
   };
-  const body = JSON.stringify({ recipient, message });
+  // New Mudslide HTTP API expects { to, message }. "me" sends to self;
+  // bare digits or group JIDs are accepted. Strip leading "+" since the
+  // new wrapper expects plain digits.
+  const to = recipient === "me" || /@/.test(recipient) ? recipient : recipient.replace(/^\+/, "");
+  const body = JSON.stringify({ to, message });
 
   let lastErr: unknown = null;
   // 1 initial attempt + 1 retry after 2s for transient socket timeouts
