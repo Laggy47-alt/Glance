@@ -684,6 +684,37 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Backup viewer */}
+      <Dialog open={!!viewing} onOpenChange={(open) => { if (!open) setViewing(null); }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm break-all">
+              {viewing?.item.instance_name ? `${viewing.item.instance_name} — ` : ""}{viewing?.item.name}
+            </DialogTitle>
+          </DialogHeader>
+          <pre className="bg-muted rounded-md p-3 text-xs overflow-auto max-h-[70vh] whitespace-pre-wrap break-words">
+            {viewing?.content ?? ""}
+          </pre>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!viewing) return;
+                navigator.clipboard.writeText(viewing.content).then(
+                  () => toast.success("Copied to clipboard"),
+                  () => toast.error("Copy failed"),
+                );
+              }}
+            >
+              Copy
+            </Button>
+            <Button onClick={() => viewing && void downloadBackup(viewing.item)}>
+              <Download className="h-4 w-4 mr-1" /> Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
