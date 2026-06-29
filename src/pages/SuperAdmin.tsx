@@ -564,6 +564,16 @@ export default function SuperAdmin() {
             </Card>
           </TabsContent>
 
+          {/* NOTES */}
+          <TabsContent value="notes" className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Shared notepad for all sites. Notes are visible to every admin.
+            </p>
+            <SuperNotesPanel />
+          </TabsContent>
+
+
+
           {/* CUSTOMIZATION */}
 
 
