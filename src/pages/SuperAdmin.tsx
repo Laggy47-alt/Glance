@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
 import { SuperFeaturesPanel } from "@/components/SuperFeaturesPanel";
+import { SuperNotesPanel } from "@/components/SuperNotesPanel";
 import { ToggleLeft } from "lucide-react";
 import { toast } from "sonner";
 
