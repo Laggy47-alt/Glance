@@ -61,6 +61,8 @@ export default function SuperAdmin() {
   };
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
+  const [viewing, setViewing] = useState<{ item: BackupItem; content: string } | null>(null);
+  const [viewLoadingPath, setViewLoadingPath] = useState<string | null>(null);
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
 
   const loadBackups = async () => {
