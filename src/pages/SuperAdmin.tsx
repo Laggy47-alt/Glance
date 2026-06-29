@@ -304,6 +304,7 @@ export default function SuperAdmin() {
             </TabsTrigger>
             <TabsTrigger value="features" className="gap-1.5"><ToggleLeft className="h-4 w-4" /> Features</TabsTrigger>
             <TabsTrigger value="backups" className="gap-1.5"><Archive className="h-4 w-4" /> Backups</TabsTrigger>
+            <TabsTrigger value="notes" className="gap-1.5"><NotebookPen className="h-4 w-4" /> Notes</TabsTrigger>
             <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
 
           </TabsList>
