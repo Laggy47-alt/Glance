@@ -119,6 +119,9 @@ export default function SuperAdmin() {
     } finally {
       setViewLoadingPath(null);
     }
+  };
+
+
 
   const formatBytes = (b: number | null) => {
     if (b == null) return "—";
