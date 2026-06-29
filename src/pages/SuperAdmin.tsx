@@ -102,6 +102,24 @@ export default function SuperAdmin() {
     }
   };
 
+  const viewBackup = async (item: BackupItem) => {
+    setViewLoadingPath(item.path);
+    try {
+      const { data, error } = await supabase.functions.invoke("frigate-list-backups", {
+        body: { action: "sign", path: item.path },
+      });
+      if (error) throw error;
+      if (!data?.ok || !data?.signedUrl) throw new Error(data?.error ?? "Sign failed");
+      const res = await fetch(data.signedUrl);
+      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      const text = await res.text();
+      setViewing({ item, content: text });
+    } catch (e: any) {
+      toast.error(e?.message ?? "View failed");
+    } finally {
+      setViewLoadingPath(null);
+    }
+
   const formatBytes = (b: number | null) => {
     if (b == null) return "—";
     if (b < 1024) return `${b} B`;
