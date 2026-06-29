@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2, Download, Archive, RefreshCw } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2, Download, Archive, RefreshCw, Eye, NotebookPen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlatformBranding } from "@/hooks/usePlatformBranding";
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { SuperBrandingEditor } from "@/components/SuperBrandingEditor";
 import { SuperFeaturesPanel } from "@/components/SuperFeaturesPanel";
+import { SuperNotesPanel } from "@/components/SuperNotesPanel";
 import { ToggleLeft } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,6 +61,8 @@ export default function SuperAdmin() {
   };
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
+  const [viewing, setViewing] = useState<{ item: BackupItem; content: string } | null>(null);
+  const [viewLoadingPath, setViewLoadingPath] = useState<string | null>(null);
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null);
 
   const loadBackups = async () => {
@@ -98,6 +101,27 @@ export default function SuperAdmin() {
       setDownloadingPath(null);
     }
   };
+
+  const viewBackup = async (item: BackupItem) => {
+    setViewLoadingPath(item.path);
+    try {
+      const { data, error } = await supabase.functions.invoke("frigate-list-backups", {
+        body: { action: "sign", path: item.path },
+      });
+      if (error) throw error;
+      if (!data?.ok || !data?.signedUrl) throw new Error(data?.error ?? "Sign failed");
+      const res = await fetch(data.signedUrl);
+      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      const text = await res.text();
+      setViewing({ item, content: text });
+    } catch (e: any) {
+      toast.error(e?.message ?? "View failed");
+    } finally {
+      setViewLoadingPath(null);
+    }
+  };
+
+
 
   const formatBytes = (b: number | null) => {
     if (b == null) return "—";
@@ -280,6 +304,7 @@ export default function SuperAdmin() {
             </TabsTrigger>
             <TabsTrigger value="features" className="gap-1.5"><ToggleLeft className="h-4 w-4" /> Features</TabsTrigger>
             <TabsTrigger value="backups" className="gap-1.5"><Archive className="h-4 w-4" /> Backups</TabsTrigger>
+            <TabsTrigger value="notes" className="gap-1.5"><NotebookPen className="h-4 w-4" /> Notes</TabsTrigger>
             <TabsTrigger value="customization" className="gap-1.5"><Palette className="h-4 w-4" /> Customization</TabsTrigger>
 
           </TabsList>
@@ -481,7 +506,7 @@ export default function SuperAdmin() {
                     <TableHead>File</TableHead>
                     <TableHead>Size</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="w-20 text-right">Action</TableHead>
+                    <TableHead className="w-28 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -505,18 +530,32 @@ export default function SuperAdmin() {
                         {b.created_at ? new Date(b.created_at).toLocaleString() : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8"
-                          title="Download"
-                          disabled={downloadingPath === b.path}
-                          onClick={() => void downloadBackup(b)}
-                        >
-                          {downloadingPath === b.path
-                            ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <Download className="h-4 w-4" />}
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            title="View in browser"
+                            disabled={viewLoadingPath === b.path}
+                            onClick={() => void viewBackup(b)}
+                          >
+                            {viewLoadingPath === b.path
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            title="Download"
+                            disabled={downloadingPath === b.path}
+                            onClick={() => void downloadBackup(b)}
+                          >
+                            {downloadingPath === b.path
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Download className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -524,6 +563,16 @@ export default function SuperAdmin() {
               </Table>
             </Card>
           </TabsContent>
+
+          {/* NOTES */}
+          <TabsContent value="notes" className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Shared notepad for all sites. Notes are visible to every admin.
+            </p>
+            <SuperNotesPanel />
+          </TabsContent>
+
+
 
           {/* CUSTOMIZATION */}
 
@@ -631,6 +680,37 @@ export default function SuperAdmin() {
             >
               {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Backup viewer */}
+      <Dialog open={!!viewing} onOpenChange={(open) => { if (!open) setViewing(null); }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm break-all">
+              {viewing?.item.instance_name ? `${viewing.item.instance_name} — ` : ""}{viewing?.item.name}
+            </DialogTitle>
+          </DialogHeader>
+          <pre className="bg-muted rounded-md p-3 text-xs overflow-auto max-h-[70vh] whitespace-pre-wrap break-words">
+            {viewing?.content ?? ""}
+          </pre>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!viewing) return;
+                navigator.clipboard.writeText(viewing.content).then(
+                  () => toast.success("Copied to clipboard"),
+                  () => toast.error("Copy failed"),
+                );
+              }}
+            >
+              Copy
+            </Button>
+            <Button onClick={() => viewing && void downloadBackup(viewing.item)}>
+              <Download className="h-4 w-4 mr-1" /> Download
             </Button>
           </DialogFooter>
         </DialogContent>
