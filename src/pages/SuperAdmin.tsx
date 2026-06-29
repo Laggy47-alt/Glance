@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2, Download, Archive, RefreshCw } from "lucide-react";
+import { LogOut, Webhook, Building2, Server, Phone, Loader2, ExternalLink, ArrowRight, Palette, ChevronDown, Plus, Trash2, Download, Archive, RefreshCw, Eye, NotebookPen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlatformBranding } from "@/hooks/usePlatformBranding";
