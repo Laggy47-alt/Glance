@@ -505,7 +505,7 @@ export default function SuperAdmin() {
                     <TableHead>File</TableHead>
                     <TableHead>Size</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="w-20 text-right">Action</TableHead>
+                    <TableHead className="w-28 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
