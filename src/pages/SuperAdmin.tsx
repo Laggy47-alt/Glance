@@ -529,18 +529,32 @@ export default function SuperAdmin() {
                         {b.created_at ? new Date(b.created_at).toLocaleString() : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8"
-                          title="Download"
-                          disabled={downloadingPath === b.path}
-                          onClick={() => void downloadBackup(b)}
-                        >
-                          {downloadingPath === b.path
-                            ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <Download className="h-4 w-4" />}
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            title="View in browser"
+                            disabled={viewLoadingPath === b.path}
+                            onClick={() => void viewBackup(b)}
+                          >
+                            {viewLoadingPath === b.path
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            title="Download"
+                            disabled={downloadingPath === b.path}
+                            onClick={() => void downloadBackup(b)}
+                          >
+                            {downloadingPath === b.path
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Download className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
