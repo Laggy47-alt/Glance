@@ -455,7 +455,16 @@ class WebhookStore {
         else if (p.eventType === "DELETE") this.hikvisionChannels = this.hikvisionChannels.filter((x) => x.id !== (p.old as { id: string }).id);
         this.emit();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "unifi_instances" }, (p) => {
+        const row = (p.new ?? p.old) as UnifiInstance;
+        if (!this.matchesOrg(row)) return;
+        if (p.eventType === "INSERT") this.unifis = [...this.unifis, p.new as unknown as UnifiInstance];
+        else if (p.eventType === "UPDATE") this.unifis = this.unifis.map((x) => x.id === (p.new as { id: string }).id ? (p.new as unknown as UnifiInstance) : x);
+        else if (p.eventType === "DELETE") this.unifis = this.unifis.filter((x) => x.id !== (p.old as { id: string }).id);
+        this.emit();
+      })
       .subscribe();
+
     this.channels.push(ch);
   }
 
