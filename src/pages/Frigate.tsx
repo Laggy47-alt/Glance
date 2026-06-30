@@ -16,6 +16,7 @@ import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
 import { HikvisionSection } from "@/components/HikvisionSection";
 import { UnifiSection } from "@/components/UnifiSection";
+import { useOrgFeatures } from "@/hooks/useOrgFeatures";
 
 
 
@@ -24,6 +25,8 @@ const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444
 
 const Frigate = () => {
   const store = useWebhookStore();
+  const { hasFeature } = useOrgFeatures();
+
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FrigateInstance | null>(null);
@@ -271,8 +274,8 @@ const Frigate = () => {
       <LocalhostHelp />
 
       <div className="mt-4 mb-6 space-y-6">
-        <HikvisionSection />
-        <UnifiSection />
+        {hasFeature("hikvision") && <HikvisionSection />}
+        {hasFeature("unifi") && <UnifiSection />}
       </div>
 
 

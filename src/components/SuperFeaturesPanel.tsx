@@ -9,7 +9,10 @@ import { toast } from "sonner";
 type Org = { id: string; slug: string; name: string };
 type FeatureRow = { organization_id: string; feature_key: string; enabled: boolean };
 
-const FEATURES: Array<{ key: string; label: string; description: string }> = [];
+const FEATURES: Array<{ key: string; label: string; description: string }> = [
+  { key: "hikvision", label: "Hikvision", description: "AcuSense NVR integration" },
+  { key: "unifi", label: "UniFi", description: "Protect ENVR bridge" },
+];
 
 export function SuperFeaturesPanel({ orgs }: { orgs: Org[] }) {
   const [rows, setRows] = useState<FeatureRow[]>([]);
