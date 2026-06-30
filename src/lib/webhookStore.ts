@@ -126,6 +126,27 @@ export type HikvisionChannel = {
   created_at: string;
 };
 
+export type UnifiInstance = {
+  id: string;
+  organization_id?: string | null;
+  source_id: string | null;
+  name: string;
+  base_url: string;
+  api_key: string | null;
+  color: string;
+  enabled: boolean;
+  is_local: boolean;
+  verify_tls: boolean;
+  webhook_secret: string;
+  last_seen_at: string | null;
+  last_event_ts: string | null;
+  last_polled_at: string | null;
+  last_error: string | null;
+  poll_enabled: boolean;
+  created_at: string;
+};
+
+
 /**
  * Returns true if the NVR's alert mute window covers `now` (local time).
  * Supports overnight windows (e.g. 22:00 → 06:00).
