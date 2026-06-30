@@ -126,6 +126,27 @@ export type HikvisionChannel = {
   created_at: string;
 };
 
+export type UnifiInstance = {
+  id: string;
+  organization_id?: string | null;
+  source_id: string | null;
+  name: string;
+  base_url: string;
+  api_key: string | null;
+  color: string;
+  enabled: boolean;
+  is_local: boolean;
+  verify_tls: boolean;
+  webhook_secret: string;
+  last_seen_at: string | null;
+  last_event_ts: string | null;
+  last_polled_at: string | null;
+  last_error: string | null;
+  poll_enabled: boolean;
+  created_at: string;
+};
+
+
 /**
  * Returns true if the NVR's alert mute window covers `now` (local time).
  * Supports overnight windows (e.g. 22:00 → 06:00).
@@ -185,6 +206,8 @@ class WebhookStore {
   frigates: FrigateInstance[] = [];
   hikvisions: HikvisionInstance[] = [];
   hikvisionChannels: HikvisionChannel[] = [];
+  unifis: UnifiInstance[] = [];
+
   loaded = false;
   error: string | null = null;
   activeOrgId: string | null = null;
@@ -343,7 +366,7 @@ class WebhookStore {
 
   async refreshAll() {
     try {
-      const [s, e, r, m, f, hi, hc] = await Promise.all([
+      const [s, e, r, m, f, hi, hc, un] = await Promise.all([
         this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
         this.fetchPaged<WebhookEvent>("webhook_events", "ts", false, 10000),
         this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
@@ -351,6 +374,7 @@ class WebhookStore {
         this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
         this.scoped(supabase.from("hikvision_instances").select("*")).order("created_at", { ascending: true }),
         this.scoped(supabase.from("hikvision_channels").select("*")).order("channel_id", { ascending: true }),
+        this.scoped(supabase.from("unifi_instances").select("*")).order("created_at", { ascending: true }),
       ]);
       this.sources = (s.data ?? []) as WebhookSource[];
       this.events = e;
@@ -359,6 +383,8 @@ class WebhookStore {
       this.frigates = (f.data ?? []) as FrigateInstance[];
       this.hikvisions = (hi.data ?? []) as unknown as HikvisionInstance[];
       this.hikvisionChannels = (hc.data ?? []) as unknown as HikvisionChannel[];
+      this.unifis = (un.data ?? []) as unknown as UnifiInstance[];
+
       this.loaded = true;
       this.error = null;
     } catch (err) {
@@ -429,7 +455,16 @@ class WebhookStore {
         else if (p.eventType === "DELETE") this.hikvisionChannels = this.hikvisionChannels.filter((x) => x.id !== (p.old as { id: string }).id);
         this.emit();
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "unifi_instances" }, (p) => {
+        const row = (p.new ?? p.old) as UnifiInstance;
+        if (!this.matchesOrg(row)) return;
+        if (p.eventType === "INSERT") this.unifis = [...this.unifis, p.new as unknown as UnifiInstance];
+        else if (p.eventType === "UPDATE") this.unifis = this.unifis.map((x) => x.id === (p.new as { id: string }).id ? (p.new as unknown as UnifiInstance) : x);
+        else if (p.eventType === "DELETE") this.unifis = this.unifis.filter((x) => x.id !== (p.old as { id: string }).id);
+        this.emit();
+      })
       .subscribe();
+
     this.channels.push(ch);
   }
 
@@ -667,7 +702,50 @@ class WebhookStore {
     }
     return parsed;
   }
+
+  // ─── UniFi instances ───
+  async createUnifi(input: {
+    name: string;
+    base_url: string;
+    color?: string;
+    verify_tls?: boolean;
+  }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
+    const { error } = await supabase.from("unifi_instances").insert({
+      organization_id: this.activeOrgId,
+      name: input.name,
+      base_url: input.base_url.replace(/\/+$/, ""),
+      color: input.color ?? "#22c55e",
+      verify_tls: input.verify_tls ?? false,
+    } as never);
+    if (error) throw error;
+  }
+  async updateUnifi(id: string, patch: Partial<Pick<UnifiInstance,
+    "name" | "base_url" | "color" | "enabled" | "verify_tls"
+  >>) {
+    const cleaned = {
+      ...patch,
+      ...(patch.base_url !== undefined ? { base_url: patch.base_url.replace(/\/+$/, "") } : {}),
+    };
+    const q = supabase.from("unifi_instances").update(cleaned as never).eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) throw error;
+  }
+  async deleteUnifi(id: string) {
+    const inst = this.unifis.find((u) => u.id === id);
+    this.unifis = this.unifis.filter((u) => u.id !== id);
+    if (inst?.source_id) this.sources = this.sources.filter((s) => s.id !== inst.source_id);
+    this.emit();
+    const q = supabase.from("unifi_instances").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) { await this.refreshAll(); throw error; }
+    if (inst?.source_id) {
+      const srcQ = supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+      await (this.activeOrgId ? srcQ.eq("organization_id", this.activeOrgId) : srcQ);
+    }
+  }
 }
+
 
 export const webhookStore = new WebhookStore();
 
