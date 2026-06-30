@@ -24,6 +24,8 @@ const PALETTE = ["#3b82f6", "#06b6d4", "#a855f7", "#22c55e", "#f59e0b", "#ef4444
 
 const Frigate = () => {
   const store = useWebhookStore();
+  const { hasFeature } = useOrgFeatures();
+
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FrigateInstance | null>(null);
