@@ -16,6 +16,7 @@ import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
 import { HikvisionSection } from "@/components/HikvisionSection";
 import { UnifiSection } from "@/components/UnifiSection";
+import { useOrgFeatures } from "@/hooks/useOrgFeatures";
 
 
 
