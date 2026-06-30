@@ -174,6 +174,10 @@ const Media = () => {
     const linkedEvent = m.event_id ? store.events.find((e) => e.id === m.event_id) : null;
     const ackName = m.archived_by_name ?? linkedEvent?.archived_by_name ?? linkedEvent?.read_by_name ?? null;
     const ackAt = m.archived_at ?? linkedEvent?.archived_at ?? linkedEvent?.read_at ?? null;
+    // If the alert was cleared automatically (by an auto-read rule) there's no actor name,
+    // but it is still part of the audit trail — show a neutral "Auto" badge so every alert
+    // visibly has a trail entry.
+    const autoCleared = !ackName && (linkedEvent?.archived || linkedEvent?.read);
     const thumbnail =
       m.kind === "clip"
         ? store.media.find((x) => x.kind === "snapshot" && (
