@@ -206,6 +206,8 @@ class WebhookStore {
   frigates: FrigateInstance[] = [];
   hikvisions: HikvisionInstance[] = [];
   hikvisionChannels: HikvisionChannel[] = [];
+  unifis: UnifiInstance[] = [];
+
   loaded = false;
   error: string | null = null;
   activeOrgId: string | null = null;
