@@ -271,8 +271,8 @@ const Frigate = () => {
       <LocalhostHelp />
 
       <div className="mt-4 mb-6 space-y-6">
-        <HikvisionSection />
-        <UnifiSection />
+        {hasFeature("hikvision") && <HikvisionSection />}
+        {hasFeature("unifi") && <UnifiSection />}
       </div>
 
 
