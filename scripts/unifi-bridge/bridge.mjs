@@ -38,6 +38,7 @@ import zlib from "node:zlib";
 import { Buffer } from "node:buffer";
 import https from "node:https";
 import WebSocket from "ws";
+import { Agent as UndiciAgent } from "undici";
 
 // ───────────────────────── config ─────────────────────────
 
@@ -68,6 +69,7 @@ for (const inst of instances) {
 
 async function runInstance(inst) {
   const agent = new https.Agent({ rejectUnauthorized: inst.verify_tls === true });
+  const dispatcher = new UndiciAgent({ connect: { rejectUnauthorized: inst.verify_tls === true } });
   const base = `https://${inst.host}`;
   let cookie = "";
   let csrf = "";
@@ -81,8 +83,7 @@ async function runInstance(inst) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: inst.username, password: inst.password }),
-      // @ts-ignore — node fetch accepts dispatcher/agent
-      agent,
+      dispatcher,
     });
     if (!res.ok) throw new Error(`login HTTP ${res.status}`);
     const setCookie = res.headers.get("set-cookie") ?? "";
@@ -95,8 +96,7 @@ async function runInstance(inst) {
   async function loadCameras() {
     const r = await fetch(`${base}/proxy/protect/api/cameras`, {
       headers: { Cookie: cookie, "x-csrf-token": csrf },
-      // @ts-ignore
-      agent,
+      dispatcher,
     });
     if (!r.ok) throw new Error(`cameras HTTP ${r.status}`);
     const arr = await r.json();
@@ -108,8 +108,7 @@ async function runInstance(inst) {
     try {
       const r = await fetch(`${base}/proxy/protect/api/events/${eventId}/thumbnail?w=640`, {
         headers: { Cookie: cookie, "x-csrf-token": csrf },
-        // @ts-ignore
-        agent,
+        dispatcher,
       });
       if (!r.ok) return null;
       const buf = Buffer.from(await r.arrayBuffer());
