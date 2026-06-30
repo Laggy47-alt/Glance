@@ -1,76 +1,61 @@
+# UniFi Protect — local WebSocket bridge → Glance
 
-# Hikvision frontend integration
+Push UniFi Protect events into Glance the same way Hikvision does today: a small Node.js bridge runs on-site, subscribes to the Protect WebSocket, and POSTs each event to a new `unifi-ingest` edge function authenticated with a per-ENVR webhook secret. Events land in `unifi_events` + are mirrored into `webhook_events`/`media_items` so they show up on the Live Wall, Media page, WhatsApp alerts, daily reports, and customer feeds with no extra UI wiring.
 
-## Goal
+## What gets built
 
-Make Hikvision NVRs first-class citizens alongside Frigate: managed from the same NVRs page, monitored on NVR Status, alerting into the same Live Wall, and selectable in schedules + customer assignments.
+### 1. Edge function — `supabase/functions/unifi-ingest/index.ts`
+- Public (`verify_jwt = false`).
+- Auth: `X-Webhook-Secret` header must match `unifi_instances.webhook_secret` for the `instance_id` in the body. Service-role client used inside.
+- Body shape (one event per POST):
+  ```json
+  {
+    "instance_id": "<uuid>",
+    "event": {
+      "id": "...", "type": "motion|smartDetectZone|smartDetectLine|ring|...",
+      "smartDetectTypes": ["person","vehicle"],
+      "camera_id": "...", "camera_name": "Front Door",
+      "start": 1730000000000, "end": 1730000004000,
+      "score": 87,
+      "thumbnail_b64": "<optional jpeg base64>"
+    }
+  }
+  ```
+- Actions:
+  1. Upsert `unifi_events` keyed on `(instance_id, remote_event_id)`.
+  2. If `thumbnail_b64`, upload to `camera-snapshots/{org}/unifi/{instance}/{event_id}.jpg` and insert a `media_items` row.
+  3. Insert a `webhook_events` row (`source_id = inst.source_id`, `topic = event.type`, `camera = camera_name`, `label = smartDetectTypes.join(',') || type`, `kind = 'unifi'`, `payload = event`).
+  4. Update `unifi_instances.last_event_ts` + `last_seen_at`.
+- Returns `{ ok: true, event_id }`.
 
-## Architectural decisions
+### 2. Bridge — `scripts/unifi-bridge/`
+New folder, self-contained Node 20 service modelled on `scripts/mudslide-listener/`:
+- `package.json` (deps: `ws`, `undici`, `dotenv`)
+- `bridge.mjs`:
+  - For each configured ENVR in `instances.json` (or `INSTANCES_JSON` env): log in to Protect (`/api/auth/login` with username/password, capture cookie + `x-csrf-token`), open WS to `wss://<host>/proxy/protect/ws/updates?lastUpdateId=...`, decode the binary action/data frame pair (header length + zlib-deflated JSON; standard Protect format).
+  - On `add` of a `event` model with `type` in motion/smartDetect/ring set: fetch the thumbnail via `/proxy/protect/api/events/{id}/thumbnail?w=640` (jpeg), base64 it, POST to `${GLANCE_URL}/functions/v1/unifi-ingest` with `X-Webhook-Secret: <per-ENVR secret>` and `apikey: <anon key>`.
+  - Auto-reconnect with backoff, re-login on 401, structured logs to stdout.
+- `unifi-bridge.service` — systemd unit (same pattern as Mudslide).
+- `README.md` — install, pair, config (`GLANCE_URL`, `GLANCE_ANON_KEY`, `INSTANCES_JSON` with `{id, host, username, password, webhook_secret, verify_tls}` per ENVR), troubleshooting.
 
-1. **Rename "Frigate NVR" → "NVRs"** in the sidebar; keep the route `/frigate` so existing links don't break.
-2. **Mirror Hikvision events into `webhook_events`** (and snapshots into `media_items`) at ingest time, in addition to writing the typed `hikvision_events` row. This means the Live Wall, Media page, auto-read rules, WhatsApp alerts, daily reports, and customer events all work automatically with zero UI changes for that part.
-3. **One auto-paired `webhook_source` per Hikvision instance**, same pattern as UniFi already uses (`ensure_unifi_webhook_source` trigger). The instance row carries `source_id`; the ingest writes events scoped to that source.
-4. **Snapshots**: store under `camera-snapshots/{org}/hikvision/...` (already done) and ALSO insert a `media_items` row with the public URL so the Wall and Media page render them like Frigate snapshots.
+### 3. Frontend
+- `src/lib/webhookStore.ts`: add `unifis: UnifiInstance[]` (mirroring `frigates` / `hikvisions`) with CRUD: `createUnifi`, `updateUnifi`, `deleteUnifi`, plus realtime subscription. Already-present columns: `name`, `base_url`, `color`, `enabled`, `verify_tls`, `webhook_secret`, `source_id`, `last_seen_at`, `last_event_ts`.
+- `src/components/UnifiSection.tsx`: new panel on `/frigate` (NVRs page) — list of UniFi ENVRs as cards. Each card shows status badge (healthy if `last_seen_at < 5 min`), last event time, **Copy webhook secret** + **Copy instance_id** buttons (these go into the bridge `instances.json`), enable toggle, edit/delete. New "Add UniFi" entry in the existing "Add NVR" dropdown.
+- `src/pages/Frigate.tsx`: mount `<UnifiSection />` under the existing `<HikvisionSection />`.
+- Sidebar already says "NVRs" — no change.
 
-## Migration (small, one new SQL block)
+### 4. Wall / Media / Alerts / Daily reports / Auto-read
+No code changes — they read from `webhook_events` + `media_items`, both populated by `unifi-ingest`.
 
-- Add `source_id uuid references webhook_sources` to `hikvision_instances`.
-- Add `ensure_hikvision_webhook_source` trigger mirroring the UniFi one (creates a `webhook_sources` row on insert, syncs name/color/enabled on update).
-- GRANTs already covered by previous migration.
+## Out of scope
+- Two-way control back to the ENVR (arm/disarm at the Protect side).
+- Live RTSP / recordings playback.
+- Auto-discovery of cameras from the bridge into a `unifi_channels` table (not needed for alerts; can add later if NVR Status should list UniFi cameras individually).
 
-## Edge function update
+## Self-hosted apply order
+1. Approve & run the (no-op) migration if any column needs added — current schema already has everything required, so no SQL migration is needed.
+2. `git pull` on the app server, rebuild frontend.
+3. `git pull` on the on-site bridge machine, `cd scripts/unifi-bridge && npm install`, fill `.env` + `instances.json`, enable the systemd unit.
+4. In Glance → NVRs → Add UniFi: create one row per ENVR, copy its `instance_id` + `webhook_secret` into the bridge config, restart bridge.
 
-- `hikvision-ingest/index.ts`: in addition to current writes, insert:
-  - one `webhook_events` row (`source_id`, `topic = eventType`, `camera = finalCameraName`, `label = targetType ?? eventType`, `kind = "hikvision"`, `payload = { event, channel, targets, raw_excerpt }`)
-  - if a snapshot was uploaded, one `media_items` row (`kind = "snapshot"`, `url = public URL`, `camera`, `topic`, `instance_id = inst.id`)
-
-## Frontend changes
-
-### Store — `src/lib/webhookStore.ts`
-- New `HikvisionInstance` + `HikvisionChannel` types.
-- `hikvisions: HikvisionInstance[]` and `hikvisionChannels: HikvisionChannel[]` fields.
-- Load + realtime subscription for both tables.
-- CRUD: `createHikvision`, `updateHikvision`, `deleteHikvision`, `discoverHikvisionChannels(id)`, `pollHikvisionNow(id)` (calls `hikvision-watch` for a single instance).
-
-### Sidebar — `src/components/AppSidebar.tsx`
-- Label "Frigate NVR" → "NVRs". Sites list shows both Frigate + Hikvision (sorted together).
-
-### NVRs page — `src/pages/Frigate.tsx`
-- Title "NVRs", subtitle covers both types.
-- New "Add" dropdown: "Add Frigate" / "Add Hikvision".
-- Hikvision dialog: name, base URL, username, password, verify TLS toggle, color, offline-alert settings.
-- Hikvision card (collapsible, same visual language as Frigate cards):
-  - Status badge (healthy / unreachable / error), enable toggle, last poll/last event.
-  - **Webhook URL + secret panel** — copy button, with paste-into-NVR instructions (links to `HIKVISION_SETUP.md` summary).
-  - **Discover channels** button (calls `hikvision-discover`, refreshes channel list).
-  - Channels list with snapshot thumbnail (via `hikvision-proxy`), online badge, last event time.
-  - Delete button.
-
-### NVR Status — `src/pages/NvrStatus.tsx`
-- Iterate `[...frigates, ...hikvisions]`. For Hikvision cards, source the channel list + online status from `camera_status` (already populated by `hikvision-watch`) and render snapshots via `hikvision-proxy`.
-
-### Schedules — `src/components/CameraScheduleDialog.tsx`
-- Camera picker currently lists Frigate cameras only. Extend it to also list Hikvision channels (instance name + channel name), keyed the same way (instance_id + camera name) so `camera_arm_schedules` works unchanged.
-
-### Customer assignments — `src/pages/Customer.tsx` (+ any picker components)
-- Add Hikvision instances + channels to the assignment dropdowns (`customer_nvr_assignments` + `customer_camera_assignments`). Keys are already polymorphic on `instance_id`.
-
-### Wall + Media + WhatsApp alerts + Daily reports + Auto-read
-- **No code changes** — they read from `webhook_events` / `media_items`, which are now populated by the Hikvision ingest mirror.
-
-## Out of scope this turn
-
-- Two-way ISAPI control (arm/disarm pushed back to NVR). Glance-side arming via `camera_arm_schedules` still works because it gates alerts in the app, not on the NVR.
-- RTSP / recordings / playback.
-
-## Suggested apply order
-
-1. Backend: migration + ingest function update (1 migration approval).
-2. Frontend: store extensions.
-3. Frontend: sidebar rename + NVRs page Hikvision section.
-4. Frontend: NVR Status page.
-5. Frontend: schedule + customer assignment pickers.
-
-You'll need to re-run the new migration on self-hosted + redeploy `hikvision-ingest` after step 1.
-
-Approve and I'll start with step 1.
+Approve and I'll start with the edge function + bridge, then the frontend.
