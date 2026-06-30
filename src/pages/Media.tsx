@@ -214,12 +214,17 @@ const Media = () => {
           {m.kind === "snapshot" ? <Camera className="h-2.5 w-2.5" /> : <Film className="h-2.5 w-2.5" />}
           <span className="text-foreground/90 capitalize">{m.camera ?? "—"}</span>
         </div>
-        {ackName && (
+        {ackName ? (
           <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-emerald-600/80 backdrop-blur px-1.5 py-0.5 rounded text-[10px] text-white">
             <CheckCircle2 className="h-2.5 w-2.5" />
             <span className="truncate max-w-[90px]">{ackName}</span>
           </div>
-        )}
+        ) : autoCleared ? (
+          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-slate-600/80 backdrop-blur px-1.5 py-0.5 rounded text-[10px] text-white" title="Auto-cleared by rule">
+            <CheckCircle2 className="h-2.5 w-2.5" />
+            <span>Auto</span>
+          </div>
+        ) : null}
         <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur px-1.5 py-0.5 rounded text-[10px] text-foreground/80 tabular-nums">
           {new Date(m.ts).toLocaleTimeString()}
         </div>
