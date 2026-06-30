@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import type { FrigateInstance } from "@/lib/webhookStore";
 import { NvrSchedulesPanel } from "@/components/NvrSchedulesPanel";
 import { HikvisionSection } from "@/components/HikvisionSection";
+import { UnifiSection } from "@/components/UnifiSection";
+
 
 
 
@@ -268,9 +270,11 @@ const Frigate = () => {
     >
       <LocalhostHelp />
 
-      <div className="mt-4 mb-6">
+      <div className="mt-4 mb-6 space-y-6">
         <HikvisionSection />
+        <UnifiSection />
       </div>
+
 
       <div className="border-t border-border pt-4">
         <div className="flex items-center gap-2 mb-3">
