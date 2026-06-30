@@ -702,7 +702,50 @@ class WebhookStore {
     }
     return parsed;
   }
+
+  // ─── UniFi instances ───
+  async createUnifi(input: {
+    name: string;
+    base_url: string;
+    color?: string;
+    verify_tls?: boolean;
+  }) {
+    if (!this.activeOrgId) throw new Error("No active organization");
+    const { error } = await supabase.from("unifi_instances").insert({
+      organization_id: this.activeOrgId,
+      name: input.name,
+      base_url: input.base_url.replace(/\/+$/, ""),
+      color: input.color ?? "#22c55e",
+      verify_tls: input.verify_tls ?? false,
+    } as never);
+    if (error) throw error;
+  }
+  async updateUnifi(id: string, patch: Partial<Pick<UnifiInstance,
+    "name" | "base_url" | "color" | "enabled" | "verify_tls"
+  >>) {
+    const cleaned = {
+      ...patch,
+      ...(patch.base_url !== undefined ? { base_url: patch.base_url.replace(/\/+$/, "") } : {}),
+    };
+    const q = supabase.from("unifi_instances").update(cleaned as never).eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) throw error;
+  }
+  async deleteUnifi(id: string) {
+    const inst = this.unifis.find((u) => u.id === id);
+    this.unifis = this.unifis.filter((u) => u.id !== id);
+    if (inst?.source_id) this.sources = this.sources.filter((s) => s.id !== inst.source_id);
+    this.emit();
+    const q = supabase.from("unifi_instances").delete().eq("id", id);
+    const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
+    if (error) { await this.refreshAll(); throw error; }
+    if (inst?.source_id) {
+      const srcQ = supabase.from("webhook_sources").delete().eq("id", inst.source_id);
+      await (this.activeOrgId ? srcQ.eq("organization_id", this.activeOrgId) : srcQ);
+    }
+  }
 }
+
 
 export const webhookStore = new WebhookStore();
 
