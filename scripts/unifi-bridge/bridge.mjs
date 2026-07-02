@@ -213,6 +213,39 @@ async function runInstance(inst) {
     return snap;
   }
 
+  // Fetch ~10s MP4 clip centred on the event start (start-2s .. start+8s).
+  async function fetchClip(cameraId, startMs) {
+    if (!cameraId || !startMs) return null;
+    const start = Math.max(0, startMs - 2000);
+    const end = start + 10_000;
+    const path = `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${start}&end=${end}&type=timelapse&fps=0`;
+    try {
+      const r = await fetch(`${base}${path}`, {
+        headers: { Cookie: cookie, "x-csrf-token": csrf },
+        dispatcher,
+      });
+      if (!r.ok) {
+        log("debug", inst.id, `clip HTTP ${r.status}`);
+        return null;
+      }
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 2000) {
+        log("debug", inst.id, `clip too small ${buf.length}b`);
+        return null;
+      }
+      const head = buf.subarray(4, 8).toString("ascii");
+      if (head !== "ftyp") {
+        log("debug", inst.id, `clip not mp4 (${head})`);
+        return null;
+      }
+      log("info", inst.id, `clip fetched ${(buf.length / 1024).toFixed(0)}kb`);
+      return buf.toString("base64");
+    } catch (e) {
+      log("debug", inst.id, "clip error", e?.message ?? e);
+      return null;
+    }
+  }
+
   async function postEvent(payload) {
     try {
       const r = await fetch(INGEST_URL, {
@@ -237,16 +270,19 @@ async function runInstance(inst) {
   }
 
   function scheduleVisualRetry(payload, delays = [5_000, 15_000, 45_000]) {
-    if (!payload.id || payload.thumbnail_b64) return;
+    if (!payload.id) return;
     for (const delay of delays) {
       setTimeout(async () => {
         const latest = recentEvents.get(payload.id) ?? payload;
-        if (latest.thumbnail_b64) return;
-        const thumbnail_b64 = await fetchThumbnail(latest.id, latest.camera_id);
-        if (!thumbnail_b64) return;
-        const enriched = { ...latest, thumbnail_b64, visual_retry: true };
+        const needsThumb = !latest.thumbnail_b64;
+        const needsClip = !latest.clip_b64;
+        if (!needsThumb && !needsClip) return;
+        const thumbnail_b64 = needsThumb ? await fetchThumbnail(latest.id, latest.camera_id) : latest.thumbnail_b64;
+        const clip_b64 = needsClip ? await fetchClip(latest.camera_id, latest.start) : latest.clip_b64;
+        if (!thumbnail_b64 && !clip_b64) return;
+        const enriched = { ...latest, thumbnail_b64: thumbnail_b64 ?? latest.thumbnail_b64 ?? null, clip_b64: clip_b64 ?? latest.clip_b64 ?? null, visual_retry: true };
         recentEvents.set(latest.id, enriched);
-        log("info", inst.id, "late visual captured", latest.camera_name);
+        log("info", inst.id, "late media captured", latest.camera_name, JSON.stringify({ thumb: !!thumbnail_b64, clip: !!clip_b64 }));
         await postEvent(enriched);
       }, delay).unref?.();
     }
