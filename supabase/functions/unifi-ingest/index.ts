@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
   const startMs: number = typeof ev.start === "number" ? ev.start : Date.now();
   const endMs: number | null = typeof ev.end === "number" ? ev.end : null;
   const score: number | null = typeof ev.score === "number" ? ev.score : null;
+  const isVisualRetry = ev.visual_retry === true;
   const startIso = new Date(startMs).toISOString();
   const endIso = endMs ? new Date(endMs).toISOString() : null;
 
@@ -119,43 +120,87 @@ Deno.serve(async (req) => {
   // Mirror to webhook_events / media_items
   if (inst.source_id) {
     const label = smartTypes.length ? smartTypes.join(",") : eventType;
-    await supabase.from("webhook_events").insert({
-      organization_id: inst.organization_id,
-      source_id: inst.source_id,
-      topic: eventType,
-      payload: {
-        event: eventType,
-        smart_types: smartTypes,
-        camera_id: cameraId,
-        camera: cameraName,
-        score,
-        start: startIso,
-        end: endIso,
-        instance_id: inst.id,
-        remote_event_id: remoteId,
-      },
-      payload_text: null,
-      headers: {},
+    let existingWebhookId: string | null = null;
+    if (remoteId) {
+      const { data: existingWebhook } = await supabase
+        .from("webhook_events")
+        .select("id")
+        .eq("source_id", inst.source_id)
+        .eq("kind", "unifi")
+        .eq("payload->>remote_event_id", remoteId)
+        .maybeSingle();
+      existingWebhookId = existingWebhook?.id ?? null;
+    }
+
+    const webhookPayload = {
+      event: eventType,
+      smart_types: smartTypes,
+      camera_id: cameraId,
       camera: cameraName,
-      label,
-      kind: "unifi",
-      ts: startIso,
-    });
+      score,
+      start: startIso,
+      end: endIso,
+      instance_id: inst.id,
+      remote_event_id: remoteId,
+      has_thumbnail: !!thumbnailPath,
+    };
+
+    if (existingWebhookId) {
+      await supabase.from("webhook_events").update({
+        payload: webhookPayload,
+        camera: cameraName,
+        label,
+        topic: eventType,
+      }).eq("id", existingWebhookId);
+    } else if (!isVisualRetry || !remoteId) {
+      const { data: insertedWebhook } = await supabase.from("webhook_events").insert({
+        organization_id: inst.organization_id,
+        source_id: inst.source_id,
+        topic: eventType,
+        payload: webhookPayload,
+        payload_text: null,
+        headers: {},
+        camera: cameraName,
+        label,
+        kind: "unifi",
+        ts: startIso,
+      }).select("id").maybeSingle();
+      existingWebhookId = insertedWebhook?.id ?? null;
+    }
 
     if (thumbnailPath) {
       const { data: pub } = supabase.storage.from("camera-snapshots").getPublicUrl(thumbnailPath);
       if (pub?.publicUrl) {
-        await supabase.from("media_items").insert({
+        const mediaRow = {
           organization_id: inst.organization_id,
           source_id: inst.source_id,
-          event_id: null,
+          event_id: existingWebhookId,
           kind: "snapshot",
           url: pub.publicUrl,
           camera: cameraName,
           topic: eventType,
           ts: startIso,
           instance_id: inst.id,
-        });
+        };
+
+        const { data: existingMedia } = remoteId
+          ? await supabase
+            .from("media_items")
+            .select("id")
+            .eq("source_id", inst.source_id)
+            .eq("kind", "snapshot")
+            .eq("instance_id", inst.id)
+            .eq("camera", cameraName)
+            .gte("ts", new Date(startMs - 1000).toISOString())
+            .lte("ts", new Date(startMs + 1000).toISOString())
+            .maybeSingle()
+          : { data: null } as { data: { id: string } | null };
+
+        if (existingMedia?.id) {
+          await supabase.from("media_items").update(mediaRow).eq("id", existingMedia.id);
+        } else {
+          await supabase.from("media_items").insert(mediaRow);
+        }
       }
     }
   }
