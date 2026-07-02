@@ -513,15 +513,26 @@ Deno.serve(async (req) => {
         email, password, email_confirm: true,
         user_metadata: { username, display_name, must_change_password: true, org_slug: orgSlug },
       });
-      if (error) return json({ ok: false, error: error.message }, 400);
+      if (error) {
+        console.error("create user: auth.createUser failed", { email, orgSlug, message: error.message });
+        return json({ ok: false, error: `auth create failed: ${error.message}` }, 400);
+      }
       const newId = created.user!.id;
 
       // Org membership: enum supports admin/customer. Operators (role='user') get
       // 'customer' membership for org-scoping while their app_role 'user' grants operator UI.
       const memberRole = role === "admin" ? "admin" : "customer";
-      await a.from("organization_members").insert({ organization_id: org.id, user_id: newId, role: memberRole });
+      const { error: memErr } = await a.from("organization_members").insert({ organization_id: org.id, user_id: newId, role: memberRole });
+      if (memErr) {
+        console.error("create user: organization_members insert failed", { newId, orgId: org.id, memberRole, message: memErr.message });
+        return json({ ok: false, error: `member insert failed: ${memErr.message}` }, 400);
+      }
       // Legacy app_role drives UI gating (admin / user / customer)
-      await a.from("user_roles").insert({ user_id: newId, role });
+      const { error: roleErr } = await a.from("user_roles").insert({ user_id: newId, role });
+      if (roleErr) {
+        console.error("create user: user_roles insert failed", { newId, role, message: roleErr.message });
+        return json({ ok: false, error: `role insert failed: ${roleErr.message}` }, 400);
+      }
 
       if (contact_email) {
         await a.from("profiles").update({ contact_email }).eq("user_id", newId);
