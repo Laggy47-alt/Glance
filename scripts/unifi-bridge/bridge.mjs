@@ -56,9 +56,12 @@ if (!instances.length) {
 }
 
 const EVENT_TYPES = new Set([
-  "motion", "smartDetectZone", "smartDetectLine", "smartDetectLoiterZone",
-  "smartAudioDetect", "ring",
+  "smartDetectZone", "smartDetectLine", "smartDetectLoiterZone",
 ]);
+// When true (default) the bridge only forwards events whose smartDetectTypes
+// includes "person". Set PERSON_ONLY=false in .env to forward all smart-detect
+// types (vehicle, package, animal, etc.).
+const PERSON_ONLY = String(process.env.PERSON_ONLY ?? "true").toLowerCase() !== "false";
 
 const INGEST_CONCURRENCY = envNumber("INGEST_CONCURRENCY", 1, 1, 8);
 const INGEST_RETRIES = envNumber("INGEST_RETRIES", 3, 0, 8);
@@ -490,6 +493,19 @@ async function runInstance(inst) {
     const end = typeof data?.end === "number" ? data.end : null;
     const score = typeof data?.score === "number" ? data.score : null;
     const previous = eventId ? recentEvents.get(eventId) : null;
+
+    // Person-only filter. Accept if any smart types (current or previously seen)
+    // include "person". If neither current update nor previous state has smart
+    // types yet, defer — the next update usually carries them.
+    if (PERSON_ONLY) {
+      const prevSmart = previous?.smartDetectTypes ?? [];
+      const combined = new Set([...smart, ...prevSmart].map((s) => String(s).toLowerCase()));
+      const hasPerson = combined.has("person");
+      const hasOtherClassification = [...combined].some((s) => s && s !== "person");
+      if (hasOtherClassification && !hasPerson) return; // classified as vehicle/etc → drop
+      if (!hasPerson) return; // unclassified yet → wait for next update
+    }
+
 
     let thumbnail_b64 = null;
     let clip_b64 = null;
