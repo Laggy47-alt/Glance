@@ -15,6 +15,7 @@ import { BackendWatchdog } from "./components/BackendWatchdog";
 const Index = lazy(() => import("./pages/Index.tsx"));
 const Sources = lazy(() => import("./pages/Sources.tsx"));
 const Frigate = lazy(() => import("./pages/Frigate.tsx"));
+const Cameras = lazy(() => import("./pages/Cameras.tsx"));
 const AutoRead = lazy(() => import("./pages/AutoRead.tsx"));
 
 const Media = lazy(() => import("./pages/Media.tsx"));
