@@ -13,7 +13,14 @@ import { supabase } from "@/integrations/supabase/client";
 const BOOTSTRAP_ORG_SLUG = "abc-2026";
 // Fallback slugs always tried (super-admin tenant + legacy installs) in case
 // the lookup endpoint is unreachable.
-const FALLBACK_SLUGS = ["super", BOOTSTRAP_ORG_SLUG, "abc-2026-canonical"];
+const FALLBACK_SLUGS = ["fiber", "super", BOOTSTRAP_ORG_SLUG, "abc-2026-canonical"];
+
+const parseLoginName = (value: string) => {
+  const raw = value.trim().toLowerCase();
+  const explicit = raw.match(/^([a-z0-9_.-]+)@([a-z0-9-]+)$/i);
+  if (explicit) return { username: explicit[1], preferredSlug: explicit[2] };
+  return { username: raw, preferredSlug: null };
+};
 
 const Login = () => {
   const { session, loading } = useAuth();
@@ -71,8 +78,12 @@ const Login = () => {
     }
   };
 
-  const attemptSignIn = async (u: string, p: string) => {
-    const slugs = await resolveSlugs(u);
+  const attemptSignIn = async (inputUsername: string, p: string) => {
+    const { username: u, preferredSlug } = parseLoginName(inputUsername);
+    const resolvedSlugs = await resolveSlugs(u);
+    const slugs = preferredSlug
+      ? [preferredSlug, ...resolvedSlugs.filter((slug) => slug !== preferredSlug)]
+      : resolvedSlugs;
     let lastError: { message: string } | null = null;
     for (const slug of slugs) {
       const { error: err } = await signInWithUsername(u, p, slug);
