@@ -211,7 +211,16 @@ function CreateUserDialog({
     });
     setBusy(false);
     if (error || (data as { ok?: boolean })?.ok === false) {
-      toast.error((data as { error?: string })?.error ?? error?.message ?? "Failed to create user");
+      // supabase-js swallows the response body on non-2xx; try to read it from error.context
+      let detail = (data as { error?: string })?.error ?? "";
+      try {
+        const ctx = (error as unknown as { context?: Response })?.context;
+        if (ctx && typeof ctx.json === "function") {
+          const parsed = await ctx.clone().json();
+          if (parsed?.error) detail = String(parsed.error);
+        }
+      } catch { /* ignore */ }
+      toast.error(detail || error?.message || "Failed to create user");
       return;
     }
     toast.success(`User "${username}" created. They must change their password on first login.`);
