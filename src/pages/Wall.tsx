@@ -311,7 +311,8 @@ const Wall = () => {
         store.unifis.find((u) => u.source_id === e.source_id) ??
         store.hikvisions.find((h) => h.source_id === e.source_id);
       const src = store.sources.find((s) => s.id === e.source_id);
-      const site = inst?.name ?? src?.name ?? "Unknown site";
+      const payloadSite = (e.payload && typeof e.payload === "object" && !Array.isArray(e.payload)) ? (e.payload as Record<string, unknown>).site_name : null;
+      const site = (typeof payloadSite === "string" && payloadSite) || inst?.name || src?.name || "Unknown site";
 
       // No silent suppression: every alert must be operator-ACKed.
       // Follow-up bundling on the same camera is handled below in setAlerts.

@@ -94,6 +94,33 @@ Deno.serve(async (req) => {
   const startIso = new Date(startMs).toISOString();
   const endIso = endMs ? new Date(endMs).toISOString() : null;
 
+  // Site lookup + ensure camera row exists (so /cameras page can list it)
+  let siteId: string | null = null;
+  let siteName: string | null = null;
+  if (cameraId) {
+    const { data: camAssign } = await supabase
+      .from("unifi_camera_sites")
+      .select("site_id, unifi_sites(name)")
+      .eq("unifi_instance_id", inst.id)
+      .eq("camera_id", cameraId)
+      .maybeSingle();
+    if (camAssign) {
+      siteId = (camAssign as any).site_id ?? null;
+      siteName = ((camAssign as any).unifi_sites?.name as string | undefined) ?? null;
+      // keep camera_name fresh
+      await supabase.from("unifi_camera_sites")
+        .update({ camera_name: cameraName })
+        .eq("unifi_instance_id", inst.id).eq("camera_id", cameraId);
+    } else {
+      await supabase.from("unifi_camera_sites").insert({
+        organization_id: inst.organization_id,
+        unifi_instance_id: inst.id,
+        camera_id: cameraId,
+        camera_name: cameraName,
+      });
+    }
+  }
+
   // Optional snapshot
   let thumbnailPath: string | null = null;
   if (typeof ev.thumbnail_b64 === "string" && ev.thumbnail_b64.length > 0) {
@@ -113,24 +140,54 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Optional MP4 clip
+  let clipPath: string | null = null;
+  let clipUrl: string | null = null;
+  if (typeof ev.clip_b64 === "string" && ev.clip_b64.length > 0) {
+    try {
+      const bytes = decodeBase64(ev.clip_b64);
+      const path = `${inst.organization_id}/unifi/${inst.id}/${cameraId ?? "unknown"}/${startMs}.mp4`;
+      const { error: upErr } = await supabase.storage.from("camera-snapshots").upload(path, bytes, {
+        contentType: "video/mp4",
+        upsert: true,
+      });
+      if (!upErr) {
+        clipPath = path;
+        const { data: pub } = supabase.storage.from("camera-snapshots").getPublicUrl(path);
+        clipUrl = pub?.publicUrl ?? null;
+        console.log("unifi-ingest clip saved", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, bytes: bytes.length }));
+      } else {
+        console.log("unifi-ingest clip upload failed", JSON.stringify({ message: upErr.message }));
+      }
+    } catch (e) {
+      console.log("unifi-ingest clip decode failed", JSON.stringify({ message: e instanceof Error ? e.message : String(e) }));
+    }
+  }
+
   // Upsert typed row
+  const eventRow: Record<string, unknown> = {
+    organization_id: inst.organization_id,
+    instance_id: inst.id,
+    remote_event_id: remoteId,
+    camera_id: cameraId,
+    camera_name: cameraName,
+    event_type: eventType,
+    smart_types: smartTypes,
+    start_at: startIso,
+    end_at: endIso,
+    score,
+    raw: ev,
+    site_id: siteId,
+  };
+  if (thumbnailPath) eventRow.thumbnail_path = thumbnailPath;
+  if (clipPath) eventRow.clip_path = clipPath;
   const { error: upErr } = await supabase
     .from("unifi_events")
-    .upsert({
-      organization_id: inst.organization_id,
-      instance_id: inst.id,
-      remote_event_id: remoteId,
-      camera_id: cameraId,
-      camera_name: cameraName,
-      event_type: eventType,
-      smart_types: smartTypes,
-      start_at: startIso,
-      end_at: endIso,
-      thumbnail_path: thumbnailPath,
-      score,
-      raw: ev,
-    }, { onConflict: "instance_id,remote_event_id" });
+    .upsert(eventRow, { onConflict: "instance_id,remote_event_id" });
   if (upErr) return json({ error: "insert failed", detail: upErr.message }, 500);
+
+  // Prefer the site name as the display "camera source"; fall back to NVR name.
+  const displaySite = siteName || inst.name;
 
   // Mirror to webhook_events / media_items
   if (inst.source_id) {
@@ -158,6 +215,9 @@ Deno.serve(async (req) => {
       instance_id: inst.id,
       remote_event_id: remoteId,
       has_thumbnail: !!thumbnailPath,
+      site_id: siteId,
+      site_name: displaySite,
+      clip_url: clipUrl,
     };
 
     if (existingWebhookId) {
@@ -183,43 +243,52 @@ Deno.serve(async (req) => {
       existingWebhookId = insertedWebhook?.id ?? null;
     }
 
-    if (thumbnailPath) {
-      const { data: pub } = supabase.storage.from("camera-snapshots").getPublicUrl(thumbnailPath);
-      if (pub?.publicUrl) {
-        const mediaRow = {
-          organization_id: inst.organization_id,
-          source_id: inst.source_id,
-          event_id: existingWebhookId,
-          kind: "snapshot",
-          url: pub.publicUrl,
-          camera: cameraName,
-          topic: eventType,
-          ts: startIso,
-          instance_id: inst.id,
-        };
+    // Locate an existing media row for this event (by remoteId) so both
+    // thumbnail retries and clip uploads update it instead of duplicating.
+    let existingMediaId: string | null = null;
+    if (remoteId) {
+      const { data: existingMedia } = await supabase
+        .from("media_items")
+        .select("id")
+        .eq("source_id", inst.source_id)
+        .eq("instance_id", inst.id)
+        .eq("camera", cameraName)
+        .gte("ts", new Date(startMs - 2000).toISOString())
+        .lte("ts", new Date(startMs + 2000).toISOString())
+        .maybeSingle();
+      existingMediaId = existingMedia?.id ?? null;
+    }
 
-        const { data: existingMedia } = remoteId
-          ? await supabase
-            .from("media_items")
-            .select("id")
-            .eq("source_id", inst.source_id)
-            .eq("kind", "snapshot")
-            .eq("instance_id", inst.id)
-            .eq("camera", cameraName)
-            .gte("ts", new Date(startMs - 1000).toISOString())
-            .lte("ts", new Date(startMs + 1000).toISOString())
-            .maybeSingle()
-          : { data: null } as { data: { id: string } | null };
+    if (thumbnailPath || clipUrl) {
+      const { data: pub } = thumbnailPath
+        ? supabase.storage.from("camera-snapshots").getPublicUrl(thumbnailPath)
+        : { data: null } as { data: { publicUrl?: string } | null };
+      const snapshotUrl = pub?.publicUrl ?? null;
 
-        if (existingMedia?.id) {
-          const { error: mediaErr } = await supabase.from("media_items").update(mediaRow).eq("id", existingMedia.id);
-          if (mediaErr) console.log("unifi-ingest media update failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: mediaErr.message }));
-        } else {
-          const { error: mediaErr } = await supabase.from("media_items").insert(mediaRow);
-          if (mediaErr) console.log("unifi-ingest media insert failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: mediaErr.message }));
-        }
-        console.log("unifi-ingest media saved", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, path: thumbnailPath }));
+      const mediaRow: Record<string, unknown> = {
+        organization_id: inst.organization_id,
+        source_id: inst.source_id,
+        event_id: existingWebhookId,
+        kind: clipUrl ? "clip" : "snapshot",
+        url: snapshotUrl ?? clipUrl ?? "",
+        camera: cameraName,
+        topic: eventType,
+        ts: startIso,
+        instance_id: inst.id,
+      };
+      if (clipUrl) (mediaRow as any).clip_url = clipUrl;
+
+      if (existingMediaId) {
+        const patch: Record<string, unknown> = { camera: cameraName, topic: eventType, event_id: existingWebhookId };
+        if (snapshotUrl) { patch.url = snapshotUrl; patch.kind = "snapshot"; }
+        if (clipUrl) { patch.clip_url = clipUrl; if (!snapshotUrl) patch.kind = "clip"; }
+        const { error: mediaErr } = await supabase.from("media_items").update(patch).eq("id", existingMediaId);
+        if (mediaErr) console.log("unifi-ingest media update failed", JSON.stringify({ message: mediaErr.message }));
+      } else {
+        const { error: mediaErr } = await supabase.from("media_items").insert(mediaRow);
+        if (mediaErr) console.log("unifi-ingest media insert failed", JSON.stringify({ message: mediaErr.message }));
       }
+      console.log("unifi-ingest media saved", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, snapshot: !!snapshotUrl, clip: !!clipUrl }));
     }
   }
 

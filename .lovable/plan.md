@@ -1,61 +1,64 @@
-# UniFi Protect — local WebSocket bridge → Glance
+# Plan — Sites, Clips, User-Create
 
-Push UniFi Protect events into Glance the same way Hikvision does today: a small Node.js bridge runs on-site, subscribes to the Protect WebSocket, and POSTs each event to a new `unifi-ingest` edge function authenticated with a per-ENVR webhook secret. Events land in `unifi_events` + are mirrored into `webhook_events`/`media_items` so they show up on the Live Wall, Media page, WhatsApp alerts, daily reports, and customer feeds with no extra UI wiring.
+## 1. Sites per UniFi NVR
 
-## What gets built
+**Database**
+- New table `unifi_sites` — id, organization_id, unifi_instance_id, name, color, notes.
+- Add `site_id uuid` column to `unifi_events` (for stamping the site on incoming events).
+- Cameras are identified by `unifi_instance_id + camera_id`. Instead of a separate join table, reuse the existing `unifi_cameras` mirror if present, or add `unifi_camera_sites(instance_id, camera_id, site_id)` — one row per assigned camera.
 
-### 1. Edge function — `supabase/functions/unifi-ingest/index.ts`
-- Public (`verify_jwt = false`).
-- Auth: `X-Webhook-Secret` header must match `unifi_instances.webhook_secret` for the `instance_id` in the body. Service-role client used inside.
-- Body shape (one event per POST):
-  ```json
-  {
-    "instance_id": "<uuid>",
-    "event": {
-      "id": "...", "type": "motion|smartDetectZone|smartDetectLine|ring|...",
-      "smartDetectTypes": ["person","vehicle"],
-      "camera_id": "...", "camera_name": "Front Door",
-      "start": 1730000000000, "end": 1730000004000,
-      "score": 87,
-      "thumbnail_b64": "<optional jpeg base64>"
-    }
-  }
-  ```
-- Actions:
-  1. Upsert `unifi_events` keyed on `(instance_id, remote_event_id)`.
-  2. If `thumbnail_b64`, upload to `camera-snapshots/{org}/unifi/{instance}/{event_id}.jpg` and insert a `media_items` row.
-  3. Insert a `webhook_events` row (`source_id = inst.source_id`, `topic = event.type`, `camera = camera_name`, `label = smartDetectTypes.join(',') || type`, `kind = 'unifi'`, `payload = event`).
-  4. Update `unifi_instances.last_event_ts` + `last_seen_at`.
-- Returns `{ ok: true, event_id }`.
+**Ingest change**
+- `supabase/functions/unifi-ingest`: on each event, look up the site for `(instance_id, camera_id)` and write it to `site_id` + include site name in the display payload so the Live wall shows the site instead of the NVR name.
 
-### 2. Bridge — `scripts/unifi-bridge/`
-New folder, self-contained Node 20 service modelled on `scripts/mudslide-listener/`:
-- `package.json` (deps: `ws`, `undici`, `dotenv`)
-- `bridge.mjs`:
-  - For each configured ENVR in `instances.json` (or `INSTANCES_JSON` env): log in to Protect (`/api/auth/login` with username/password, capture cookie + `x-csrf-token`), open WS to `wss://<host>/proxy/protect/ws/updates?lastUpdateId=...`, decode the binary action/data frame pair (header length + zlib-deflated JSON; standard Protect format).
-  - On `add` of a `event` model with `type` in motion/smartDetect/ring set: fetch the thumbnail via `/proxy/protect/api/events/{id}/thumbnail?w=640` (jpeg), base64 it, POST to `${GLANCE_URL}/functions/v1/unifi-ingest` with `X-Webhook-Secret: <per-ENVR secret>` and `apikey: <anon key>`.
-  - Auto-reconnect with backoff, re-login on 401, structured logs to stdout.
-- `unifi-bridge.service` — systemd unit (same pattern as Mudslide).
-- `README.md` — install, pair, config (`GLANCE_URL`, `GLANCE_ANON_KEY`, `INSTANCES_JSON` with `{id, host, username, password, webhook_secret, verify_tls}` per ENVR), troubleshooting.
+**Frontend**
+- New route `/cameras` — dedicated page that lists ALL UniFi cameras across NVRs, groups by NVR, filter/search bar, and a Site dropdown per camera with bulk-assign (checkboxes → "Assign selected to site").
+- Add "Manage sites" side panel on the same page (create/rename/delete sites, scoped to the selected NVR).
+- `Wall.tsx` site-lookup: prefer `event.site_name` from ingest, fall back to NVR name (already fixed).
+- Sidebar link "Cameras" under NVRs.
 
-### 3. Frontend
-- `src/lib/webhookStore.ts`: add `unifis: UnifiInstance[]` (mirroring `frigates` / `hikvisions`) with CRUD: `createUnifi`, `updateUnifi`, `deleteUnifi`, plus realtime subscription. Already-present columns: `name`, `base_url`, `color`, `enabled`, `verify_tls`, `webhook_secret`, `source_id`, `last_seen_at`, `last_event_ts`.
-- `src/components/UnifiSection.tsx`: new panel on `/frigate` (NVRs page) — list of UniFi ENVRs as cards. Each card shows status badge (healthy if `last_seen_at < 5 min`), last event time, **Copy webhook secret** + **Copy instance_id** buttons (these go into the bridge `instances.json`), enable toggle, edit/delete. New "Add UniFi" entry in the existing "Add NVR" dropdown.
-- `src/pages/Frigate.tsx`: mount `<UnifiSection />` under the existing `<HikvisionSection />`.
-- Sidebar already says "NVRs" — no change.
+## 2. UniFi 10-second clips
 
-### 4. Wall / Media / Alerts / Daily reports / Auto-read
-No code changes — they read from `webhook_events` + `media_items`, both populated by `unifi-ingest`.
+**Bridge (`scripts/unifi-bridge/bridge.mjs`)**
+- After receiving `add` event with `end` timestamp (or `motion`/`smartDetectZone` finished), schedule a clip download after `end + 5s` buffer.
+- Call `POST /proxy/protect/api/video/export` with `camera`, `start`, `end` (10s window centred on event start), stream to buffer.
+- POST clip to `unifi-ingest` as multipart with `kind=clip`, same event id so it updates the existing row.
 
-## Out of scope
-- Two-way control back to the ENVR (arm/disarm at the Protect side).
-- Live RTSP / recordings playback.
-- Auto-discovery of cameras from the bridge into a `unifi_channels` table (not needed for alerts; can add later if NVR Status should list UniFi cameras individually).
+**Ingest (`unifi-ingest`)**
+- Accept `clip` uploads: store to `camera-snapshots` bucket (or new `camera-clips`) and update `media_items.clip_url` for the matching event.
 
-## Self-hosted apply order
-1. Approve & run the (no-op) migration if any column needs added — current schema already has everything required, so no SQL migration is needed.
-2. `git pull` on the app server, rebuild frontend.
-3. `git pull` on the on-site bridge machine, `cd scripts/unifi-bridge && npm install`, fill `.env` + `instances.json`, enable the systemd unit.
-4. In Glance → NVRs → Add UniFi: create one row per ENVR, copy its `instance_id` + `webhook_secret` into the bridge config, restart bridge.
+**Frontend**
+- Alert card already renders `clip_url` if present; verify Media viewer plays MP4.
 
-Approve and I'll start with the edge function + bridge, then the frontend.
+## 3. `/super` create user — "non-2xx" fix
+
+**Diagnostics + fix**
+- Add server-side console.error at every failure branch of `create` so the specific message surfaces in edge logs (already partly there — expand to include the caught throw path).
+- Most likely causes on a *new org*:
+  - `organization_members.role` enum missing `customer` value in a fresh org install.
+  - `auth.users.email` collision because the org slug is empty/duplicate → `buildEmail` produces the same address as an existing user.
+  - `profiles.username` uniqueness collision (a super-admin creating "admin" across orgs).
+- Frontend `Users.tsx`: surface the JSON `error` field from the response instead of the generic "non-2xx" toast so we see the real reason next time.
+
+## Technical details
+
+```text
+unifi_sites (id, organization_id, unifi_instance_id, name, color, notes)
+unifi_camera_sites (instance_id, camera_id, site_id)  PK(instance_id, camera_id)
+unifi_events + site_id uuid null
+```
+
+Files touched:
+- `supabase/migrations/<ts>_unifi_sites.sql` (new)
+- `supabase/functions/unifi-ingest/index.ts` (site lookup + clip accept)
+- `scripts/unifi-bridge/bridge.mjs` (clip fetch)
+- `src/pages/Cameras.tsx` (new)
+- `src/App.tsx` + sidebar (route + link)
+- `src/pages/Users.tsx` (surface error text)
+- `supabase/functions/admin-users/index.ts` (verbose error logs)
+
+## Order of work
+1. Migration (sites tables + site_id column).
+2. `/cameras` page + sidebar.
+3. Ingest lookup + wall label.
+4. Bridge clip fetch + ingest clip handler.
+5. Users.tsx error surfacing + admin-users logging.

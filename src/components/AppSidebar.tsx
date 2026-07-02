@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Activity, Filter, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, AlertTriangle, MessageCircle } from "lucide-react";
+import { Activity, Filter, Film, Webhook, Plug, Server, Bell, Users as UsersIcon, LogOut, KeyRound, Palette, HeartPulse, ChevronDown, Building2, Mail, VideoOff, ShieldAlert, Phone, Radio, MessageSquareWarning, AlertTriangle, MessageCircle, Video } from "lucide-react";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
@@ -13,6 +13,7 @@ const adminItems = [
   { to: "/", label: "Overview", icon: Activity },
   { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/frigate", label: "NVRs", icon: Server },
+  { to: "/cameras", label: "Cameras", icon: Video },
   { to: "/nvr-status", label: "NVR Status", icon: HeartPulse },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
   { to: "/media", label: "Media", icon: Film },

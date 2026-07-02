@@ -897,6 +897,7 @@ export type Database = {
         Row: {
           archived: boolean
           camera: string | null
+          clip_url: string | null
           event_id: string | null
           frigate_event_id: string | null
           id: string
@@ -911,6 +912,7 @@ export type Database = {
         Insert: {
           archived?: boolean
           camera?: string | null
+          clip_url?: string | null
           event_id?: string | null
           frigate_event_id?: string | null
           id?: string
@@ -925,6 +927,7 @@ export type Database = {
         Update: {
           archived?: boolean
           camera?: string | null
+          clip_url?: string | null
           event_id?: string | null
           frigate_event_id?: string | null
           id?: string
@@ -1250,11 +1253,67 @@ export type Database = {
         }
         Relationships: []
       }
+      unifi_camera_sites: {
+        Row: {
+          camera_id: string
+          camera_name: string | null
+          created_at: string
+          id: string
+          organization_id: string
+          site_id: string | null
+          unifi_instance_id: string
+          updated_at: string
+        }
+        Insert: {
+          camera_id: string
+          camera_name?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          site_id?: string | null
+          unifi_instance_id: string
+          updated_at?: string
+        }
+        Update: {
+          camera_id?: string
+          camera_name?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          site_id?: string | null
+          unifi_instance_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unifi_camera_sites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unifi_camera_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "unifi_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unifi_camera_sites_unifi_instance_id_fkey"
+            columns: ["unifi_instance_id"]
+            isOneToOne: false
+            referencedRelation: "unifi_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       unifi_events: {
         Row: {
           archived: boolean
           camera_id: string
           camera_name: string | null
+          clip_path: string | null
           created_at: string
           end_at: string | null
           event_type: string
@@ -1265,6 +1324,7 @@ export type Database = {
           read: boolean
           remote_event_id: string
           score: number | null
+          site_id: string | null
           smart_types: string[] | null
           start_at: string
           thumbnail_path: string | null
@@ -1273,6 +1333,7 @@ export type Database = {
           archived?: boolean
           camera_id: string
           camera_name?: string | null
+          clip_path?: string | null
           created_at?: string
           end_at?: string | null
           event_type: string
@@ -1283,6 +1344,7 @@ export type Database = {
           read?: boolean
           remote_event_id: string
           score?: number | null
+          site_id?: string | null
           smart_types?: string[] | null
           start_at: string
           thumbnail_path?: string | null
@@ -1291,6 +1353,7 @@ export type Database = {
           archived?: boolean
           camera_id?: string
           camera_name?: string | null
+          clip_path?: string | null
           created_at?: string
           end_at?: string | null
           event_type?: string
@@ -1301,6 +1364,7 @@ export type Database = {
           read?: boolean
           remote_event_id?: string
           score?: number | null
+          site_id?: string | null
           smart_types?: string[] | null
           start_at?: string
           thumbnail_path?: string | null
@@ -1318,6 +1382,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unifi_events_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "unifi_sites"
             referencedColumns: ["id"]
           },
         ]
@@ -1396,6 +1467,54 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "webhook_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unifi_sites: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          unifi_instance_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id: string
+          unifi_instance_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          unifi_instance_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unifi_sites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unifi_sites_unifi_instance_id_fkey"
+            columns: ["unifi_instance_id"]
+            isOneToOne: false
+            referencedRelation: "unifi_instances"
             referencedColumns: ["id"]
           },
         ]

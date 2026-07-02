@@ -15,6 +15,7 @@ import { BackendWatchdog } from "./components/BackendWatchdog";
 const Index = lazy(() => import("./pages/Index.tsx"));
 const Sources = lazy(() => import("./pages/Sources.tsx"));
 const Frigate = lazy(() => import("./pages/Frigate.tsx"));
+const Cameras = lazy(() => import("./pages/Cameras.tsx"));
 const AutoRead = lazy(() => import("./pages/AutoRead.tsx"));
 
 const Media = lazy(() => import("./pages/Media.tsx"));
@@ -87,6 +88,7 @@ const App = () => (
                 <Route path="/" element={protect(<Index />, true)} />
                 <Route path="/sources" element={protect(<Sources />, true)} />
                 <Route path="/frigate" element={protect(<Frigate />, true)} />
+                <Route path="/cameras" element={protect(<Cameras />, true)} />
                 <Route path="/nvr-status" element={protect(<NvrStatus />)} />
                 <Route path="/camera-status" element={protect(<CameraStatus />)} />
                 <Route path="/wall" element={protect(<Wall />)} />
