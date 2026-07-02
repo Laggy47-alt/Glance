@@ -39,6 +39,7 @@ import { Buffer } from "node:buffer";
 import https from "node:https";
 import WebSocket from "ws";
 import { Agent as UndiciAgent } from "undici";
+import { authenticator } from "otplib";
 
 // ───────────────────────── config ─────────────────────────
 
