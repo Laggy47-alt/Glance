@@ -394,6 +394,12 @@ Deno.serve(async (req) => {
           { organization_id: orgId, user_id: userId, role: "admin" },
           { onConflict: "organization_id,user_id" },
         );
+        // If this user was previously seeded into the wrong org slug, remove
+        // stale memberships so login lands only in the requested existing org.
+        await a.from("organization_members")
+          .delete()
+          .eq("user_id", userId)
+          .neq("organization_id", orgId);
 
         return json({ ok: true, organization_id: orgId, user_id: userId, login_email: email });
       } catch (e) {
