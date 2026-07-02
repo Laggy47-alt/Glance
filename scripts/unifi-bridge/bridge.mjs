@@ -80,7 +80,7 @@ async function runInstance(inst) {
 
   async function login() {
     log("info", inst.id, "logging in", inst.host);
-    const body = { username: inst.username, password: inst.password };
+    const body = { username: inst.username, password: inst.password, rememberMe: true };
     // First attempt — without token; UniFi returns 401 with ulp-auth-* headers when MFA needed.
     let res = await fetch(`${base}/api/auth/login`, {
       method: "POST",
@@ -89,9 +89,15 @@ async function runInstance(inst) {
       dispatcher,
     });
     // MFA required → generate TOTP from configured secret and retry.
+    // UniFi OS returns HTTP 499 with an mfaCookie in the JSON response. That
+    // UBIC_2FA cookie must be sent back with the one-time code; otherwise the
+    // second login attempt is treated as a fresh MFA challenge and returns 499.
     if (res.status === 499 || res.status === 401) {
+      const mfaText = await res.text().catch(() => "");
+      const mfaJson = safeJson(mfaText);
+      const mfaCookie = extractMfaCookie(mfaJson, res.headers.get("set-cookie") ?? "");
       const mfaHeader = res.headers.get("x-ulp-auth-token") || res.headers.get("x-csrf-token");
-      const needsMfa = res.status === 499 || (mfaHeader && (await res.clone().text()).toLowerCase().includes("mfa"));
+      const needsMfa = res.status === 499 || (mfaHeader && mfaText.toLowerCase().includes("mfa"));
       if (needsMfa || inst.totp_secret || inst.mfa_token) {
         let code = inst.mfa_token;
         if (inst.totp_secret) {
@@ -99,10 +105,13 @@ async function runInstance(inst) {
           log("debug", inst.id, "generated TOTP code");
         }
         if (!code) throw new Error("login: MFA required but no totp_secret / mfa_token configured");
+        log("info", inst.id, "mfa challenge, submitting totp");
+        const retryHeaders = { "Content-Type": "application/json" };
+        if (mfaCookie) retryHeaders.Cookie = mfaCookie;
         res = await fetch(`${base}/api/auth/login`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, token: code, ubic_2fa_token: code }),
+          headers: retryHeaders,
+          body: JSON.stringify({ ...body, token: code }),
           dispatcher,
         });
       }
@@ -292,6 +301,17 @@ function loadInstances() {
     return [];
   }
   return JSON.parse(fs.readFileSync(path, "utf8"));
+}
+
+function safeJson(text) {
+  try { return text ? JSON.parse(text) : null; } catch { return null; }
+}
+
+function extractMfaCookie(body, setCookie) {
+  const fromBody = body?.data?.mfaCookie || body?.mfaCookie;
+  if (typeof fromBody === "string" && fromBody.trim()) return fromBody.split(";")[0];
+  const match = String(setCookie || "").match(/UBIC_2FA=([^;]+)/);
+  return match ? `UBIC_2FA=${match[1]}` : "";
 }
 
 function log(level, id, ...rest) {

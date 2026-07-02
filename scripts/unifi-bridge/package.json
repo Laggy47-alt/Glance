@@ -9,7 +9,7 @@
     "start": "node bridge.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=18"
   },
   "dependencies": {
     "otplib": "^12.0.1",
