@@ -10,12 +10,13 @@ import {
 } from "@/components/ui/dialog";
 import {
   Plus, Trash2, Server, AlertCircle, CheckCircle2,
-  Copy, Eye, EyeOff, Webhook, WifiOff, ChevronDown, Wifi,
+  Copy, Eye, EyeOff, Webhook, WifiOff, ChevronDown, Wifi, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import type { UnifiInstance } from "@/lib/webhookStore";
+import { UnifiAlertScheduleDialog } from "@/components/UnifiAlertScheduleDialog";
 
 const PALETTE = ["#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#f59e0b", "#ef4444", "#14b8a6"];
 const HEALTHY_WINDOW_MS = 5 * 60 * 1000;
@@ -32,6 +33,7 @@ function hostFromBaseUrl(raw: string) {
 export function UnifiSection() {
   const store = useWebhookStore();
   const [open, setOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [editing, setEditing] = useState<UnifiInstance | null>(null);
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -90,7 +92,11 @@ export function UnifiSection() {
             <p className="text-[11px] text-muted-foreground">Local WebSocket bridge pushes motion / smart-detect events.</p>
           </div>
         </div>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setScheduleOpen(true)}>
+            <Clock className="h-3.5 w-3.5" /> Alert schedule
+          </Button>
+          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
           <DialogTrigger asChild>
             <Button onClick={openNew} size="sm" variant="outline" className="gap-1.5">
               <Plus className="h-3.5 w-3.5" /> Add UniFi
