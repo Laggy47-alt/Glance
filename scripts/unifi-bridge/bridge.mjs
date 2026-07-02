@@ -56,9 +56,12 @@ if (!instances.length) {
 }
 
 const EVENT_TYPES = new Set([
-  "motion", "smartDetectZone", "smartDetectLine", "smartDetectLoiterZone",
-  "smartAudioDetect", "ring",
+  "smartDetectZone", "smartDetectLine", "smartDetectLoiterZone",
 ]);
+// When true (default) the bridge only forwards events whose smartDetectTypes
+// includes "person". Set PERSON_ONLY=false in .env to forward all smart-detect
+// types (vehicle, package, animal, etc.).
+const PERSON_ONLY = String(process.env.PERSON_ONLY ?? "true").toLowerCase() !== "false";
 
 const INGEST_CONCURRENCY = envNumber("INGEST_CONCURRENCY", 1, 1, 8);
 const INGEST_RETRIES = envNumber("INGEST_RETRIES", 3, 0, 8);
