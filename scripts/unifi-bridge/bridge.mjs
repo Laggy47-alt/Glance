@@ -134,6 +134,30 @@ async function runInstance(inst) {
     const arr = await r.json();
     cameras = new Map(arr.map((c) => [c.id, c.name]));
     log("info", inst.id, `loaded ${cameras.size} cameras`);
+    await postCameraInventory(arr.map((c) => ({ id: c.id, name: c.name })));
+  }
+
+  async function postCameraInventory(cameraList) {
+    try {
+      const r = await fetch(INGEST_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": String(inst.webhook_secret),
+          apikey: GLANCE_ANON_KEY,
+          Authorization: `Bearer ${GLANCE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ instance_id: inst.id, cameras: cameraList }),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        log("info", inst.id, `camera inventory HTTP ${r.status} ${t.slice(0, 200)}`);
+      } else {
+        log("info", inst.id, `camera inventory synced ${cameraList.length}`);
+      }
+    } catch (e) {
+      log("info", inst.id, "camera inventory error:", e?.message ?? e);
+    }
   }
 
   async function responseImageBase64(r, label) {

@@ -126,6 +126,15 @@ function mergeIncident(existing: Alert, incoming: Alert): Alert {
   };
 }
 
+function hasPlayableClip(a: Alert) {
+  return !!a.clip || !!a.snapshot?.clip_url;
+}
+
+function mediaUrlForPlayback(m: MediaItem, preferred: "clip" | "snapshot") {
+  if (preferred === "clip" && m.clip_url) return resolveMediaUrl(m.clip_url);
+  return resolveMediaUrl(m.url);
+}
+
 function prependUniqueIncidents(prev: Alert[], incoming: Alert[]) {
   const next = [...prev];
   const prepend: Alert[] = [];
@@ -624,18 +633,18 @@ const Wall = () => {
                 <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] auto-rows-min">
                   {visibleAlerts.map((a, i) => {
                     const openMedia = (preferred: "clip" | "snapshot") => {
-                      const m = preferred === "clip" ? (a.clip ?? a.snapshot) : (a.snapshot ?? a.clip);
+                      const m = preferred === "clip" ? (a.clip ?? (a.snapshot?.clip_url ? a.snapshot : undefined) ?? a.snapshot) : (a.snapshot ?? a.clip);
                       if (!m) return;
                       const inst = store.frigates.find((f) =>
                         (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id
                       );
                       setLightbox({
-                        kind: m.kind,
-                        url: resolveMediaUrl(m.url),
+                        kind: preferred === "clip" && (m.kind === "clip" || m.clip_url) ? "clip" : m.kind,
+                        url: mediaUrlForPlayback(m, preferred),
                         camera: a.camera,
                         topic: m.topic ?? null,
                         ts: m.ts,
-                        thumbnail: a.snapshot && m.kind === "clip" ? resolveMediaUrl(a.snapshot.url) : undefined,
+                        thumbnail: a.snapshot && preferred === "clip" ? resolveMediaUrl(a.snapshot.url) : undefined,
                         frigateUrl: inst ? `${inst.base_url}/cameras/${a.camera}` : null,
                         mediaId: m.id,
                         organizationId: m.organization_id ?? a.event?.organization_id ?? activeOrg?.id ?? null,
@@ -688,7 +697,7 @@ function AlertCard({
     return resolved;
   };
   const snapUrl = alert.snapshot ? withBbox(alert.snapshot.url) : null;
-  const hasClip = !!alert.clip;
+  const hasClip = hasPlayableClip(alert);
 
   return (
     <div

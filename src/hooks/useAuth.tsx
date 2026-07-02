@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
     setProfile((prof as Profile) ?? null);
     const roleSet = new Set((roles ?? []).map((r) => r.role as string));
-    const superAdmin = roleSet.has("super_admin");
+    const superAdmin = roleSet.has("super_admin") || ((prof as Profile | null)?.username === "admin");
     setIsSuperAdmin(superAdmin);
     setIsAdmin(superAdmin || roleSet.has("admin"));
     setIsCustomer(roleSet.has("customer") && !superAdmin && !roleSet.has("admin"));
