@@ -182,11 +182,12 @@ function SnapshotImage({ url, fallbacks, alt }: { url: string; fallbacks: string
     <img
       src={candidates[idx]}
       alt={alt}
-      className="max-h-[70vh] w-auto"
+      className="w-auto h-auto max-h-[80vh] max-w-full object-contain"
       onError={() => {
         if (idx + 1 < candidates.length) setIdx(idx + 1);
         else setFailed(true);
       }}
     />
   );
+
 }
