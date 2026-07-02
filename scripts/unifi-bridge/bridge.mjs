@@ -279,11 +279,11 @@ async function runInstance(inst) {
     const score = typeof data?.score === "number" ? data.score : null;
 
     let thumbnail_b64 = null;
-    if (eventId) {
-      // Slight delay so Protect has the snapshot ready
-      await new Promise((r) => setTimeout(r, 800));
-      thumbnail_b64 = await fetchThumbnail(eventId);
-    }
+    // Kick off thumbnail retrieval; use eventId when available, otherwise straight to snapshot.
+    await new Promise((r) => setTimeout(r, 500));
+    thumbnail_b64 = eventId
+      ? await fetchThumbnail(eventId, cameraId)
+      : await fetchCameraSnapshot(cameraId);
 
     await postEvent({
       id: eventId,
