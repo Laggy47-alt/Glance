@@ -76,6 +76,7 @@ async function runInstance(inst) {
   let csrf = "";
   let lastUpdateId = "";
   let cameras = new Map(); // id → name
+  let recentEvents = new Map(); // Protect event id → last payload sent
   let backoff = 1000;
 
   async function login() {
@@ -135,31 +136,58 @@ async function runInstance(inst) {
     log("info", inst.id, `loaded ${cameras.size} cameras`);
   }
 
+  async function responseImageBase64(r, label) {
+    if (!r.ok) {
+      log("debug", inst.id, `${label} HTTP ${r.status}`);
+      return null;
+    }
+    const contentType = (r.headers.get("content-type") ?? "").toLowerCase();
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length < 500) {
+      log("debug", inst.id, `${label} too small ${buf.length}b ${contentType}`);
+      return null;
+    }
+    if (contentType && !contentType.includes("image")) {
+      log("debug", inst.id, `${label} not image ${contentType} ${buf.length}b`);
+      return null;
+    }
+    log("debug", inst.id, `${label} ok ${buf.length}b ${contentType || "unknown-content-type"}`);
+    return buf.toString("base64");
+  }
+
   async function fetchEventThumb(eventId) {
     try {
       const r = await fetch(`${base}/proxy/protect/api/events/${eventId}/thumbnail?w=640`, {
         headers: { Cookie: cookie, "x-csrf-token": csrf },
         dispatcher,
       });
-      if (!r.ok) return null;
-      const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length < 500) return null;
-      return buf.toString("base64");
-    } catch { return null; }
+      return await responseImageBase64(r, "event thumbnail");
+    } catch (e) {
+      log("debug", inst.id, "event thumbnail error", e?.message ?? e);
+      return null;
+    }
   }
 
   async function fetchCameraSnapshot(cameraId) {
     if (!cameraId) return null;
-    try {
-      const r = await fetch(`${base}/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}&force=true&w=640`, {
-        headers: { Cookie: cookie, "x-csrf-token": csrf },
-        dispatcher,
-      });
-      if (!r.ok) return null;
-      const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length < 500) return null;
-      return buf.toString("base64");
-    } catch { return null; }
+    const paths = [
+      `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=640&ts=${Date.now()}`,
+      `/proxy/protect/api/cameras/${cameraId}/snapshot?w=640&ts=${Date.now()}`,
+      `/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}`,
+    ];
+    for (const path of paths) {
+      try {
+        const r = await fetch(`${base}${path}`, {
+          headers: { Cookie: cookie, "x-csrf-token": csrf },
+          dispatcher,
+        });
+        const img = await responseImageBase64(r, "camera snapshot");
+        if (img) return img;
+      } catch (e) {
+        log("debug", inst.id, "camera snapshot error", e?.message ?? e);
+      }
+    }
+    return null;
   }
 
   async function fetchThumbnail(eventId, cameraId) {
@@ -195,6 +223,22 @@ async function runInstance(inst) {
       }
     } catch (e) {
       log("info", inst.id, "ingest error:", e?.message ?? e);
+    }
+  }
+
+  function scheduleVisualRetry(payload, delays = [5_000, 15_000, 45_000]) {
+    if (!payload.id || payload.thumbnail_b64) return;
+    for (const delay of delays) {
+      setTimeout(async () => {
+        const latest = recentEvents.get(payload.id) ?? payload;
+        if (latest.thumbnail_b64) return;
+        const thumbnail_b64 = await fetchThumbnail(latest.id, latest.camera_id);
+        if (!thumbnail_b64) return;
+        const enriched = { ...latest, thumbnail_b64, visual_retry: true };
+        recentEvents.set(latest.id, enriched);
+        log("info", inst.id, "late visual captured", latest.camera_name);
+        await postEvent(enriched);
+      }, delay).unref?.();
     }
   }
 
@@ -268,10 +312,9 @@ async function runInstance(inst) {
     if (!isAdd && !isUpd) return;
     const type = data?.type ?? action.type;
     if (!type || !EVENT_TYPES.has(type)) return;
-    if (!isAdd) return; // only emit once on add to avoid duplicates
-
     const eventId = action.id ?? data?.id;
     const cameraId = data?.camera ?? data?.cameraId ?? null;
+    if (isUpd && (!eventId || !recentEvents.has(eventId))) return;
     const cameraName = (cameraId && cameras.get(cameraId)) || data?.cameraName || cameraId || "Unknown";
     const smart = Array.isArray(data?.smartDetectTypes) ? data.smartDetectTypes : [];
     const start = typeof data?.start === "number" ? data.start : Date.now();
@@ -281,21 +324,30 @@ async function runInstance(inst) {
     let thumbnail_b64 = null;
     // Kick off thumbnail retrieval; use eventId when available, otherwise straight to snapshot.
     await new Promise((r) => setTimeout(r, 500));
-    thumbnail_b64 = eventId
-      ? await fetchThumbnail(eventId, cameraId)
-      : await fetchCameraSnapshot(cameraId);
+    thumbnail_b64 = eventId ? await fetchThumbnail(eventId, cameraId) : await fetchCameraSnapshot(cameraId);
 
-    await postEvent({
+    const previous = eventId ? recentEvents.get(eventId) : null;
+    const payload = {
+      ...(previous ?? {}),
       id: eventId,
       type,
-      smartDetectTypes: smart,
-      camera_id: cameraId,
-      camera_name: cameraName,
-      start,
-      end,
-      score,
-      thumbnail_b64,
-    });
+      smartDetectTypes: smart.length ? smart : previous?.smartDetectTypes ?? [],
+      camera_id: cameraId ?? previous?.camera_id ?? null,
+      camera_name: cameraName || previous?.camera_name || "Unknown",
+      start: typeof previous?.start === "number" ? previous.start : start,
+      end: end ?? previous?.end ?? null,
+      score: score ?? previous?.score ?? null,
+      thumbnail_b64: thumbnail_b64 ?? previous?.thumbnail_b64 ?? null,
+      visual_retry: isUpd,
+    };
+    if (eventId) recentEvents.set(eventId, payload);
+
+    // Send adds immediately so the alarm appears. Updates only re-post when
+    // they add a visual that was missing on the initial add.
+    if (isAdd || (!previous?.thumbnail_b64 && payload.thumbnail_b64)) {
+      await postEvent(payload);
+    }
+    scheduleVisualRetry(payload);
   }
 
   // boot
