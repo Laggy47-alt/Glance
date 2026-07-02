@@ -1,6 +1,6 @@
 # Glance — UniFi Protect bridge
 
-Small Node 20 service that runs on an on-site machine, holds a WebSocket
+Small Node 18+ service that runs on an on-site machine, holds a WebSocket
 session to one or more UniFi Protect ENVRs (UDM Pro / NVR / CKG2+), decodes
 the binary `updates` feed, and pushes each motion / smart-detect / ring
 event to the Glance edge function `unifi-ingest`.
@@ -25,7 +25,7 @@ outbound HTTPS POSTs.
 
 ## 2. Install the bridge on the on-site machine
 
-Tested on Debian / Ubuntu with Node 20.
+Tested on Debian / Ubuntu with Node 18+.
 
 ```bash
 sudo apt install -y nodejs npm
@@ -58,6 +58,7 @@ Edit `/opt/glance-unifi-bridge/instances.json` — one block per ENVR:
     "host": "10.0.0.1",
     "username": "glance",
     "password": "the-local-password",
+    "totp_secret": "JBSWY3DPEHPK3PXP",
     "webhook_secret": "uuid-from-glance",
     "verify_tls": false
   }
@@ -65,6 +66,22 @@ Edit `/opt/glance-unifi-bridge/instances.json` — one block per ENVR:
 ```
 
 `verify_tls: false` is normal — UniFi consoles ship with a self-signed cert.
+
+### MFA / 2FA (`totp_secret`)
+
+UniFi accounts with MFA enabled need a fresh 6-digit code on every login.
+Instead of pasting one-time codes, give the bridge the **TOTP shared secret**
+so it can generate codes itself on every reconnect:
+
+1. On the UniFi console, sign in as the bridge user.
+2. Go to **Account → Two-Factor Authentication → Add Authenticator App**.
+3. When the QR code appears, click **"Can't scan?"** / **"Enter code manually"**
+   and copy the base32 string.
+4. Also scan the QR with a normal authenticator app and finish setup.
+5. Paste the base32 string into `totp_secret` in `instances.json`.
+
+When UniFi returns `login HTTP 499`, it means MFA is required. The bridge sends
+the generated TOTP code and the required `UBIC_2FA` MFA cookie automatically.
 
 ---
 
@@ -108,6 +125,9 @@ sudo systemctl restart unifi-bridge
   `unifi_instances`. Re-copy the Instance ID.
 - **`login HTTP 401`** — wrong username/password, or the user isn't a local
   account. UniFi cloud SSO users can't log in to the local API.
+- **`login HTTP 499`** — MFA is still not accepted. Pull the latest bridge,
+  copy `bridge.mjs` and `package.json` again, run `sudo npm install --omit=dev`,
+  confirm `totp_secret` is the manual/base32 authenticator secret, and restart.
 - **`ws closed 1006`** — network blip; the bridge reconnects automatically
   with exponential backoff (max 30 s).
 - Set `LOG_LEVEL=debug` and `systemctl restart unifi-bridge` to see every

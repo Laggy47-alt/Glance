@@ -1,6 +1,6 @@
 # Glance — UniFi Protect bridge
 
-Small Node 20 service that runs on an on-site machine, holds a WebSocket
+Small Node 18+ service that runs on an on-site machine, holds a WebSocket
 session to one or more UniFi Protect ENVRs (UDM Pro / NVR / CKG2+), decodes
 the binary `updates` feed, and pushes each motion / smart-detect / ring
 event to the Glance edge function `unifi-ingest`.
@@ -25,7 +25,7 @@ outbound HTTPS POSTs.
 
 ## 2. Install the bridge on the on-site machine
 
-Tested on Debian / Ubuntu with Node 20.
+Tested on Debian / Ubuntu with Node 18+.
 
 ```bash
 sudo apt install -y nodejs npm
@@ -85,6 +85,10 @@ The bridge uses `otplib` to compute the current code from that secret on
 every login and re-login, so reconnects after network blips or reboots just
 work — no manual intervention.
 
+When UniFi returns `login HTTP 499`, it means MFA is required. The bridge must
+send the generated TOTP code **and** the `UBIC_2FA` MFA cookie returned by the
+first login attempt. Current bridge versions do this automatically.
+
 If MFA is **not** enabled on the account, omit `totp_secret` entirely.
 
 
@@ -130,6 +134,9 @@ sudo systemctl restart unifi-bridge
   `unifi_instances`. Re-copy the Instance ID.
 - **`login HTTP 401`** — wrong username/password, or the user isn't a local
   account. UniFi cloud SSO users can't log in to the local API.
+- **`login HTTP 499`** — MFA is still not accepted. Pull the latest bridge,
+  copy `bridge.mjs` and `package.json` again, run `sudo npm install --omit=dev`,
+  confirm `totp_secret` is the manual/base32 authenticator secret, and restart.
 - **`ws closed 1006`** — network blip; the bridge reconnects automatically
   with exponential backoff (max 30 s).
 - Set `LOG_LEVEL=debug` and `systemctl restart unifi-bridge` to see every
