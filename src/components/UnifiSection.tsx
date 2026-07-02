@@ -140,8 +140,10 @@ export function UnifiSection() {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
+
 
       {store.unifis.length === 0 ? (
         <Card className="bg-gradient-card border-border shadow-card p-8 text-center">
@@ -279,6 +281,8 @@ export function UnifiSection() {
           })}
         </div>
       )}
+      <UnifiAlertScheduleDialog open={scheduleOpen} onOpenChange={setScheduleOpen} />
     </div>
   );
 }
+
