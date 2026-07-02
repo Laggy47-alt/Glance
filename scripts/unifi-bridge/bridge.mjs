@@ -277,6 +277,7 @@ async function runInstance(inst) {
     } catch (e) {
       log("debug", inst.id, "clip error", e?.message ?? e);
     }
+    log("info", inst.id, "clip unavailable", cameraId);
     return null;
   }
 
