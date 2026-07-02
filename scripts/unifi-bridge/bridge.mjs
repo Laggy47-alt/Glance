@@ -134,6 +134,30 @@ async function runInstance(inst) {
     const arr = await r.json();
     cameras = new Map(arr.map((c) => [c.id, c.name]));
     log("info", inst.id, `loaded ${cameras.size} cameras`);
+    await postCameraInventory(arr.map((c) => ({ id: c.id, name: c.name })));
+  }
+
+  async function postCameraInventory(cameraList) {
+    try {
+      const r = await fetch(INGEST_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": String(inst.webhook_secret),
+          apikey: GLANCE_ANON_KEY,
+          Authorization: `Bearer ${GLANCE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ instance_id: inst.id, cameras: cameraList }),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        log("info", inst.id, `camera inventory HTTP ${r.status} ${t.slice(0, 200)}`);
+      } else {
+        log("info", inst.id, `camera inventory synced ${cameraList.length}`);
+      }
+    } catch (e) {
+      log("info", inst.id, "camera inventory error:", e?.message ?? e);
+    }
   }
 
   async function responseImageBase64(r, label) {
@@ -213,37 +237,48 @@ async function runInstance(inst) {
     return snap;
   }
 
+  function isMp4(buf) {
+    return buf.length > 12 && buf.subarray(4, 8).toString("ascii") === "ftyp";
+  }
+
   // Fetch ~10s MP4 clip centred on the event start (start-2s .. start+8s).
   async function fetchClip(cameraId, startMs) {
     if (!cameraId || !startMs) return null;
     const start = Math.max(0, startMs - 2000);
     const end = start + 10_000;
-    const path = `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${start}&end=${end}&type=timelapse&fps=0`;
+    const paths = [
+      `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${start}&end=${end}`,
+      `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${start}&end=${end}&type=timelapse&fps=0`,
+      `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${start}&end=${end}&type=normal`,
+      `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${Math.floor(start / 1000)}&end=${Math.floor(end / 1000)}`,
+    ];
     try {
-      const r = await fetch(`${base}${path}`, {
-        headers: { Cookie: cookie, "x-csrf-token": csrf },
-        dispatcher,
-      });
-      if (!r.ok) {
-        log("debug", inst.id, `clip HTTP ${r.status}`);
-        return null;
+      for (const path of paths) {
+        const r = await fetch(`${base}${path}`, {
+          headers: { Cookie: cookie, "x-csrf-token": csrf },
+          dispatcher,
+        });
+        if (!r.ok) {
+          log("debug", inst.id, `clip HTTP ${r.status} ${path}`);
+          continue;
+        }
+        const buf = Buffer.from(await r.arrayBuffer());
+        if (buf.length < 2000) {
+          log("debug", inst.id, `clip too small ${buf.length}b ${path}`);
+          continue;
+        }
+        if (!isMp4(buf)) {
+          log("debug", inst.id, `clip not mp4 (${buf.subarray(0, 16).toString("hex")}) ${path}`);
+          continue;
+        }
+        log("info", inst.id, `clip fetched ${(buf.length / 1024).toFixed(0)}kb`);
+        return buf.toString("base64");
       }
-      const buf = Buffer.from(await r.arrayBuffer());
-      if (buf.length < 2000) {
-        log("debug", inst.id, `clip too small ${buf.length}b`);
-        return null;
-      }
-      const head = buf.subarray(4, 8).toString("ascii");
-      if (head !== "ftyp") {
-        log("debug", inst.id, `clip not mp4 (${head})`);
-        return null;
-      }
-      log("info", inst.id, `clip fetched ${(buf.length / 1024).toFixed(0)}kb`);
-      return buf.toString("base64");
     } catch (e) {
       log("debug", inst.id, "clip error", e?.message ?? e);
-      return null;
     }
+    log("info", inst.id, "clip unavailable", cameraId);
+    return null;
   }
 
   async function postEvent(payload) {
@@ -368,9 +403,11 @@ async function runInstance(inst) {
     const score = typeof data?.score === "number" ? data.score : null;
 
     let thumbnail_b64 = null;
+    let clip_b64 = null;
     // Kick off thumbnail retrieval; use eventId when available, otherwise straight to snapshot.
     await new Promise((r) => setTimeout(r, 500));
     thumbnail_b64 = eventId ? await fetchThumbnail(eventId, cameraId) : await fetchCameraSnapshot(cameraId);
+    clip_b64 = await fetchClip(cameraId, typeof previous?.start === "number" ? previous.start : start);
 
     const previous = eventId ? recentEvents.get(eventId) : null;
     const payload = {
@@ -384,13 +421,14 @@ async function runInstance(inst) {
       end: end ?? previous?.end ?? null,
       score: score ?? previous?.score ?? null,
       thumbnail_b64: thumbnail_b64 ?? previous?.thumbnail_b64 ?? null,
+      clip_b64: clip_b64 ?? previous?.clip_b64 ?? null,
       visual_retry: isUpd,
     };
     if (eventId) recentEvents.set(eventId, payload);
 
     // Send adds immediately so the alarm appears. Updates only re-post when
     // they add a visual that was missing on the initial add.
-    if (isAdd || (!previous?.thumbnail_b64 && payload.thumbnail_b64)) {
+    if (isAdd || (!previous?.thumbnail_b64 && payload.thumbnail_b64) || (!previous?.clip_b64 && payload.clip_b64)) {
       await postEvent(payload);
     }
     scheduleVisualRetry(payload);

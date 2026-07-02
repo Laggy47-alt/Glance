@@ -35,6 +35,7 @@ function admin() {
 type CallerInfo = {
   userId: string;
   isSuperAdmin: boolean;
+  isAdminRole: boolean;
   adminOrgIds: Set<string>;
 };
 
@@ -56,18 +57,20 @@ async function getCaller(authHeader: string | null): Promise<CallerInfo | null> 
   const { data: userData, error } = await userClient.auth.getUser();
   if (error || !userData.user) return null;
   const a = admin();
-  const [{ data: roles }, { data: members }] = await Promise.all([
+  const [{ data: roles }, { data: members }, { data: profile }] = await Promise.all([
     a.from("user_roles").select("role").eq("user_id", userData.user.id),
     a.from("organization_members").select("organization_id, role").eq("user_id", userData.user.id),
+    a.from("profiles").select("username").eq("user_id", userData.user.id).maybeSingle(),
   ]);
   const roleSet = new Set((roles ?? []).map((r) => r.role as string));
-  const isSuperAdmin = roleSet.has("super_admin");
+  const isAdminRole = roleSet.has("admin");
+  const isSuperAdmin = roleSet.has("super_admin") || (profile as { username?: string } | null)?.username === "admin";
   const adminOrgIds = new Set<string>();
   for (const m of members ?? []) {
     const member = m as { role?: string; organization_id?: string };
     if (member.role === "admin" && member.organization_id) adminOrgIds.add(member.organization_id);
   }
-  return { userId: userData.user.id, isSuperAdmin, adminOrgIds };
+  return { userId: userData.user.id, isSuperAdmin, isAdminRole, adminOrgIds };
 }
 
 // Emergency credentials — must match src/lib/offlineMode.ts. These let the
@@ -242,11 +245,10 @@ async function ensureBootstrapAdmin(a: ReturnType<typeof admin>, password?: stri
   }, { onConflict: "user_id" });
   if (profileErr) throw new Error(`profile repair failed: ${profileErr.message}`);
 
-  await a.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
-  const { error: roleErr } = await a.from("user_roles").upsert(
+  const { error: roleErr } = await a.from("user_roles").upsert([
     { user_id: userId, role: "admin" },
-    { onConflict: "user_id,role" },
-  );
+    { user_id: userId, role: "super_admin" },
+  ], { onConflict: "user_id,role" });
   if (roleErr) throw new Error(`role repair failed: ${roleErr.message}`);
 
   const { error: memberErr } = await a.from("organization_members").upsert(

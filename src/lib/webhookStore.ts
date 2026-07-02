@@ -57,6 +57,7 @@ export type MediaItem = {
   ts: string;
   instance_id?: string | null;
   frigate_event_id?: string | null;
+  clip_url?: string | null;
   archived?: boolean;
   archived_by?: string | null;
   archived_by_name?: string | null;

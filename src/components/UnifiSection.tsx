@@ -20,6 +20,15 @@ import type { UnifiInstance } from "@/lib/webhookStore";
 const PALETTE = ["#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#f59e0b", "#ef4444", "#14b8a6"];
 const HEALTHY_WINDOW_MS = 5 * 60 * 1000;
 
+function hostFromBaseUrl(raw: string) {
+  try {
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    return new URL(withScheme).host;
+  } catch {
+    return raw.replace(/^https?:\/\//i, "").replace(/\/+$/, "") || "10.0.0.1";
+  }
+}
+
 export function UnifiSection() {
   const store = useWebhookStore();
   const [open, setOpen] = useState(false);
@@ -140,6 +149,15 @@ export function UnifiSection() {
             const isOpen = !!expanded[u.id];
             const lastSeen = u.last_seen_at ? new Date(u.last_seen_at).getTime() : 0;
             const healthy = lastSeen && (Date.now() - lastSeen) < HEALTHY_WINDOW_MS;
+            const bridgeConfig = JSON.stringify({
+              id: u.id,
+              host: hostFromBaseUrl(u.base_url),
+              username: "glance",
+              password: "CHANGE_ME",
+              totp_secret: "BASE32_TOTP_SECRET_IF_MFA_ENABLED",
+              webhook_secret: u.webhook_secret,
+              verify_tls: u.verify_tls,
+            }, null, 2);
             return (
               <Card key={u.id} id={u.id} className="bg-gradient-card border-border shadow-card overflow-hidden">
                 <button
@@ -222,6 +240,19 @@ export function UnifiSection() {
                           <strong> Webhook secret</strong> above to <code>instances.json</code>, then start the systemd service.
                           See <code>scripts/unifi-bridge/README.md</code> for full steps.
                         </p>
+
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">instances.json entry</Label>
+                            <Button size="sm" variant="outline" className="h-7 gap-1.5" onClick={() => copy(bridgeConfig)}>
+                              <Copy className="h-3.5 w-3.5" /> Copy block
+                            </Button>
+                          </div>
+                          <pre className="text-[10px] leading-relaxed bg-black/30 border border-border rounded-md p-3 overflow-x-auto text-accent font-mono">{bridgeConfig}</pre>
+                          <p className="text-[10px] text-muted-foreground mt-1.5">
+                            After the bridge restarts, this NVR should show “Bridge online” here and its camera list will sync to the Cameras page automatically.
+                          </p>
+                        </div>
                       </div>
 
                       <div className="flex justify-end gap-2 flex-wrap">
