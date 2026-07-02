@@ -16,6 +16,73 @@ This single Node process replaces the old split setup (Mudslide CLI for sending
 
 ## Install on the server
 
+### Docker fix for `unknown command 'http'`
+
+The plain `robvanderleek/mudslide` container cannot be started with `http`.
+That is why your container restarts with:
+
+```text
+error: unknown command 'http'
+Cmd=["http"]
+```
+
+Replace it with the Glance listener container:
+
+```bash
+cd /srv/abc-glance/Glance
+git pull
+cd scripts/mudslide-listener
+
+docker rm -f mudslide 2>/dev/null || true
+cp docker-compose.example.yml docker-compose.yml
+nano .env
+```
+
+Use this `.env` shape:
+
+```env
+WEBHOOK_URL=https://supabase.abcglance.co.za/functions/v1/whatsapp-incoming
+WEBHOOK_SECRET=<value from whatsapp_settings.incoming_webhook_secret>
+ORG_ID=<original organization_id uuid>
+SUPABASE_ANON_KEY=<your anon key>
+
+LISTEN_HOST=0.0.0.0
+LISTEN_PORT=3000
+SEND_TOKEN=<same value as whatsapp_settings.mudslide_token>
+MUDSLIDE_AUTH_DIR=/data/.mudslide
+
+INCLUDE_GROUPS=1
+INCLUDE_DMS=1
+INCLUDE_FROM_ME=0
+```
+
+Then:
+
+```bash
+docker compose up -d --build
+docker logs -f mudslide-listener
+```
+
+Verify:
+
+```bash
+curl -s http://127.0.0.1:3000/health
+curl -s -H "Authorization: Bearer $SEND_TOKEN" http://127.0.0.1:3000/me
+curl -s -X POST http://127.0.0.1:3000/send \
+  -H "Authorization: Bearer $SEND_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"me","message":"Glance WhatsApp test"}'
+```
+
+If it says logged out, pair once:
+
+```bash
+docker compose run --rm mudslide-listener npx mudslide login -c /data/.mudslide
+docker compose up -d
+```
+
+### Systemd / Node install
+
 ```bash
 sudo mkdir -p /opt/mudslide-listener
 sudo cp listener.mjs package.json /opt/mudslide-listener/

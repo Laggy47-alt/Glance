@@ -16,6 +16,68 @@ This single Node process replaces the old split setup (Mudslide CLI for sending
 
 ## Install on the server
 
+### Option A — Docker, recommended for your current setup
+
+The plain `robvanderleek/mudslide` image does **not** have a `http` command. If
+your container shows `Cmd=["http"]` and logs `unknown command 'http'`, remove it
+and run this listener container instead.
+
+```bash
+cd /srv/abc-glance/Glance/scripts/mudslide-listener
+
+# stop the broken container
+docker rm -f mudslide 2>/dev/null || true
+
+# create/edit config
+cp docker-compose.example.yml docker-compose.yml
+nano .env
+```
+
+`.env` example:
+
+```env
+WEBHOOK_URL=https://supabase.abcglance.co.za/functions/v1/whatsapp-incoming
+WEBHOOK_SECRET=<value from whatsapp_settings.incoming_webhook_secret>
+ORG_ID=<original organization_id uuid>
+SUPABASE_ANON_KEY=<your anon key>
+
+LISTEN_HOST=0.0.0.0
+LISTEN_PORT=3000
+SEND_TOKEN=<same value as whatsapp_settings.mudslide_token>
+MUDSLIDE_AUTH_DIR=/data/.mudslide
+
+INCLUDE_GROUPS=1
+INCLUDE_DMS=1
+INCLUDE_FROM_ME=0
+```
+
+Start it:
+
+```bash
+docker compose up -d --build
+docker logs -f mudslide-listener
+```
+
+Pair WhatsApp if needed. If the logs say it is logged out, run:
+
+```bash
+docker compose run --rm mudslide-listener npx mudslide login -c /data/.mudslide
+docker compose up -d
+```
+
+Verify:
+
+```bash
+curl -s http://127.0.0.1:3000/health
+curl -s -H "Authorization: Bearer $SEND_TOKEN" http://127.0.0.1:3000/me
+curl -s -X POST http://127.0.0.1:3000/send \
+  -H "Authorization: Bearer $SEND_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"me","message":"Glance WhatsApp test"}'
+```
+
+### Option B — systemd / Node
+
 ```bash
 sudo mkdir -p /opt/mudslide-listener
 sudo cp listener.mjs package.json /opt/mudslide-listener/
