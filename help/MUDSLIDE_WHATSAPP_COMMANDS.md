@@ -399,3 +399,77 @@ docker compose logs -f mudslide-listener
 - Only expose port 3000 on the loopback interface or the docker network. Never publish it to the public internet.
 - The `mudslide_base_url` should be an internal address (`host.docker.internal`, private IP, or the docker network name), never a public URL.
 - Rotate `SEND_TOKEN` and `WEBHOOK_SECRET` any time the container image or host is shared/rebuilt.
+
+---
+
+## 10. Listing WhatsApp groups & running Mudslide CLI in the container
+
+The listener image ships the `mudslide` CLI. Use `docker exec` against the **running** container — you do not need a `docker-compose.yml` in your CWD.
+
+### 10.1 Find the container & its auth mount
+
+```bash
+# Confirm the container is running
+sudo docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' | grep -i mud
+
+# Show mounted auth folder + env (MUDSLIDE_AUTH_DIR is the in-container path)
+sudo docker inspect mudslide-listener \
+  --format 'Mounts: {{json .Mounts}}{{"\n"}}Env: {{json .Config.Env}}'
+
+# Show the compose project dir (empty if started with `docker run`)
+sudo docker inspect mudslide-listener \
+  --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}'
+```
+
+On this deployment the auth dir is mounted at:
+
+- Host:      `/home/charl/functions/Glance/scripts/mudslide-listener/auth`
+- Container: `/data/.mudslide`
+
+### 10.2 CLI flag: use `-c`, not `--data-dir`
+
+The bundled Mudslide version uses `-c <config-dir>`. `--data-dir` will error with `unknown option`.
+
+```bash
+# Who am I logged in as
+sudo docker exec mudslide-listener npx mudslide me -c /data/.mudslide
+
+# List all WhatsApp groups (JID + name)
+sudo docker exec mudslide-listener npx mudslide groups -c /data/.mudslide
+
+# Some builds use singular
+sudo docker exec mudslide-listener npx mudslide group -c /data/.mudslide
+
+# List recent chats / contacts
+sudo docker exec mudslide-listener npx mudslide chats    -c /data/.mudslide
+sudo docker exec mudslide-listener npx mudslide contacts -c /data/.mudslide
+
+# Send a test message from CLI
+sudo docker exec mudslide-listener npx mudslide send \
+  -c /data/.mudslide '<JID or number>@s.whatsapp.net' 'hello from CLI'
+```
+
+Group JIDs end in `@g.us`. Copy one and use it as `to` in the `/send` API:
+
+```bash
+curl -X POST http://127.0.0.1:3000/send \
+  -H "Authorization: Bearer $SEND_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"120363...@g.us","message":"hello group"}'
+```
+
+### 10.3 HTTP `/groups` endpoint (listener)
+
+The listener also exposes groups over HTTP (auth required):
+
+```bash
+curl -H "Authorization: Bearer $SEND_TOKEN" http://127.0.0.1:3000/groups
+```
+
+### 10.4 Common gotchas
+
+- `no configuration file provided: not found` → you are in the wrong dir for `docker compose`. Either `cd` to the folder containing your `docker-compose.yml`, pass `-f /full/path/docker-compose.yml`, or skip compose and use `docker exec` as above.
+- `/opt/mudslide/node_modules/mudslide/assets/docker-compose.yml` is the **upstream package example**, not your deployment — ignore it.
+- `error: unknown option '--data-dir'` → replace with `-c /data/.mudslide`.
+- If `mudslide` isn't on PATH inside the container, prefix with `npx`: `npx mudslide ...`.
+- Rotate `SEND_TOKEN` if it was ever pasted into a shared terminal / screenshot.
