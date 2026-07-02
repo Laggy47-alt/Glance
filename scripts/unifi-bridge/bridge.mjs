@@ -494,6 +494,19 @@ async function runInstance(inst) {
     const score = typeof data?.score === "number" ? data.score : null;
     const previous = eventId ? recentEvents.get(eventId) : null;
 
+    // Person-only filter. Accept if any smart types (current or previously seen)
+    // include "person". If neither current update nor previous state has smart
+    // types yet, defer — the next update usually carries them.
+    if (PERSON_ONLY) {
+      const prevSmart = previous?.smartDetectTypes ?? [];
+      const combined = new Set([...smart, ...prevSmart].map((s) => String(s).toLowerCase()));
+      const hasPerson = combined.has("person");
+      const hasOtherClassification = [...combined].some((s) => s && s !== "person");
+      if (hasOtherClassification && !hasPerson) return; // classified as vehicle/etc → drop
+      if (!hasPerson) return; // unclassified yet → wait for next update
+    }
+
+
     let thumbnail_b64 = null;
     let clip_b64 = null;
     const needsThumb = !previous?.has_thumbnail;
