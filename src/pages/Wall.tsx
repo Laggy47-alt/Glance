@@ -306,8 +306,12 @@ const Wall = () => {
       seenRef.current.add(key);
       const camera = e.camera ?? "unknown";
       const label = e.label ?? e.kind ?? "motion";
-      const inst = store.frigates.find((f) => f.source_id === e.source_id);
-      const site = inst?.name ?? "Unknown site";
+      const inst =
+        store.frigates.find((f) => f.source_id === e.source_id) ??
+        store.unifis.find((u) => u.source_id === e.source_id) ??
+        store.hikvisions.find((h) => h.source_id === e.source_id);
+      const src = store.sources.find((s) => s.id === e.source_id);
+      const site = inst?.name ?? src?.name ?? "Unknown site";
 
       // No silent suppression: every alert must be operator-ACKed.
       // Follow-up bundling on the same camera is handled below in setAlerts.
@@ -390,10 +394,12 @@ const Wall = () => {
       );
       const camera = m.camera ?? "unknown";
       const label = "motion";
-      const inst = store.frigates.find((f) =>
-        (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id
-      );
-      const site = inst?.name ?? "Unknown site";
+      const inst =
+        store.frigates.find((f) => (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id) ??
+        store.unifis.find((u) => (m.instance_id && u.id === m.instance_id) || u.source_id === m.source_id) ??
+        store.hikvisions.find((h) => (m.instance_id && h.id === m.instance_id) || h.source_id === m.source_id);
+      const src = store.sources.find((s) => s.id === m.source_id);
+      const site = inst?.name ?? src?.name ?? "Unknown site";
       const mMs = new Date(m.ts).getTime();
 
       // No silent suppression — handled by setAlerts follow-up logic below.
