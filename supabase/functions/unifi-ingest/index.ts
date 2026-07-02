@@ -42,6 +42,16 @@ function decodeBase64(b64: string): Uint8Array {
   return out;
 }
 
+function imageKind(bytes: Uint8Array): string | null {
+  if (bytes.length < 12) return null;
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
+  const head = String.fromCharCode(...bytes.slice(0, 4));
+  const webp = String.fromCharCode(...bytes.slice(8, 12));
+  if (head === "RIFF" && webp === "WEBP") return "webp";
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method not allowed" }, 405);
@@ -89,13 +99,18 @@ Deno.serve(async (req) => {
   if (typeof ev.thumbnail_b64 === "string" && ev.thumbnail_b64.length > 0) {
     try {
       const bytes = decodeBase64(ev.thumbnail_b64);
+      const kind = imageKind(bytes);
+      console.log("unifi-ingest visual received", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, bytes: bytes.length, kind, visual_retry: isVisualRetry }));
       const path = `${inst.organization_id}/unifi/${inst.id}/${cameraId ?? "unknown"}/${startMs}.jpg`;
       const { error: upErr } = await supabase.storage.from("camera-snapshots").upload(path, bytes, {
         contentType: "image/jpeg",
         upsert: true,
       });
       if (!upErr) thumbnailPath = path;
-    } catch { /* swallow — snapshot is best-effort */ }
+      else console.log("unifi-ingest visual upload failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: upErr.message }));
+    } catch (e) {
+      console.log("unifi-ingest visual decode failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: e instanceof Error ? e.message : String(e) }));
+    }
   }
 
   // Upsert typed row
@@ -197,10 +212,13 @@ Deno.serve(async (req) => {
           : { data: null } as { data: { id: string } | null };
 
         if (existingMedia?.id) {
-          await supabase.from("media_items").update(mediaRow).eq("id", existingMedia.id);
+          const { error: mediaErr } = await supabase.from("media_items").update(mediaRow).eq("id", existingMedia.id);
+          if (mediaErr) console.log("unifi-ingest media update failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: mediaErr.message }));
         } else {
-          await supabase.from("media_items").insert(mediaRow);
+          const { error: mediaErr } = await supabase.from("media_items").insert(mediaRow);
+          if (mediaErr) console.log("unifi-ingest media insert failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: mediaErr.message }));
         }
+        console.log("unifi-ingest media saved", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, path: thumbnailPath }));
       }
     }
   }
