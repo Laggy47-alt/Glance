@@ -82,6 +82,27 @@ Deno.serve(async (req) => {
   if (String(inst.webhook_secret) !== secret) return json({ error: "bad secret" }, 401);
   if (!inst.enabled) return json({ ok: true, skipped: "instance disabled" });
 
+  if (Array.isArray(body?.cameras)) {
+    const rows = body.cameras
+      .map((camera: any) => ({
+        organization_id: inst.organization_id,
+        unifi_instance_id: inst.id,
+        camera_id: String(camera?.id ?? "").trim(),
+        camera_name: String(camera?.name ?? "").trim() || null,
+      }))
+      .filter((camera: any) => camera.camera_id);
+    if (rows.length) {
+      const { error: camErr } = await supabase
+        .from("unifi_camera_sites")
+        .upsert(rows, { onConflict: "unifi_instance_id,camera_id" });
+      if (camErr) return json({ error: "camera inventory failed", detail: camErr.message }, 500);
+    }
+    await supabase.from("unifi_instances")
+      .update({ last_seen_at: new Date().toISOString(), last_error: null })
+      .eq("id", inst.id);
+    return json({ ok: true, cameras: rows.length });
+  }
+
   const remoteId: string | null = ev.id ?? null;
   const eventType: string = ev.type ?? "unknown";
   const smartTypes: string[] = Array.isArray(ev.smartDetectTypes) ? ev.smartDetectTypes : [];
@@ -243,20 +264,23 @@ Deno.serve(async (req) => {
       existingWebhookId = insertedWebhook?.id ?? null;
     }
 
-    // Locate an existing media row for this event (by remoteId) so both
-    // thumbnail retries and clip uploads update it instead of duplicating.
-    let existingMediaId: string | null = null;
+    // Locate existing media rows for this event so late thumbnail/clip retries
+    // update their own rows instead of overwriting snapshot rows with video data.
+    let existingSnapshotMediaId: string | null = null;
+    let existingClipMediaId: string | null = null;
     if (remoteId) {
       const { data: existingMedia } = await supabase
         .from("media_items")
-        .select("id")
+        .select("id, kind, clip_url")
         .eq("source_id", inst.source_id)
         .eq("instance_id", inst.id)
         .eq("camera", cameraName)
         .gte("ts", new Date(startMs - 2000).toISOString())
-        .lte("ts", new Date(startMs + 2000).toISOString())
-        .maybeSingle();
-      existingMediaId = existingMedia?.id ?? null;
+        .lte("ts", new Date(startMs + 2000).toISOString());
+      for (const row of existingMedia ?? []) {
+        if ((row as any).kind === "clip") existingClipMediaId = (row as any).id;
+        else if ((row as any).kind === "snapshot") existingSnapshotMediaId = (row as any).id;
+      }
     }
 
     if (thumbnailPath || clipUrl) {
@@ -265,28 +289,48 @@ Deno.serve(async (req) => {
         : { data: null } as { data: { publicUrl?: string } | null };
       const snapshotUrl = pub?.publicUrl ?? null;
 
-      const mediaRow: Record<string, unknown> = {
-        organization_id: inst.organization_id,
-        source_id: inst.source_id,
-        event_id: existingWebhookId,
-        kind: clipUrl ? "clip" : "snapshot",
-        url: snapshotUrl ?? clipUrl ?? "",
-        camera: cameraName,
-        topic: eventType,
-        ts: startIso,
-        instance_id: inst.id,
-      };
-      if (clipUrl) (mediaRow as any).clip_url = clipUrl;
+      if (snapshotUrl) {
+        const snapshotRow: Record<string, unknown> = {
+          organization_id: inst.organization_id,
+          source_id: inst.source_id,
+          event_id: existingWebhookId,
+          kind: "snapshot",
+          url: snapshotUrl,
+          camera: cameraName,
+          topic: eventType,
+          ts: startIso,
+          instance_id: inst.id,
+          ...(clipUrl ? { clip_url: clipUrl } : {}),
+        };
+        if (existingSnapshotMediaId) {
+          const { error: mediaErr } = await supabase.from("media_items").update(snapshotRow).eq("id", existingSnapshotMediaId);
+          if (mediaErr) console.log("unifi-ingest snapshot media update failed", JSON.stringify({ message: mediaErr.message }));
+        } else {
+          const { error: mediaErr } = await supabase.from("media_items").insert(snapshotRow);
+          if (mediaErr) console.log("unifi-ingest snapshot media insert failed", JSON.stringify({ message: mediaErr.message }));
+        }
+      }
 
-      if (existingMediaId) {
-        const patch: Record<string, unknown> = { camera: cameraName, topic: eventType, event_id: existingWebhookId };
-        if (snapshotUrl) { patch.url = snapshotUrl; patch.kind = "snapshot"; }
-        if (clipUrl) { patch.clip_url = clipUrl; if (!snapshotUrl) patch.kind = "clip"; }
-        const { error: mediaErr } = await supabase.from("media_items").update(patch).eq("id", existingMediaId);
-        if (mediaErr) console.log("unifi-ingest media update failed", JSON.stringify({ message: mediaErr.message }));
-      } else {
-        const { error: mediaErr } = await supabase.from("media_items").insert(mediaRow);
-        if (mediaErr) console.log("unifi-ingest media insert failed", JSON.stringify({ message: mediaErr.message }));
+      if (clipUrl) {
+        const clipRow: Record<string, unknown> = {
+          organization_id: inst.organization_id,
+          source_id: inst.source_id,
+          event_id: existingWebhookId,
+          kind: "clip",
+          url: clipUrl,
+          camera: cameraName,
+          topic: eventType,
+          ts: startIso,
+          instance_id: inst.id,
+          clip_url: clipUrl,
+        };
+        if (existingClipMediaId) {
+          const { error: mediaErr } = await supabase.from("media_items").update(clipRow).eq("id", existingClipMediaId);
+          if (mediaErr) console.log("unifi-ingest clip media update failed", JSON.stringify({ message: mediaErr.message }));
+        } else {
+          const { error: mediaErr } = await supabase.from("media_items").insert(clipRow);
+          if (mediaErr) console.log("unifi-ingest clip media insert failed", JSON.stringify({ message: mediaErr.message }));
+        }
       }
       console.log("unifi-ingest media saved", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, snapshot: !!snapshotUrl, clip: !!clipUrl }));
     }
