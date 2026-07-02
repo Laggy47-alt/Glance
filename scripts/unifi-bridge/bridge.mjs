@@ -135,7 +135,7 @@ async function runInstance(inst) {
     log("info", inst.id, `loaded ${cameras.size} cameras`);
   }
 
-  async function fetchThumbnail(eventId) {
+  async function fetchEventThumb(eventId) {
     try {
       const r = await fetch(`${base}/proxy/protect/api/events/${eventId}/thumbnail?w=640`, {
         headers: { Cookie: cookie, "x-csrf-token": csrf },
@@ -143,8 +143,36 @@ async function runInstance(inst) {
       });
       if (!r.ok) return null;
       const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 500) return null;
       return buf.toString("base64");
     } catch { return null; }
+  }
+
+  async function fetchCameraSnapshot(cameraId) {
+    if (!cameraId) return null;
+    try {
+      const r = await fetch(`${base}/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}&force=true&w=640`, {
+        headers: { Cookie: cookie, "x-csrf-token": csrf },
+        dispatcher,
+      });
+      if (!r.ok) return null;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length < 500) return null;
+      return buf.toString("base64");
+    } catch { return null; }
+  }
+
+  async function fetchThumbnail(eventId, cameraId) {
+    // Try event thumbnail up to 3 times (Protect may take a moment to render it)
+    for (let i = 0; i < 3; i++) {
+      const t = await fetchEventThumb(eventId);
+      if (t) return t;
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    // Fallback: live camera snapshot
+    const snap = await fetchCameraSnapshot(cameraId);
+    if (snap) log("debug", inst.id, "used camera snapshot fallback");
+    return snap;
   }
 
   async function postEvent(payload) {
