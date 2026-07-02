@@ -4,6 +4,7 @@
     "host": "10.0.0.1",
     "username": "glance",
     "password": "change-me",
+    "totp_secret": "JBSWY3DPEHPK3PXP",
     "webhook_secret": "paste-from-glance-ui",
     "verify_tls": false
   }
