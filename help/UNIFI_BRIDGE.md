@@ -58,6 +58,7 @@ Edit `/opt/glance-unifi-bridge/instances.json` — one block per ENVR:
     "host": "10.0.0.1",
     "username": "glance",
     "password": "the-local-password",
+    "totp_secret": "JBSWY3DPEHPK3PXP",
     "webhook_secret": "uuid-from-glance",
     "verify_tls": false
   }
@@ -65,6 +66,27 @@ Edit `/opt/glance-unifi-bridge/instances.json` — one block per ENVR:
 ```
 
 `verify_tls: false` is normal — UniFi consoles ship with a self-signed cert.
+
+### MFA / 2FA (`totp_secret`)
+
+UniFi accounts with MFA enabled need a fresh 6-digit code on every login.
+Instead of pasting one-time codes, give the bridge the **TOTP shared secret**
+so it can generate codes itself on every reconnect:
+
+1. On the UniFi console, sign in as the bridge user.
+2. Go to **Account → Two-Factor Authentication → Add Authenticator App**.
+3. When the QR code appears, click **"Can't scan?"** / **"Enter code manually"**
+   — UniFi reveals a base32 string like `JBSWY3DPEHPK3PXP…`. Copy it.
+4. Also scan the QR with a normal authenticator app (Authy, 1Password, etc.)
+   and finish the setup by entering the 6-digit code UniFi asks for.
+5. Paste the base32 string into `totp_secret` in `instances.json`.
+
+The bridge uses `otplib` to compute the current code from that secret on
+every login and re-login, so reconnects after network blips or reboots just
+work — no manual intervention.
+
+If MFA is **not** enabled on the account, omit `totp_secret` entirely.
+
 
 ---
 
