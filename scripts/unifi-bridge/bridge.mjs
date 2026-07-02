@@ -60,6 +60,16 @@ const EVENT_TYPES = new Set([
   "smartAudioDetect", "ring",
 ]);
 
+const INGEST_CONCURRENCY = envNumber("INGEST_CONCURRENCY", 1, 1, 8);
+const INGEST_RETRIES = envNumber("INGEST_RETRIES", 3, 0, 8);
+const EVENT_CONCURRENCY = envNumber("EVENT_CONCURRENCY", 1, 1, 4);
+const MEDIA_FETCH_CONCURRENCY = envNumber("MEDIA_FETCH_CONCURRENCY", 2, 1, 6);
+const CLIP_SECONDS = envNumber("CLIP_SECONDS", 6, 2, 30);
+const CLIP_PRE_ROLL_SECONDS = envNumber("CLIP_PRE_ROLL_SECONDS", 1, 0, 10);
+const MAX_CLIP_BYTES = envNumber("MAX_CLIP_MB", 10, 1, 50) * 1024 * 1024;
+const ingestQueue = createAsyncQueue(INGEST_CONCURRENCY);
+const mediaQueue = createAsyncQueue(MEDIA_FETCH_CONCURRENCY);
+
 // ───────────────────────── per-instance worker ─────────────────────────
 
 for (const inst of instances) {
@@ -77,9 +87,23 @@ async function runInstance(inst) {
   let csrf = "";
   let lastUpdateId = "";
   let cameras = new Map(); // id → name
-  let recentEvents = new Map(); // Protect event id → last payload sent
+  let recentEvents = new Map(); // Protect event id → compact state; never stores base64 media
+  let postedInitialEvents = new Set();
+  let visualRetryScheduled = new Set();
+  const eventQueue = createAsyncQueue(Number(inst.event_concurrency) || EVENT_CONCURRENCY);
   let backoff = 1000;
   let reconnectTimer = null;
+
+  setInterval(() => {
+    const cutoff = Date.now() - 30 * 60 * 1000;
+    for (const [id, ev] of recentEvents) {
+      if ((ev?._remembered_at ?? 0) < cutoff) {
+        recentEvents.delete(id);
+        postedInitialEvents.delete(id);
+        visualRetryScheduled.delete(id);
+      }
+    }
+  }, 10 * 60 * 1000).unref?.();
 
   async function login() {
     log("info", inst.id, "logging in", inst.host);
@@ -248,11 +272,16 @@ async function runInstance(inst) {
     return buf.length > 12 && buf.subarray(4, 8).toString("ascii") === "ftyp";
   }
 
-  // Fetch ~10s MP4 clip centred on the event start (start-2s .. start+8s).
   async function fetchClip(cameraId, startMs) {
     if (!cameraId || !startMs) return null;
-    const start = Math.max(0, startMs - 2000);
-    const end = start + 10_000;
+    return mediaQueue.add(() => fetchClipNow(cameraId, startMs));
+  }
+
+  // Fetch a short MP4 clip centred on the event start. Keep clips modest so the
+  // self-hosted edge worker does not cancel large concurrent JSON uploads.
+  async function fetchClipNow(cameraId, startMs) {
+    const start = Math.max(0, startMs - CLIP_PRE_ROLL_SECONDS * 1000);
+    const end = start + CLIP_SECONDS * 1000;
     const paths = [
       `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${start}&end=${end}`,
       `/proxy/protect/api/video/export?camera=${encodeURIComponent(cameraId)}&start=${start}&end=${end}&type=timelapse&fps=0`,
@@ -274,6 +303,10 @@ async function runInstance(inst) {
           log("debug", inst.id, `clip too small ${buf.length}b ${path}`);
           continue;
         }
+        if (buf.length > MAX_CLIP_BYTES) {
+          log("info", inst.id, `clip skipped too large ${(buf.length / 1024 / 1024).toFixed(1)}mb (MAX_CLIP_MB=${(MAX_CLIP_BYTES / 1024 / 1024).toFixed(0)})`);
+          continue;
+        }
         if (!isMp4(buf)) {
           log("debug", inst.id, `clip not mp4 (${buf.subarray(0, 16).toString("hex")}) ${path}`);
           continue;
@@ -289,45 +322,84 @@ async function runInstance(inst) {
   }
 
   async function postEvent(payload) {
-    try {
-      const r = await fetch(INGEST_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Webhook-Secret": String(inst.webhook_secret),
-          apikey: GLANCE_ANON_KEY,
-          Authorization: `Bearer ${GLANCE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ instance_id: inst.id, event: payload }),
-      });
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        log("info", inst.id, `ingest HTTP ${r.status} ${t.slice(0, 200)}`);
-      } else {
-        log("debug", inst.id, `sent ${payload.type} ${payload.camera_name}`);
+    const event = outboundEventPayload(payload);
+    const body = JSON.stringify({ instance_id: inst.id, event });
+    return ingestQueue.add(async () => {
+      for (let attempt = 0; attempt <= INGEST_RETRIES; attempt += 1) {
+        try {
+          const r = await fetch(INGEST_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Webhook-Secret": String(inst.webhook_secret),
+              apikey: GLANCE_ANON_KEY,
+              Authorization: `Bearer ${GLANCE_ANON_KEY}`,
+            },
+            body,
+          });
+          if (r.ok) {
+            log("debug", inst.id, `sent ${payload.type} ${payload.camera_name}`);
+            return true;
+          }
+          const t = await r.text().catch(() => "");
+          log("info", inst.id, `ingest HTTP ${r.status} ${t.slice(0, 200)}${attempt < INGEST_RETRIES ? " — retrying" : ""}`);
+          if (![429, 500, 502, 503, 504].includes(r.status)) return false;
+        } catch (e) {
+          log("info", inst.id, `ingest error${attempt < INGEST_RETRIES ? " — retrying" : ""}:`, e?.message ?? e);
+        }
+        if (attempt < INGEST_RETRIES) await delay(Math.min(1000 * 2 ** attempt, 8000));
       }
-    } catch (e) {
-      log("info", inst.id, "ingest error:", e?.message ?? e);
-    }
+      return false;
+    });
+  }
+
+  function rememberEvent(payload) {
+    if (!payload?.id) return;
+    recentEvents.set(payload.id, {
+      id: payload.id,
+      type: payload.type,
+      smartDetectTypes: payload.smartDetectTypes ?? [],
+      camera_id: payload.camera_id ?? null,
+      camera_name: payload.camera_name ?? "Unknown",
+      start: payload.start,
+      end: payload.end ?? null,
+      score: payload.score ?? null,
+      has_thumbnail: Boolean(payload.has_thumbnail || payload.thumbnail_b64),
+      has_clip: Boolean(payload.has_clip || payload.clip_b64),
+      _remembered_at: Date.now(),
+    });
   }
 
   function scheduleVisualRetry(payload, delays = [5_000, 15_000, 45_000]) {
     if (!payload.id) return;
-    for (const delay of delays) {
+    if (visualRetryScheduled.has(payload.id)) return;
+    visualRetryScheduled.add(payload.id);
+    delays.forEach((delayMs, index) => {
       setTimeout(async () => {
-        const latest = recentEvents.get(payload.id) ?? payload;
-        const needsThumb = !latest.thumbnail_b64;
-        const needsClip = !latest.clip_b64;
-        if (!needsThumb && !needsClip) return;
-        const thumbnail_b64 = needsThumb ? await fetchThumbnail(latest.id, latest.camera_id) : latest.thumbnail_b64;
-        const clip_b64 = needsClip ? await fetchClip(latest.camera_id, latest.start) : latest.clip_b64;
-        if (!thumbnail_b64 && !clip_b64) return;
-        const enriched = { ...latest, thumbnail_b64: thumbnail_b64 ?? latest.thumbnail_b64 ?? null, clip_b64: clip_b64 ?? latest.clip_b64 ?? null, visual_retry: true };
-        recentEvents.set(latest.id, enriched);
-        log("info", inst.id, "late media captured", latest.camera_name, JSON.stringify({ thumb: !!thumbnail_b64, clip: !!clip_b64 }));
-        await postEvent(enriched);
-      }, delay).unref?.();
-    }
+        try {
+          const latest = recentEvents.get(payload.id) ?? payload;
+          const needsThumb = !latest.has_thumbnail;
+          const needsClip = !latest.has_clip;
+          if (!needsThumb && !needsClip) return;
+          const thumbnail_b64 = needsThumb ? await fetchThumbnail(latest.id, latest.camera_id) : null;
+          const clip_b64 = needsClip ? await fetchClip(latest.camera_id, latest.start) : null;
+          if (!thumbnail_b64 && !clip_b64) return;
+          const enriched = {
+            ...latest,
+            thumbnail_b64,
+            clip_b64,
+            has_thumbnail: Boolean(latest.has_thumbnail || thumbnail_b64),
+            has_clip: Boolean(latest.has_clip || clip_b64),
+            visual_retry: true,
+          };
+          log("info", inst.id, "late media captured", latest.camera_name, JSON.stringify({ thumb: !!thumbnail_b64, clip: !!clip_b64 }));
+          const ok = await postEvent(enriched);
+          if (ok) rememberEvent(enriched);
+        } finally {
+          if (index === delays.length - 1) visualRetryScheduled.delete(payload.id);
+        }
+      }, delayMs).unref?.();
+    });
   }
 
   async function openWs() {
@@ -391,7 +463,7 @@ async function runInstance(inst) {
     }
   }
 
-  async function handleUpdate(action, data) {
+  function handleUpdate(action, data) {
     if (!action || typeof action !== "object") return;
     if (action.newUpdateId) lastUpdateId = action.newUpdateId;
     if (action.modelKey !== "event") return;
@@ -402,6 +474,13 @@ async function runInstance(inst) {
     if (!isAdd && !isUpd) return;
     const type = data?.type ?? action.type;
     if (!type || !EVENT_TYPES.has(type)) return;
+    eventQueue.add(() => processEventUpdate(action, data)).catch((e) => log("info", inst.id, "event processing error", e?.message ?? e));
+  }
+
+  async function processEventUpdate(action, data) {
+    const isAdd = action.action === "add";
+    const isUpd = action.action === "update";
+    const type = data?.type ?? action.type;
     const eventId = action.id ?? data?.id;
     const cameraId = data?.camera ?? data?.cameraId ?? null;
     if (isUpd && (!eventId || !recentEvents.has(eventId))) return;
@@ -414,13 +493,18 @@ async function runInstance(inst) {
 
     let thumbnail_b64 = null;
     let clip_b64 = null;
-    // Kick off thumbnail retrieval; use eventId when available, otherwise straight to snapshot.
-    await new Promise((r) => setTimeout(r, 500));
-    thumbnail_b64 = eventId ? await fetchThumbnail(eventId, cameraId) : await fetchCameraSnapshot(cameraId);
-    clip_b64 = await fetchClip(cameraId, typeof previous?.start === "number" ? previous.start : start);
+    const needsThumb = !previous?.has_thumbnail;
+    const needsClip = !previous?.has_clip;
+    // Kick off visual retrieval only while the event is still missing media.
+    // UniFi often emits many updates for the same event; re-fetching clips for
+    // every update floods both the ENVR and the ingest worker.
+    if (needsThumb || needsClip) {
+      await delay(500);
+      if (needsThumb) thumbnail_b64 = eventId ? await fetchThumbnail(eventId, cameraId) : await fetchCameraSnapshot(cameraId);
+      if (needsClip) clip_b64 = await fetchClip(cameraId, typeof previous?.start === "number" ? previous.start : start);
+    }
 
     const payload = {
-      ...(previous ?? {}),
       id: eventId,
       type,
       smartDetectTypes: smart.length ? smart : previous?.smartDetectTypes ?? [],
@@ -429,18 +513,26 @@ async function runInstance(inst) {
       start: typeof previous?.start === "number" ? previous.start : start,
       end: end ?? previous?.end ?? null,
       score: score ?? previous?.score ?? null,
-      thumbnail_b64: thumbnail_b64 ?? previous?.thumbnail_b64 ?? null,
-      clip_b64: clip_b64 ?? previous?.clip_b64 ?? null,
+      thumbnail_b64,
+      clip_b64,
+      has_thumbnail: Boolean(previous?.has_thumbnail || thumbnail_b64),
+      has_clip: Boolean(previous?.has_clip || clip_b64),
       visual_retry: isUpd,
     };
-    if (eventId) recentEvents.set(eventId, payload);
 
     // Send adds immediately so the alarm appears. Updates only re-post when
     // they add a visual that was missing on the initial add.
-    if (isAdd || (!previous?.thumbnail_b64 && payload.thumbnail_b64) || (!previous?.clip_b64 && payload.clip_b64)) {
-      await postEvent(payload);
+    const initialAlreadyPosted = eventId ? postedInitialEvents.has(eventId) : false;
+    const gainedThumb = !previous?.has_thumbnail && !!payload.thumbnail_b64;
+    const gainedClip = !previous?.has_clip && !!payload.clip_b64;
+    const shouldPost = (isAdd && !initialAlreadyPosted) || gainedThumb || gainedClip;
+    let ok = true;
+    if (shouldPost) {
+      ok = await postEvent(payload);
+      if (ok && isAdd && eventId) postedInitialEvents.add(eventId);
     }
-    scheduleVisualRetry(payload);
+    if (ok && eventId) rememberEvent(payload);
+    if (!payload.has_thumbnail || !payload.has_clip) scheduleVisualRetry(payload);
   }
 
   async function boot() {
@@ -470,6 +562,60 @@ function required(name) {
   const v = process.env[name];
   if (!v) { console.error(`[bridge] missing env ${name}`); process.exit(1); }
   return v;
+}
+
+function envNumber(name, fallback, min, max) {
+  const raw = process.env[name];
+  const n = raw == null || raw === "" ? fallback : Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createAsyncQueue(concurrency) {
+  const q = [];
+  let active = 0;
+  function pump() {
+    while (active < concurrency && q.length) {
+      const item = q.shift();
+      active += 1;
+      Promise.resolve()
+        .then(item.fn)
+        .then(item.resolve, item.reject)
+        .finally(() => {
+          active -= 1;
+          pump();
+        });
+    }
+  }
+  return {
+    add(fn) {
+      return new Promise((resolve, reject) => {
+        q.push({ fn, resolve, reject });
+        pump();
+      });
+    },
+    size() { return q.length + active; },
+  };
+}
+
+function outboundEventPayload(payload) {
+  return {
+    id: payload.id,
+    type: payload.type,
+    smartDetectTypes: payload.smartDetectTypes ?? [],
+    camera_id: payload.camera_id ?? null,
+    camera_name: payload.camera_name ?? "Unknown",
+    start: payload.start,
+    end: payload.end ?? null,
+    score: payload.score ?? null,
+    thumbnail_b64: payload.thumbnail_b64 ?? null,
+    clip_b64: payload.clip_b64 ?? null,
+    visual_retry: payload.visual_retry === true,
+  };
 }
 
 function loadInstances() {

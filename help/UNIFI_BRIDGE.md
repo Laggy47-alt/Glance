@@ -47,6 +47,16 @@ GLANCE_URL=https://supabase.your-domain.com
 GLANCE_ANON_KEY=eyJhbGciOi...
 INSTANCES_FILE=/opt/glance-unifi-bridge/instances.json
 LOG_LEVEL=info
+
+# Safe defaults for busy sites / multiple ENVRs. Increase only if your backend
+# stays stable under load.
+INGEST_CONCURRENCY=1
+INGEST_RETRIES=3
+EVENT_CONCURRENCY=1
+MEDIA_FETCH_CONCURRENCY=2
+CLIP_SECONDS=6
+CLIP_PRE_ROLL_SECONDS=1
+MAX_CLIP_MB=10
 ```
 
 Edit `/opt/glance-unifi-bridge/instances.json` — one block per ENVR:
@@ -114,6 +124,12 @@ You should see:
 Trigger motion on a camera — within ~1–2 s a line should appear in Glance
 on the Live Wall, with a thumbnail in Media.
 
+On large multi-ENVR installs, UniFi can send many updates for the same event.
+The bridge now queues uploads and fetches each event's clip/thumbnail only until
+that event has media. If you see `WorkerRequestCancelled` in the logs, leave
+`INGEST_CONCURRENCY=1` and keep clips short (`CLIP_SECONDS=6`) so the backend
+worker is not flooded with large simultaneous base64 video uploads.
+
 ---
 
 ## 4. Adding more ENVRs
@@ -132,6 +148,10 @@ sudo systemctl restart unifi-bridge
   the one on the Glance ENVR card. Re-copy it.
 - **`ingest HTTP 404`** — `id` in `instances.json` doesn't match a row in
   `unifi_instances`. Re-copy the Instance ID.
+- **`ingest HTTP 500 WorkerRequestCancelled`** — the backend worker was
+  overloaded/cancelled during a burst. Pull the latest bridge, copy
+  `bridge.mjs`, restart, and keep `INGEST_CONCURRENCY=1`, `EVENT_CONCURRENCY=1`,
+  `CLIP_SECONDS=6`, `MAX_CLIP_MB=10` in `.env`.
 - **`login HTTP 401`** — wrong username/password, or the user isn't a local
   account. UniFi cloud SSO users can't log in to the local API.
 - **`login HTTP 403 after MFA`** — UniFi rejected the generated MFA code. Pull
