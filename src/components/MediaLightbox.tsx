@@ -80,7 +80,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
 
   return (
     <Dialog open={!!item} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl bg-card border-border p-0 overflow-hidden">
+      <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-6xl bg-card border-border p-0 overflow-hidden">
         {item && (
           <div className="flex flex-col">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-secondary/40">
@@ -88,13 +88,14 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
               <span className="text-sm font-semibold text-foreground">{item.camera ?? "Unknown"}</span>
               <code className="text-xs text-accent ml-auto truncate">{item.topic}</code>
             </div>
-            <div className="bg-black grid place-items-center min-h-[300px]">
+            <div className="bg-black grid place-items-center min-h-[300px] max-h-[80vh] overflow-hidden">
               {item.kind === "snapshot" ? (
                 <SnapshotImage url={item.url} fallbacks={item.fallbackUrls ?? []} alt={item.camera ?? ""} />
               ) : (
-                <video src={item.url} controls autoPlay className="max-h-[70vh] w-full" poster={item.thumbnail} />
+                <video src={item.url} controls autoPlay className="w-full h-auto max-h-[80vh] object-contain" poster={item.thumbnail} />
               )}
             </div>
+
             {item.mediaId && !item.readOnly && (
               <div className="px-4 py-3 border-t border-border bg-secondary/20 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
@@ -181,11 +182,12 @@ function SnapshotImage({ url, fallbacks, alt }: { url: string; fallbacks: string
     <img
       src={candidates[idx]}
       alt={alt}
-      className="max-h-[70vh] w-auto"
+      className="w-auto h-auto max-h-[80vh] max-w-full object-contain"
       onError={() => {
         if (idx + 1 < candidates.length) setIdx(idx + 1);
         else setFailed(true);
       }}
     />
   );
+
 }
