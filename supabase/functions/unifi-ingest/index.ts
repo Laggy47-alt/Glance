@@ -94,6 +94,33 @@ Deno.serve(async (req) => {
   const startIso = new Date(startMs).toISOString();
   const endIso = endMs ? new Date(endMs).toISOString() : null;
 
+  // Site lookup + ensure camera row exists (so /cameras page can list it)
+  let siteId: string | null = null;
+  let siteName: string | null = null;
+  if (cameraId) {
+    const { data: camAssign } = await supabase
+      .from("unifi_camera_sites")
+      .select("site_id, unifi_sites(name)")
+      .eq("unifi_instance_id", inst.id)
+      .eq("camera_id", cameraId)
+      .maybeSingle();
+    if (camAssign) {
+      siteId = (camAssign as any).site_id ?? null;
+      siteName = ((camAssign as any).unifi_sites?.name as string | undefined) ?? null;
+      // keep camera_name fresh
+      await supabase.from("unifi_camera_sites")
+        .update({ camera_name: cameraName })
+        .eq("unifi_instance_id", inst.id).eq("camera_id", cameraId);
+    } else {
+      await supabase.from("unifi_camera_sites").insert({
+        organization_id: inst.organization_id,
+        unifi_instance_id: inst.id,
+        camera_id: cameraId,
+        camera_name: cameraName,
+      });
+    }
+  }
+
   // Optional snapshot
   let thumbnailPath: string | null = null;
   if (typeof ev.thumbnail_b64 === "string" && ev.thumbnail_b64.length > 0) {
@@ -110,6 +137,30 @@ Deno.serve(async (req) => {
       else console.log("unifi-ingest visual upload failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: upErr.message }));
     } catch (e) {
       console.log("unifi-ingest visual decode failed", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, message: e instanceof Error ? e.message : String(e) }));
+    }
+  }
+
+  // Optional MP4 clip
+  let clipPath: string | null = null;
+  let clipUrl: string | null = null;
+  if (typeof ev.clip_b64 === "string" && ev.clip_b64.length > 0) {
+    try {
+      const bytes = decodeBase64(ev.clip_b64);
+      const path = `${inst.organization_id}/unifi/${inst.id}/${cameraId ?? "unknown"}/${startMs}.mp4`;
+      const { error: upErr } = await supabase.storage.from("camera-snapshots").upload(path, bytes, {
+        contentType: "video/mp4",
+        upsert: true,
+      });
+      if (!upErr) {
+        clipPath = path;
+        const { data: pub } = supabase.storage.from("camera-snapshots").getPublicUrl(path);
+        clipUrl = pub?.publicUrl ?? null;
+        console.log("unifi-ingest clip saved", JSON.stringify({ instance_id: inst.id, remote_event_id: remoteId, bytes: bytes.length }));
+      } else {
+        console.log("unifi-ingest clip upload failed", JSON.stringify({ message: upErr.message }));
+      }
+    } catch (e) {
+      console.log("unifi-ingest clip decode failed", JSON.stringify({ message: e instanceof Error ? e.message : String(e) }));
     }
   }
 
