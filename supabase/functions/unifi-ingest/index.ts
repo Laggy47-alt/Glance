@@ -64,8 +64,8 @@ Deno.serve(async (req) => {
 
   const instanceId: string | undefined = body?.instance_id;
   const ev = body?.event;
-  if (!instanceId || !ev || typeof ev !== "object") {
-    return json({ error: "instance_id and event are required" }, 400);
+  if (!instanceId) {
+    return json({ error: "instance_id is required" }, 400);
   }
 
   const supabase = createClient(
@@ -101,6 +101,10 @@ Deno.serve(async (req) => {
       .update({ last_seen_at: new Date().toISOString(), last_error: null })
       .eq("id", inst.id);
     return json({ ok: true, cameras: rows.length });
+  }
+
+  if (!ev || typeof ev !== "object") {
+    return json({ error: "event is required" }, 400);
   }
 
   const remoteId: string | null = ev.id ?? null;
