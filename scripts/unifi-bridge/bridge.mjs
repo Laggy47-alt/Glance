@@ -147,11 +147,18 @@ async function runInstance(inst) {
       log("debug", inst.id, `${label} too small ${buf.length}b ${contentType}`);
       return null;
     }
-    if (contentType && !contentType.includes("image")) {
+    const imageKind = detectImageKind(buf);
+    // UniFi Protect commonly serves snapshots/thumbnails as application/octet-stream
+    // even when the body is a valid JPEG. Trust the bytes, not just content-type.
+    if (!imageKind && contentType && !contentType.includes("image")) {
       log("debug", inst.id, `${label} not image ${contentType} ${buf.length}b`);
       return null;
     }
-    log("debug", inst.id, `${label} ok ${buf.length}b ${contentType || "unknown-content-type"}`);
+    if (!imageKind && !contentType.includes("image")) {
+      log("debug", inst.id, `${label} unknown image body ${buf.length}b ${contentType || "unknown-content-type"}`);
+      return null;
+    }
+    log("debug", inst.id, `${label} ok ${buf.length}b ${contentType || "unknown-content-type"} ${imageKind || "image"}`);
     return buf.toString("base64");
   }
 
@@ -171,6 +178,8 @@ async function runInstance(inst) {
   async function fetchCameraSnapshot(cameraId) {
     if (!cameraId) return null;
     const paths = [
+      `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&width=640&ts=${Date.now()}`,
+      `/proxy/protect/api/cameras/${cameraId}/snapshot?width=640&ts=${Date.now()}`,
       `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=640&ts=${Date.now()}`,
       `/proxy/protect/api/cameras/${cameraId}/snapshot?w=640&ts=${Date.now()}`,
       `/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}`,
@@ -200,6 +209,7 @@ async function runInstance(inst) {
     // Fallback: live camera snapshot
     const snap = await fetchCameraSnapshot(cameraId);
     if (snap) log("debug", inst.id, "used camera snapshot fallback");
+    else log("info", inst.id, "visual fetch failed", { eventId, cameraId });
     return snap;
   }
 
@@ -392,6 +402,14 @@ function extractMfaCookie(body, setCookie) {
   if (typeof fromBody === "string" && fromBody.trim()) return fromBody.split(";")[0];
   const match = String(setCookie || "").match(/UBIC_2FA=([^;]+)/);
   return match ? `UBIC_2FA=${match[1]}` : "";
+}
+
+function detectImageKind(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "png";
+  if (buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
+  return null;
 }
 
 function log(level, id, ...rest) {
