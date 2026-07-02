@@ -88,6 +88,7 @@ const App = () => (
                 <Route path="/" element={protect(<Index />, true)} />
                 <Route path="/sources" element={protect(<Sources />, true)} />
                 <Route path="/frigate" element={protect(<Frigate />, true)} />
+                <Route path="/cameras" element={protect(<Cameras />, true)} />
                 <Route path="/nvr-status" element={protect(<NvrStatus />)} />
                 <Route path="/camera-status" element={protect(<CameraStatus />)} />
                 <Route path="/wall" element={protect(<Wall />)} />
