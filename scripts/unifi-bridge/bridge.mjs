@@ -37,6 +37,7 @@ import fs from "node:fs";
 import zlib from "node:zlib";
 import { Buffer } from "node:buffer";
 import https from "node:https";
+import crypto from "node:crypto";
 import WebSocket from "ws";
 import { Agent as UndiciAgent } from "undici";
 import { authenticator } from "otplib";
@@ -78,6 +79,7 @@ async function runInstance(inst) {
   let cameras = new Map(); // id → name
   let recentEvents = new Map(); // Protect event id → last payload sent
   let backoff = 1000;
+  let reconnectTimer = null;
 
   async function login() {
     log("info", inst.id, "logging in", inst.host);
@@ -100,21 +102,26 @@ async function runInstance(inst) {
       const mfaHeader = res.headers.get("x-ulp-auth-token") || res.headers.get("x-csrf-token");
       const needsMfa = res.status === 499 || (mfaHeader && mfaText.toLowerCase().includes("mfa"));
       if (needsMfa || inst.totp_secret || inst.mfa_token) {
-        let code = inst.mfa_token;
-        if (inst.totp_secret) {
-          code = authenticator.generate(String(inst.totp_secret).replace(/\s+/g, ""));
-          log("debug", inst.id, "generated TOTP code");
+        const codes = mfaCodes(inst);
+        if (!codes.length) throw new Error("login: MFA required but no totp_secret / mfa_token configured");
+        let lastStatus = res.status;
+        for (let i = 0; i < codes.length; i += 1) {
+          const retryHeaders = { "Content-Type": "application/json" };
+          if (mfaCookie) retryHeaders.Cookie = mfaCookie;
+          log("info", inst.id, i === 0 ? "mfa challenge, submitting totp" : `mfa retry with adjacent totp window ${i}`);
+          res = await fetch(`${base}/api/auth/login`, {
+            method: "POST",
+            headers: retryHeaders,
+            body: JSON.stringify({ ...body, token: codes[i] }),
+            dispatcher,
+          });
+          lastStatus = res.status;
+          if (res.ok) break;
+          if (res.status !== 403 && res.status !== 401 && res.status !== 499) break;
         }
-        if (!code) throw new Error("login: MFA required but no totp_secret / mfa_token configured");
-        log("info", inst.id, "mfa challenge, submitting totp");
-        const retryHeaders = { "Content-Type": "application/json" };
-        if (mfaCookie) retryHeaders.Cookie = mfaCookie;
-        res = await fetch(`${base}/api/auth/login`, {
-          method: "POST",
-          headers: retryHeaders,
-          body: JSON.stringify({ ...body, token: code }),
-          dispatcher,
-        });
+        if (!res.ok && lastStatus === 403) {
+          throw new Error("login HTTP 403 after MFA — check totp_secret, bridge machine time/NTP, and that the UniFi user is not locked/disabled");
+        }
       }
     }
     if (!res.ok) throw new Error(`login HTTP ${res.status}`);
@@ -342,7 +349,7 @@ async function runInstance(inst) {
     ws.on("unexpected-response", async (_req, res) => {
       log("info", inst.id, "ws http", res.statusCode);
       if (res.statusCode === 401 || res.statusCode === 403) {
-        try { await login(); } catch (e) { log("info", inst.id, "relogin failed", e?.message ?? e); }
+        try { await boot(); } catch (e) { log("info", inst.id, "relogin failed", e?.message ?? e); scheduleReconnect(); }
       }
     });
   }
@@ -350,7 +357,9 @@ async function runInstance(inst) {
   function scheduleReconnect() {
     const delay = Math.min(backoff, 30_000);
     backoff = Math.min(backoff * 2, 30_000);
-    setTimeout(() => { openWs().catch((e) => log("info", inst.id, "reconnect err", e?.message ?? e)); }, delay);
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(() => { boot().catch((e) => { log("info", inst.id, "reconnect err", e?.message ?? e); scheduleReconnect(); }); }, delay);
+    reconnectTimer.unref?.();
   }
 
   // Protect "updates" framing: two packets concatenated.
@@ -401,6 +410,7 @@ async function runInstance(inst) {
     const start = typeof data?.start === "number" ? data.start : Date.now();
     const end = typeof data?.end === "number" ? data.end : null;
     const score = typeof data?.score === "number" ? data.score : null;
+    const previous = eventId ? recentEvents.get(eventId) : null;
 
     let thumbnail_b64 = null;
     let clip_b64 = null;
@@ -409,7 +419,6 @@ async function runInstance(inst) {
     thumbnail_b64 = eventId ? await fetchThumbnail(eventId, cameraId) : await fetchCameraSnapshot(cameraId);
     clip_b64 = await fetchClip(cameraId, typeof previous?.start === "number" ? previous.start : start);
 
-    const previous = eventId ? recentEvents.get(eventId) : null;
     const payload = {
       ...(previous ?? {}),
       id: eventId,
@@ -434,11 +443,19 @@ async function runInstance(inst) {
     scheduleVisualRetry(payload);
   }
 
-  // boot
-  try {
+  async function boot() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     await login();
     await loadCameras();
     await openWs();
+  }
+
+  // boot
+  try {
+    await boot();
     // Periodic camera refresh (in case names change)
     setInterval(() => { loadCameras().catch(() => {}); }, 10 * 60 * 1000);
   } catch (e) {
@@ -476,6 +493,48 @@ function extractMfaCookie(body, setCookie) {
   if (typeof fromBody === "string" && fromBody.trim()) return fromBody.split(";")[0];
   const match = String(setCookie || "").match(/UBIC_2FA=([^;]+)/);
   return match ? `UBIC_2FA=${match[1]}` : "";
+}
+
+function mfaCodes(inst) {
+  if (inst.mfa_token) return [String(inst.mfa_token).trim()].filter(Boolean);
+  if (!inst.totp_secret) return [];
+  const secret = String(inst.totp_secret).replace(/\s+/g, "").toUpperCase();
+  const now = Date.now();
+  // UniFi rejects TOTP with HTTP 403 when either the secret is wrong or the
+  // bridge machine clock is slightly skewed. Try current, previous and next
+  // 30-second windows without logging the codes.
+  const codes = [0, -1, 1].map((offset) => totpAt(secret, now + offset * 30_000));
+  return [...new Set(codes.filter(Boolean))];
+}
+
+function totpAt(secret, epochMs) {
+  try {
+    const key = base32Decode(secret);
+    const counter = Math.floor(epochMs / 1000 / 30);
+    const msg = Buffer.alloc(8);
+    msg.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+    msg.writeUInt32BE(counter >>> 0, 4);
+    const hmac = crypto.createHmac("sha1", key).update(msg).digest();
+    const offset = hmac[hmac.length - 1] & 0x0f;
+    const bin = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
+    return String(bin % 1_000_000).padStart(6, "0");
+  } catch {
+    return authenticator.generate(secret);
+  }
+}
+
+function base32Decode(input) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const clean = String(input).replace(/=+$/g, "").toUpperCase();
+  let bits = "";
+  for (const ch of clean) {
+    const v = alphabet.indexOf(ch);
+    if (v < 0) continue;
+    bits += v.toString(2).padStart(5, "0");
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  return Buffer.from(bytes);
 }
 
 function detectImageKind(buf) {
