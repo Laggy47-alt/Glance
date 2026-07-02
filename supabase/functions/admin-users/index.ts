@@ -343,10 +343,11 @@ Deno.serve(async (req) => {
       return json({ ok: true, exists: true, seeded: result.created, reset: false, user_id: result.userId, organization_id: result.organizationId });
     }
 
-    if (action === "seed-org-admin") {
-      // Bootstrap creator for arbitrary orgs. Auth via emergency credentials
-      // so it can be run once from a shell before any UI login exists.
-      // Body: { emergency_user, emergency_pass, org_slug, org_name, username, password, display_name? }
+    if (action === "seed-existing-org-admin") {
+      // Create/reset an admin user inside an EXISTING organization. Auth via
+      // emergency credentials so it can be run from a shell. Will NOT create
+      // an organization — fails if the slug does not already exist.
+      // Body: { emergency_user, emergency_pass, org_slug, username, password, display_name? }
       const body = await req.json().catch(() => ({} as Record<string, unknown>));
       const eu = String(body.emergency_user ?? "").trim().toLowerCase();
       const ep = String(body.emergency_pass ?? "");
@@ -354,7 +355,6 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "invalid emergency credentials" }, 401);
       }
       const orgSlug = String(body.org_slug ?? "").trim().toLowerCase();
-      const orgName = String(body.org_name ?? orgSlug).trim();
       const username = String(body.username ?? "").trim().toLowerCase();
       const password = String(body.password ?? "");
       const displayName = String(body.display_name ?? username);
@@ -363,18 +363,11 @@ Deno.serve(async (req) => {
       if (password.length < 6) return json({ ok: false, error: "password too short" }, 400);
 
       try {
-        // Ensure org exists
-        let { data: org } = await a.from("organizations").select("id, slug, name").eq("slug", orgSlug).maybeSingle();
-        if (!org) {
-          const { data: ins, error: insErr } = await a.from("organizations")
-            .insert({ slug: orgSlug, name: orgName }).select("id, slug, name").single();
-          if (insErr) throw new Error(`org create failed: ${insErr.message}`);
-          org = ins as any;
-        }
+        const { data: org } = await a.from("organizations").select("id, slug, name").eq("slug", orgSlug).maybeSingle();
+        if (!org) return json({ ok: false, error: `organization '${orgSlug}' does not exist` }, 404);
         const orgId = (org as any).id as string;
         const email = buildEmail(username, orgSlug);
 
-        // Find or create the auth user
         let authUser = await findAuthUserByEmail(email);
         if (authUser) {
           const { error: upErr } = await a.auth.admin.updateUserById(authUser.id, { password, email_confirm: true });
@@ -407,6 +400,8 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: (e as Error).message }, 400);
       }
     }
+
+
 
 
     // All other endpoints require an authenticated caller
