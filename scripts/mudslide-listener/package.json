@@ -12,6 +12,6 @@
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",
     "@hapi/boom": "^10.0.1",
-    "mudslide": "^1.16.0"
+    "mudslide": "^0.36.0"
   }
 }
