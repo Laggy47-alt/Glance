@@ -157,6 +157,25 @@ async function handleHttp(req, res) {
       return json(res, 200, { user: sock.user });
     }
 
+    if (path === "/groups" && req.method === "GET") {
+      if (!authOk(req)) return json(res, 401, { error: "unauthorized" });
+      if (!connected || !sock) return json(res, 503, { error: "not connected" });
+      try {
+        const all = await sock.groupFetchAllParticipating();
+        const groups = Object.values(all).map((g) => ({
+          jid: g.id,
+          name: g.subject,
+          participants: Array.isArray(g.participants) ? g.participants.length : 0,
+          owner: g.owner ?? null,
+          creation: g.creation ?? null,
+        }));
+        groups.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        return json(res, 200, { groups });
+      } catch (e) {
+        return json(res, 502, { error: e?.message ?? String(e) });
+      }
+    }
+
     if (path === "/send" && req.method === "POST") {
       if (!authOk(req)) return json(res, 401, { error: "unauthorized" });
       if (!connected || !sock) return json(res, 503, { error: "not connected" });
