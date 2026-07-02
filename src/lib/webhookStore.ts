@@ -782,8 +782,38 @@ export function frigateUrl(instance: { id: string; base_url: string; is_local: b
   return frigateProxyUrl(`/${instance.id}${p}`);
 }
 
+/**
+ * Rewrites internal/self-hosted Supabase hostnames (e.g. `http://kong:8000`,
+ * `http://supabase-kong:8000`, `http://localhost:*`) to the browser-reachable
+ * Supabase base URL. Edge functions on self-hosted stacks resolve
+ * `SUPABASE_URL` to the internal Docker service name, which then gets baked
+ * into public storage URLs — the browser can't resolve those hostnames.
+ */
+function rewriteInternalSupabaseHost(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    const internal =
+      host === "kong" ||
+      host === "supabase-kong" ||
+      host === "supabase" ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".internal") ||
+      host.endsWith(".local");
+    if (!internal) return url;
+    const base = new URL(supabaseBaseUrl());
+    u.protocol = base.protocol;
+    u.host = base.host;
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function resolveMediaUrl(url: string) {
-  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
+  if (/^https?:\/\//i.test(url)) return rewriteInternalSupabaseHost(url);
+  if (url.startsWith("data:")) return url;
   return frigateProxyUrl(url);
 }
 
