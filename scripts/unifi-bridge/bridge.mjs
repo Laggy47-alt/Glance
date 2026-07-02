@@ -564,6 +564,60 @@ function required(name) {
   return v;
 }
 
+function envNumber(name, fallback, min, max) {
+  const raw = process.env[name];
+  const n = raw == null || raw === "" ? fallback : Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createAsyncQueue(concurrency) {
+  const q = [];
+  let active = 0;
+  function pump() {
+    while (active < concurrency && q.length) {
+      const item = q.shift();
+      active += 1;
+      Promise.resolve()
+        .then(item.fn)
+        .then(item.resolve, item.reject)
+        .finally(() => {
+          active -= 1;
+          pump();
+        });
+    }
+  }
+  return {
+    add(fn) {
+      return new Promise((resolve, reject) => {
+        q.push({ fn, resolve, reject });
+        pump();
+      });
+    },
+    size() { return q.length + active; },
+  };
+}
+
+function outboundEventPayload(payload) {
+  return {
+    id: payload.id,
+    type: payload.type,
+    smartDetectTypes: payload.smartDetectTypes ?? [],
+    camera_id: payload.camera_id ?? null,
+    camera_name: payload.camera_name ?? "Unknown",
+    start: payload.start,
+    end: payload.end ?? null,
+    score: payload.score ?? null,
+    thumbnail_b64: payload.thumbnail_b64 ?? null,
+    clip_b64: payload.clip_b64 ?? null,
+    visual_retry: payload.visual_retry === true,
+  };
+}
+
 function loadInstances() {
   if (process.env.INSTANCES_JSON) {
     return JSON.parse(process.env.INSTANCES_JSON);
