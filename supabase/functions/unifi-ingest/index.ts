@@ -107,6 +107,56 @@ Deno.serve(async (req) => {
     return json({ error: "event is required" }, 400);
   }
 
+  // ----- Alert schedule gate (Africa/Johannesburg local time) -----
+  // If the org has any enabled unifi_alert_schedules rows, an event is only
+  // ingested when the current SAST moment falls inside one of those windows.
+  // No rows = allow 24/7 (backward compatible).
+  {
+    const { data: sched } = await supabase
+      .from("unifi_alert_schedules")
+      .select("weekday, start_time, end_time, enabled")
+      .eq("organization_id", inst.organization_id)
+      .eq("enabled", true);
+    if (sched && sched.length > 0) {
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Africa/Johannesburg",
+        weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+      const parts: Record<string, string> = {};
+      for (const p of fmt.formatToParts(new Date())) parts[p.type] = p.value;
+      const dayMap: Record<string, number> = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+      const todayDow = dayMap[parts.weekday] ?? 0;
+      const yesterdayDow = (todayDow + 6) % 7;
+      const nowMin = parseInt(parts.hour, 10) * 60 + parseInt(parts.minute, 10);
+      const toMin = (t: string | null): number | null => {
+        if (!t) return null;
+        const [h, m] = t.split(":").map((x) => parseInt(x, 10));
+        return Number.isNaN(h) || Number.isNaN(m) ? null : h * 60 + m;
+      };
+      let allowed = false;
+      for (const r of sched as any[]) {
+        const s = toMin(r.start_time);
+        const e = toMin(r.end_time);
+        if (s === null || e === null) continue;
+        if (r.weekday === todayDow) {
+          if (s < e) { if (nowMin >= s && nowMin < e) { allowed = true; break; } }
+          else       { if (nowMin >= s)               { allowed = true; break; } }
+        }
+        if (r.weekday === yesterdayDow) {
+          // Window that crossed midnight from yesterday
+          if (e <= s && nowMin < e) { allowed = true; break; }
+        }
+      }
+      if (!allowed) {
+        console.log("unifi-ingest dropped by schedule", JSON.stringify({
+          instance_id: inst.id, remote_event_id: ev?.id ?? null, todayDow, nowMin,
+        }));
+        return json({ ok: true, skipped: "outside alert schedule" });
+      }
+    }
+  }
+
+
   const remoteId: string | null = ev.id ?? null;
   const eventType: string = ev.type ?? "unknown";
   const smartTypes: string[] = Array.isArray(ev.smartDetectTypes) ? ev.smartDetectTypes : [];
