@@ -64,13 +64,28 @@ async function getCaller(authHeader: string | null): Promise<CallerInfo | null> 
   ]);
   const roleSet = new Set((roles ?? []).map((r) => r.role as string));
   const isAdminRole = roleSet.has("admin");
-  const isSuperAdmin = roleSet.has("super_admin") || (profile as { username?: string } | null)?.username === "admin";
+  const uname = ((profile as { username?: string } | null)?.username ?? "").toLowerCase();
+  const emailLc = String(userData.user.email ?? "").toLowerCase();
+  const isBootstrapAdmin =
+    uname === "admin" ||
+    uname === EMERGENCY_USER ||
+    LEGACY_ADMIN_EMAILS.includes(emailLc);
+  const isSuperAdmin = roleSet.has("super_admin") || isBootstrapAdmin;
   const adminOrgIds = new Set<string>();
   for (const m of members ?? []) {
     const member = m as { role?: string; organization_id?: string };
     if (member.role === "admin" && member.organization_id) adminOrgIds.add(member.organization_id);
   }
+  // Self-heal: ensure the bootstrap admin has the super_admin role persisted
+  // so future calls (and RLS) recognise them as such.
+  if (isBootstrapAdmin && !roleSet.has("super_admin")) {
+    await a.from("user_roles").upsert(
+      { user_id: userData.user.id, role: "super_admin" },
+      { onConflict: "user_id,role" },
+    ).then(() => {}, () => {});
+  }
   return { userId: userData.user.id, isSuperAdmin, isAdminRole, adminOrgIds };
+
 }
 
 // Emergency credentials — must match src/lib/offlineMode.ts. These let the
