@@ -80,12 +80,33 @@ async function runInstance(inst) {
 
   async function login() {
     log("info", inst.id, "logging in", inst.host);
-    const res = await fetch(`${base}/api/auth/login`, {
+    const body = { username: inst.username, password: inst.password };
+    // First attempt — without token; UniFi returns 401 with ulp-auth-* headers when MFA needed.
+    let res = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: inst.username, password: inst.password }),
+      body: JSON.stringify(body),
       dispatcher,
     });
+    // MFA required → generate TOTP from configured secret and retry.
+    if (res.status === 499 || res.status === 401) {
+      const mfaHeader = res.headers.get("x-ulp-auth-token") || res.headers.get("x-csrf-token");
+      const needsMfa = res.status === 499 || (mfaHeader && (await res.clone().text()).toLowerCase().includes("mfa"));
+      if (needsMfa || inst.totp_secret || inst.mfa_token) {
+        let code = inst.mfa_token;
+        if (inst.totp_secret) {
+          code = authenticator.generate(String(inst.totp_secret).replace(/\s+/g, ""));
+          log("debug", inst.id, "generated TOTP code");
+        }
+        if (!code) throw new Error("login: MFA required but no totp_secret / mfa_token configured");
+        res = await fetch(`${base}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, token: code, ubic_2fa_token: code }),
+          dispatcher,
+        });
+      }
+    }
     if (!res.ok) throw new Error(`login HTTP ${res.status}`);
     const setCookie = res.headers.get("set-cookie") ?? "";
     const tokenMatch = setCookie.match(/TOKEN=([^;]+)/);
