@@ -134,6 +134,11 @@ sudo systemctl restart unifi-bridge
   `unifi_instances`. Re-copy the Instance ID.
 - **`login HTTP 401`** — wrong username/password, or the user isn't a local
   account. UniFi cloud SSO users can't log in to the local API.
+- **`login HTTP 403 after MFA`** — UniFi rejected the generated MFA code. Pull
+  the latest bridge, copy `bridge.mjs` again, restart, then check:
+  `timedatectl` shows NTP synchronized, `totp_secret` is the manual/base32
+  authenticator secret for this exact local UniFi user, and the user is not
+  locked/disabled on the console.
 - **`login HTTP 499`** — MFA is still not accepted. Pull the latest bridge,
   copy `bridge.mjs` and `package.json` again, run `sudo npm install --omit=dev`,
   confirm `totp_secret` is the manual/base32 authenticator secret, and restart.

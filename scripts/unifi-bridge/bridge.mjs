@@ -410,6 +410,7 @@ async function runInstance(inst) {
     const start = typeof data?.start === "number" ? data.start : Date.now();
     const end = typeof data?.end === "number" ? data.end : null;
     const score = typeof data?.score === "number" ? data.score : null;
+    const previous = eventId ? recentEvents.get(eventId) : null;
 
     let thumbnail_b64 = null;
     let clip_b64 = null;
@@ -418,7 +419,6 @@ async function runInstance(inst) {
     thumbnail_b64 = eventId ? await fetchThumbnail(eventId, cameraId) : await fetchCameraSnapshot(cameraId);
     clip_b64 = await fetchClip(cameraId, typeof previous?.start === "number" ? previous.start : start);
 
-    const previous = eventId ? recentEvents.get(eventId) : null;
     const payload = {
       ...(previous ?? {}),
       id: eventId,
