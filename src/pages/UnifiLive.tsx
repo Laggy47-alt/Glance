@@ -6,15 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { fetchUnifiCameraStatus } from "@/lib/unifiHealthStore";
+import { supabase } from "@/integrations/supabase/client";
 import type { UnifiCameraStatus } from "@/lib/webhookStore";
+
+const db = supabase as unknown as { from: (t: string) => any };
 
 export default function UnifiLive() {
   const store = useWebhookStore();
   const [params, setParams] = useSearchParams();
   const [cams, setCams] = useState<UnifiCameraStatus[]>([]);
-  const [running, setRunning] = useState(true);
+  const [running, setRunning] = useState(false); // on-demand
+  const [siteName, setSiteName] = useState<string | null>(null);
+  const [siteCameraIds, setSiteCameraIds] = useState<Set<string> | null>(null);
 
   const instanceId = params.get("instance") || store.unifis[0]?.id || "";
+  const siteId = params.get("site");
+  const cameraFilterParam = params.get("cameras") || params.get("camera");
+  const cameraFilter = useMemo(
+    () => (cameraFilterParam ? new Set(cameraFilterParam.split(",").filter(Boolean)) : null),
+    [cameraFilterParam],
+  );
   const inst = useMemo(() => store.unifis.find((u) => u.id === instanceId), [store.unifis, instanceId]);
 
   useEffect(() => {
@@ -22,7 +33,28 @@ export default function UnifiLive() {
     fetchUnifiCameraStatus(instanceId).then(setCams).catch(() => {});
   }, [instanceId]);
 
-  const visible = cams.filter((c) => c.is_online);
+  // Resolve site -> allowed camera ids
+  useEffect(() => {
+    let cancelled = false;
+    if (!siteId || !instanceId) { setSiteCameraIds(null); setSiteName(null); return; }
+    (async () => {
+      const [{ data: siteRow }, { data: mapRows }] = await Promise.all([
+        db.from("unifi_sites").select("name").eq("id", siteId).maybeSingle(),
+        db.from("unifi_camera_sites").select("camera_id").eq("site_id", siteId).eq("unifi_instance_id", instanceId),
+      ]);
+      if (cancelled) return;
+      setSiteName((siteRow as { name?: string } | null)?.name ?? null);
+      setSiteCameraIds(new Set(((mapRows ?? []) as Array<{ camera_id: string }>).map((r) => r.camera_id)));
+    })();
+    return () => { cancelled = true; };
+  }, [siteId, instanceId]);
+
+  const visible = cams.filter((c) => {
+    if (!c.is_online) return false;
+    if (cameraFilter && !cameraFilter.has(c.camera_id)) return false;
+    if (siteCameraIds && !siteCameraIds.has(c.camera_id)) return false;
+    return true;
+  });
 
   if (!inst) {
     return (
@@ -40,20 +72,45 @@ export default function UnifiLive() {
   const bridge = (inst.bridge_public_url ?? "").replace(/\/+$/, "");
   const token = inst.live_token ?? "";
   const streamsReady = Boolean(bridge);
+  const filterLabel = siteName
+    ? `Site: ${siteName}`
+    : cameraFilter
+      ? `${cameraFilter.size} camera(s)`
+      : "All cameras";
+
+  const clearFilter = () => {
+    const next = new URLSearchParams(params);
+    next.delete("site");
+    next.delete("camera");
+    next.delete("cameras");
+    setParams(next);
+    setRunning(false);
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
       <AppSidebar />
       <main className="flex-1 p-6 space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-xl font-semibold">Live view — {inst.name}</h1>
             <p className="text-xs text-muted-foreground">
-              MJPEG snapshot stream from the local bridge. LAN performance recommended.
+              On-demand MJPEG snapshot stream. Filter: <span className="font-medium">{filterLabel}</span>.
+              {(siteId || cameraFilter) && (
+                <button type="button" onClick={clearFilter} className="ml-2 underline text-primary">
+                  clear filter
+                </button>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Select value={instanceId} onValueChange={(v) => setParams({ instance: v })}>
+            <Select
+              value={instanceId}
+              onValueChange={(v) => {
+                setRunning(false);
+                setParams({ instance: v });
+              }}
+            >
               <SelectTrigger className="w-56 h-9 text-xs">
                 <SelectValue placeholder="Pick NVR" />
               </SelectTrigger>
@@ -63,8 +120,13 @@ export default function UnifiLive() {
                 ))}
               </SelectContent>
             </Select>
-            <Button size="sm" variant="outline" onClick={() => setRunning((r) => !r)}>
-              {running ? "Pause" : "Resume"}
+            <Button
+              size="sm"
+              variant={running ? "outline" : "default"}
+              onClick={() => setRunning((r) => !r)}
+              disabled={!streamsReady || visible.length === 0}
+            >
+              {running ? "Stop live" : `Start live (${visible.length})`}
             </Button>
           </div>
         </div>
@@ -79,7 +141,7 @@ export default function UnifiLive() {
         {streamsReady && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {visible.length === 0 && (
-              <Card className="p-4 text-xs text-muted-foreground col-span-full">No online cameras.</Card>
+              <Card className="p-4 text-xs text-muted-foreground col-span-full">No online cameras match this filter.</Card>
             )}
             {visible.map((c) => {
               const src = running
@@ -91,7 +153,7 @@ export default function UnifiLive() {
                     {running ? (
                       <img src={src} alt={c.name ?? c.camera_id} className="w-full h-full object-contain" />
                     ) : (
-                      <span className="text-xs text-muted-foreground">Paused</span>
+                      <span className="text-xs text-muted-foreground">Idle — press Start live</span>
                     )}
                   </div>
                   <div className="px-3 py-2 flex items-center justify-between">
