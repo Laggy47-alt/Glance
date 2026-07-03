@@ -292,11 +292,11 @@ cd /functions/Glance
 git pull
 ```
 
-On the **bridge machine**:
+On the **bridge machine** (the repo is at `/Glance`, the service runs from `/opt/glance-unifi-bridge`):
 
 ```bash
 sudo systemctl stop unifi-bridge
-sudo cp -r /path/to/Glance/scripts/unifi-bridge/* /opt/glance-unifi-bridge/
+sudo cp -r /Glance/scripts/unifi-bridge/* /opt/glance-unifi-bridge/
 # (.env and instances.json are NOT overwritten by the wildcard — good)
 cd /opt/glance-unifi-bridge
 sudo -u unifi-bridge npm install --omit=dev
