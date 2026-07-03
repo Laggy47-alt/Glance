@@ -973,7 +973,6 @@ async function ensureHlsSession(entry, cameraId) {
     "-hide_banner", "-loglevel", "warning",
     "-fflags", "nobuffer+genpts", "-flags", "low_delay",
     "-rtsp_transport", "tcp",
-    "-tls_verify", "0",
     "-i", rtspUrl,
     ...codecArgs,
     "-f", "hls",
