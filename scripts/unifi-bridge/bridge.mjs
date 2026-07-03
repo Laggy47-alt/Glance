@@ -34,6 +34,7 @@
  */
 
 import fs from "node:fs";
+import http from "node:http";
 import zlib from "node:zlib";
 import { Buffer } from "node:buffer";
 import https from "node:https";
@@ -42,12 +43,22 @@ import WebSocket from "ws";
 import { Agent as UndiciAgent } from "undici";
 import { authenticator } from "otplib";
 
+
 // ───────────────────────── config ─────────────────────────
 
 const LOG_LEVEL = (process.env.LOG_LEVEL ?? "info").toLowerCase();
 const GLANCE_URL = required("GLANCE_URL").replace(/\/+$/, "");
 const GLANCE_ANON_KEY = required("GLANCE_ANON_KEY");
 const INGEST_URL = `${GLANCE_URL}/functions/v1/unifi-ingest`;
+const STATUS_URL = `${GLANCE_URL}/functions/v1/unifi-status`;
+const STATUS_INTERVAL_MS = envNumber("STATUS_INTERVAL_SEC", 30, 5, 600) * 1000;
+
+// Optional HTTP server for live snapshot streaming (MJPEG proxy).
+const HTTP_PORT = envNumber("HTTP_PORT", 0, 0, 65535);
+const LIVE_TOKEN = process.env.BRIDGE_LIVE_TOKEN ?? "";
+const LIVE_FPS = envNumber("LIVE_FPS", 2, 1, 10);
+// Registry so the HTTP server can look up per-instance session state.
+const REGISTRY = new Map();
 
 const instances = loadInstances();
 if (!instances.length) {
