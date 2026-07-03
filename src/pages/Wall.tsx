@@ -813,6 +813,14 @@ function AlertCard({
           </Button>
         </div>
       </div>
+      {liveUrl && (
+        <a
+          href={liveUrl}
+          className="block px-2 py-1.5 text-[11px] text-center font-medium bg-primary/10 hover:bg-primary/20 text-primary border-t border-border"
+        >
+          Open live view →
+        </a>
+      )}
     </div>
   );
 }
