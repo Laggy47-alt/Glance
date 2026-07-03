@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import type { UnifiInstance } from "@/lib/webhookStore";
 import { UnifiAlertScheduleDialog } from "@/components/UnifiAlertScheduleDialog";
+import { UnifiOfflineAlertsDialog } from "@/components/UnifiOfflineAlertsDialog";
+import { BellOff } from "lucide-react";
 
 const PALETTE = ["#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#f59e0b", "#ef4444", "#14b8a6"];
 const HEALTHY_WINDOW_MS = 5 * 60 * 1000;
@@ -37,19 +39,24 @@ export function UnifiSection() {
   const [editing, setEditing] = useState<UnifiInstance | null>(null);
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [bridgePublicUrl, setBridgePublicUrl] = useState("");
+  const [liveToken, setLiveToken] = useState("");
   const [verifyTls, setVerifyTls] = useState(false);
   const [color, setColor] = useState(PALETTE[0]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [secretRevealed, setSecretRevealed] = useState<Record<string, boolean>>({});
+  const [offlineAlertsFor, setOfflineAlertsFor] = useState<UnifiInstance | null>(null);
 
   const reset = () => {
     setEditing(null);
-    setName(""); setBaseUrl(""); setVerifyTls(false); setColor(PALETTE[0]);
+    setName(""); setBaseUrl(""); setBridgePublicUrl(""); setLiveToken("");
+    setVerifyTls(false); setColor(PALETTE[0]);
   };
   const openNew = () => { reset(); setOpen(true); };
   const openEdit = (u: UnifiInstance) => {
     setEditing(u);
     setName(u.name); setBaseUrl(u.base_url); setVerifyTls(u.verify_tls); setColor(u.color);
+    setBridgePublicUrl(u.bridge_public_url ?? ""); setLiveToken(u.live_token ?? "");
     setOpen(true);
   };
 
@@ -62,6 +69,8 @@ export function UnifiSection() {
           base_url: baseUrl.trim(),
           verify_tls: verifyTls,
           color,
+          bridge_public_url: bridgePublicUrl.trim() || null,
+          live_token: liveToken.trim() || null,
         });
         toast.success("UniFi NVR updated");
       } else {
@@ -71,6 +80,17 @@ export function UnifiSection() {
           verify_tls: verifyTls,
           color,
         });
+        if (bridgePublicUrl.trim() || liveToken.trim()) {
+          // The newly-created row surfaces on next refresh; update after.
+          await store.refreshAll();
+          const created = store.unifis.find((x) => x.name === name.trim() && x.base_url === baseUrl.trim().replace(/\/+$/, ""));
+          if (created) {
+            await store.updateUnifi(created.id, {
+              bridge_public_url: bridgePublicUrl.trim() || null,
+              live_token: liveToken.trim() || null,
+            });
+          }
+        }
         toast.success("UniFi ENVR added");
       }
       await store.refreshAll();
