@@ -696,6 +696,7 @@ const Wall = () => {
                         onDismiss={() => dismiss(a)}
                         onOpen={() => openMedia("clip")}
                         onTag={() => openMedia("snapshot")}
+                        liveUrl={unifiLiveUrlFor(a)}
                       />
                     );
                   })}
