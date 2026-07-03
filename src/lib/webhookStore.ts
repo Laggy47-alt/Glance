@@ -144,7 +144,36 @@ export type UnifiInstance = {
   last_polled_at: string | null;
   last_error: string | null;
   poll_enabled: boolean;
+  bridge_public_url: string | null;
+  live_token: string | null;
   created_at: string;
+};
+
+export type UnifiCameraStatus = {
+  instance_id: string;
+  camera_id: string;
+  organization_id: string;
+  name: string | null;
+  state: string | null;
+  is_online: boolean;
+  last_seen_at: string | null;
+  last_status_at: string;
+  last_offline_at: string | null;
+  last_online_at: string | null;
+  last_alert_sent_at: string | null;
+  last_recovery_sent_at: string | null;
+  updated_at: string;
+};
+
+export type UnifiOfflineAlertSettings = {
+  unifi_instance_id: string;
+  organization_id: string;
+  enabled: boolean;
+  threshold_minutes: number;
+  cooldown_minutes: number;
+  notify_on_recovery: boolean;
+  recipients: Array<{ type?: "number" | "group"; value: string; label?: string }>;
+  updated_at: string;
 };
 
 
@@ -722,11 +751,14 @@ class WebhookStore {
     if (error) throw error;
   }
   async updateUnifi(id: string, patch: Partial<Pick<UnifiInstance,
-    "name" | "base_url" | "color" | "enabled" | "verify_tls"
+    "name" | "base_url" | "color" | "enabled" | "verify_tls" | "bridge_public_url" | "live_token"
   >>) {
     const cleaned = {
       ...patch,
       ...(patch.base_url !== undefined ? { base_url: patch.base_url.replace(/\/+$/, "") } : {}),
+      ...(patch.bridge_public_url !== undefined
+        ? { bridge_public_url: patch.bridge_public_url ? patch.bridge_public_url.replace(/\/+$/, "") : null }
+        : {}),
     };
     const q = supabase.from("unifi_instances").update(cleaned as never).eq("id", id);
     const { error } = this.activeOrgId ? await q.eq("organization_id", this.activeOrgId) : await q;
