@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { fetchUnifiCameraStatus } from "@/lib/unifiHealthStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +19,7 @@ export default function UnifiLive() {
   const [running, setRunning] = useState(false); // on-demand
   const [siteName, setSiteName] = useState<string | null>(null);
   const [siteCameraIds, setSiteCameraIds] = useState<Set<string> | null>(null);
+  const [expanded, setExpanded] = useState<UnifiCameraStatus | null>(null);
 
   const instanceId = params.get("instance") || store.unifis[0]?.id || "";
   const siteId = params.get("site");
@@ -148,7 +150,11 @@ export default function UnifiLive() {
                 ? `${bridge}/stream/${inst.id}/${c.camera_id}?token=${encodeURIComponent(token)}`
                 : "";
               return (
-                <Card key={c.camera_id} className="overflow-hidden">
+                <Card
+                  key={c.camera_id}
+                  className={`overflow-hidden ${running ? "cursor-zoom-in hover:ring-2 hover:ring-primary transition" : ""}`}
+                  onClick={() => running && setExpanded(c)}
+                >
                   <div className="aspect-video bg-black grid place-items-center">
                     {running ? (
                       <img src={src} alt={c.name ?? c.camera_id} className="w-full h-full object-contain" />
@@ -165,6 +171,25 @@ export default function UnifiLive() {
             })}
           </div>
         )}
+
+        <Dialog open={!!expanded} onOpenChange={(o) => !o && setExpanded(null)}>
+          <DialogContent className="max-w-6xl p-0 overflow-hidden bg-black border-border">
+            <DialogTitle className="sr-only">{expanded?.name ?? expanded?.camera_id ?? "Camera"}</DialogTitle>
+            {expanded && running && (
+              <div className="relative">
+                <img
+                  src={`${bridge}/stream/${inst.id}/${expanded.camera_id}?token=${encodeURIComponent(token)}&t=big`}
+                  alt={expanded.name ?? expanded.camera_id}
+                  className="w-full max-h-[85vh] object-contain bg-black"
+                />
+                <div className="absolute bottom-0 left-0 right-0 px-4 py-2 bg-black/60 text-xs text-white flex items-center justify-between">
+                  <span className="font-medium">{expanded.name ?? expanded.camera_id}</span>
+                  <span className="text-[10px] opacity-70">{expanded.state ?? "live"}</span>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
