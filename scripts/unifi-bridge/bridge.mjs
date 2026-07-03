@@ -800,15 +800,19 @@ if (HTTP_PORT > 0) {
       const entry = REGISTRY.get(instanceId);
       if (!entry) { res.writeHead(503); res.end("instance not ready"); return; }
 
+      const widthParam = Math.max(160, Math.min(1920, parseInt(url.searchParams.get("w") ?? "", 10) || 1280));
+      const fpsParam = Math.max(1, Math.min(15, parseInt(url.searchParams.get("fps") ?? "", 10) || LIVE_FPS));
+
       if (kind === "snapshot") {
-        const buf = await grabSnapshot(entry, cameraId);
+        const buf = await grabSnapshot(entry, cameraId, widthParam);
         if (!buf) { res.writeHead(502); res.end("snapshot failed"); return; }
         res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-store" });
         res.end(buf);
         return;
       }
 
-      // MJPEG stream
+      // MJPEG stream — pipelined: prefetch next frame while writing current one,
+      // and only sleep the *remaining* interval so slow fetches don't stack.
       const boundary = "glancemjpeg";
       res.writeHead(200, {
         "Content-Type": `multipart/x-mixed-replace; boundary=${boundary}`,
@@ -817,9 +821,14 @@ if (HTTP_PORT > 0) {
       });
       let closed = false;
       req.on("close", () => { closed = true; });
-      const interval = Math.max(100, Math.floor(1000 / LIVE_FPS));
+      const interval = Math.max(60, Math.floor(1000 / fpsParam));
+      let pending = grabSnapshot(entry, cameraId, widthParam);
       while (!closed) {
-        const buf = await grabSnapshot(entry, cameraId);
+        const start = Date.now();
+        const buf = await pending;
+        if (closed) break;
+        // Kick off the next fetch immediately, in parallel with writing this frame.
+        pending = grabSnapshot(entry, cameraId, widthParam);
         if (buf) {
           res.write(`--${boundary}\r\n`);
           res.write(`Content-Type: image/jpeg\r\n`);
@@ -827,7 +836,9 @@ if (HTTP_PORT > 0) {
           res.write(buf);
           res.write("\r\n");
         }
-        await new Promise((r) => setTimeout(r, interval));
+        const elapsed = Date.now() - start;
+        const wait = interval - elapsed;
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       }
       try { res.end(); } catch {}
     } catch (e) {
