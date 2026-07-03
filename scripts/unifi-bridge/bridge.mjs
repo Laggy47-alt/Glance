@@ -34,6 +34,9 @@
  */
 
 import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { spawn } from "node:child_process";
 import http from "node:http";
 import zlib from "node:zlib";
 import { Buffer } from "node:buffer";
