@@ -56,7 +56,7 @@ const STATUS_INTERVAL_MS = envNumber("STATUS_INTERVAL_SEC", 30, 5, 600) * 1000;
 // Optional HTTP server for live snapshot streaming (MJPEG proxy).
 const HTTP_PORT = envNumber("HTTP_PORT", 0, 0, 65535);
 const LIVE_TOKEN = process.env.BRIDGE_LIVE_TOKEN ?? "";
-const LIVE_FPS = envNumber("LIVE_FPS", 2, 1, 10);
+const LIVE_FPS = envNumber("LIVE_FPS", 6, 1, 15);
 // Registry so the HTTP server can look up per-instance session state.
 const REGISTRY = new Map();
 
@@ -800,15 +800,19 @@ if (HTTP_PORT > 0) {
       const entry = REGISTRY.get(instanceId);
       if (!entry) { res.writeHead(503); res.end("instance not ready"); return; }
 
+      const widthParam = Math.max(160, Math.min(1920, parseInt(url.searchParams.get("w") ?? "", 10) || 1280));
+      const fpsParam = Math.max(1, Math.min(15, parseInt(url.searchParams.get("fps") ?? "", 10) || LIVE_FPS));
+
       if (kind === "snapshot") {
-        const buf = await grabSnapshot(entry, cameraId);
+        const buf = await grabSnapshot(entry, cameraId, widthParam);
         if (!buf) { res.writeHead(502); res.end("snapshot failed"); return; }
         res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-store" });
         res.end(buf);
         return;
       }
 
-      // MJPEG stream
+      // MJPEG stream — pipelined: prefetch next frame while writing current one,
+      // and only sleep the *remaining* interval so slow fetches don't stack.
       const boundary = "glancemjpeg";
       res.writeHead(200, {
         "Content-Type": `multipart/x-mixed-replace; boundary=${boundary}`,
@@ -817,9 +821,14 @@ if (HTTP_PORT > 0) {
       });
       let closed = false;
       req.on("close", () => { closed = true; });
-      const interval = Math.max(100, Math.floor(1000 / LIVE_FPS));
+      const interval = Math.max(60, Math.floor(1000 / fpsParam));
+      let pending = grabSnapshot(entry, cameraId, widthParam);
       while (!closed) {
-        const buf = await grabSnapshot(entry, cameraId);
+        const start = Date.now();
+        const buf = await pending;
+        if (closed) break;
+        // Kick off the next fetch immediately, in parallel with writing this frame.
+        pending = grabSnapshot(entry, cameraId, widthParam);
         if (buf) {
           res.write(`--${boundary}\r\n`);
           res.write(`Content-Type: image/jpeg\r\n`);
@@ -827,7 +836,9 @@ if (HTTP_PORT > 0) {
           res.write(buf);
           res.write("\r\n");
         }
-        await new Promise((r) => setTimeout(r, interval));
+        const elapsed = Date.now() - start;
+        const wait = interval - elapsed;
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       }
       try { res.end(); } catch {}
     } catch (e) {
@@ -839,12 +850,13 @@ if (HTTP_PORT > 0) {
   });
 }
 
-async function grabSnapshot(entry, cameraId) {
+async function grabSnapshot(entry, cameraId, width = 1280) {
   const { base, dispatcher, getAuth } = entry;
   const { cookie, csrf } = getAuth();
+  const w = Math.max(160, Math.min(1920, Math.floor(width)));
   const paths = [
-    `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=1280&ts=${Date.now()}`,
-    `/proxy/protect/api/cameras/${cameraId}/snapshot?w=1280&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=${w}&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?w=${w}&ts=${Date.now()}`,
     `/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}`,
   ];
   for (const p of paths) {

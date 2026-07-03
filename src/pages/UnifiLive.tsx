@@ -147,7 +147,7 @@ export default function UnifiLive() {
             )}
             {visible.map((c) => {
               const src = running
-                ? `${bridge}/stream/${inst.id}/${c.camera_id}?token=${encodeURIComponent(token)}`
+                ? `${bridge}/stream/${inst.id}/${c.camera_id}?token=${encodeURIComponent(token)}&w=640&fps=6`
                 : "";
               return (
                 <Card
@@ -178,7 +178,7 @@ export default function UnifiLive() {
             {expanded && running && (
               <div className="relative">
                 <img
-                  src={`${bridge}/stream/${inst.id}/${expanded.camera_id}?token=${encodeURIComponent(token)}&t=big`}
+                  src={`${bridge}/stream/${inst.id}/${expanded.camera_id}?token=${encodeURIComponent(token)}&w=1280&fps=8&t=big`}
                   alt={expanded.name ?? expanded.camera_id}
                   className="w-full max-h-[85vh] object-contain bg-black"
                 />
