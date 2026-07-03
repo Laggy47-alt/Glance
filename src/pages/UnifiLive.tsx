@@ -147,9 +147,9 @@ export default function UnifiLive() {
               <Card className="p-4 text-xs text-muted-foreground col-span-full">No online cameras match this filter.</Card>
             )}
             {visible.map((c) => {
-              const src = running
-                ? `${bridge}/stream/${inst.id}/${c.camera_id}?token=${encodeURIComponent(token)}&w=640&fps=6`
-                : "";
+              const q = `token=${encodeURIComponent(token)}`;
+              const hlsUrl = `${bridge}/hls/${inst.id}/${c.camera_id}/index.m3u8?${q}`;
+              const mjpegUrl = `${bridge}/stream/${inst.id}/${c.camera_id}?${q}&w=640&fps=6`;
               return (
                 <Card
                   key={c.camera_id}
@@ -158,7 +158,12 @@ export default function UnifiLive() {
                 >
                   <div className="aspect-video bg-black grid place-items-center">
                     {running ? (
-                      <img src={src} alt={c.name ?? c.camera_id} className="w-full h-full object-contain" />
+                      <UnifiHlsPlayer
+                        hlsUrl={hlsUrl}
+                        mjpegUrl={mjpegUrl}
+                        alt={c.name ?? c.camera_id}
+                        className="w-full h-full object-contain"
+                      />
                     ) : (
                       <span className="text-xs text-muted-foreground">Idle — press Start live</span>
                     )}
@@ -178,8 +183,9 @@ export default function UnifiLive() {
             <DialogTitle className="sr-only">{expanded?.name ?? expanded?.camera_id ?? "Camera"}</DialogTitle>
             {expanded && running && (
               <div className="relative">
-                <img
-                  src={`${bridge}/stream/${inst.id}/${expanded.camera_id}?token=${encodeURIComponent(token)}&w=1280&fps=8&t=big`}
+                <UnifiHlsPlayer
+                  hlsUrl={`${bridge}/hls/${inst.id}/${expanded.camera_id}/index.m3u8?token=${encodeURIComponent(token)}`}
+                  mjpegUrl={`${bridge}/stream/${inst.id}/${expanded.camera_id}?token=${encodeURIComponent(token)}&w=1280&fps=8`}
                   alt={expanded.name ?? expanded.camera_id}
                   className="w-full max-h-[85vh] object-contain bg-black"
                 />
