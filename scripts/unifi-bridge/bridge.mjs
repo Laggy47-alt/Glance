@@ -34,6 +34,7 @@
  */
 
 import fs from "node:fs";
+import http from "node:http";
 import zlib from "node:zlib";
 import { Buffer } from "node:buffer";
 import https from "node:https";
@@ -42,12 +43,22 @@ import WebSocket from "ws";
 import { Agent as UndiciAgent } from "undici";
 import { authenticator } from "otplib";
 
+
 // ───────────────────────── config ─────────────────────────
 
 const LOG_LEVEL = (process.env.LOG_LEVEL ?? "info").toLowerCase();
 const GLANCE_URL = required("GLANCE_URL").replace(/\/+$/, "");
 const GLANCE_ANON_KEY = required("GLANCE_ANON_KEY");
 const INGEST_URL = `${GLANCE_URL}/functions/v1/unifi-ingest`;
+const STATUS_URL = `${GLANCE_URL}/functions/v1/unifi-status`;
+const STATUS_INTERVAL_MS = envNumber("STATUS_INTERVAL_SEC", 30, 5, 600) * 1000;
+
+// Optional HTTP server for live snapshot streaming (MJPEG proxy).
+const HTTP_PORT = envNumber("HTTP_PORT", 0, 0, 65535);
+const LIVE_TOKEN = process.env.BRIDGE_LIVE_TOKEN ?? "";
+const LIVE_FPS = envNumber("LIVE_FPS", 2, 1, 10);
+// Registry so the HTTP server can look up per-instance session state.
+const REGISTRY = new Map();
 
 const instances = loadInstances();
 if (!instances.length) {
@@ -90,6 +101,7 @@ async function runInstance(inst) {
   let csrf = "";
   let lastUpdateId = "";
   let cameras = new Map(); // id → name
+  let cameraDetails = new Map(); // id → full camera object from Protect
   let recentEvents = new Map(); // Protect event id → compact state; never stores base64 media
   let postedInitialEvents = new Set();
   let visualRetryScheduled = new Set();
@@ -167,8 +179,46 @@ async function runInstance(inst) {
     if (!r.ok) throw new Error(`cameras HTTP ${r.status}`);
     const arr = await r.json();
     cameras = new Map(arr.map((c) => [c.id, c.name]));
+    cameraDetails = new Map(arr.map((c) => [c.id, c]));
+    // Refresh registry entry every load so /snapshot always has fresh auth.
+    REGISTRY.set(inst.id, { inst, base, dispatcher, cameraDetails, getAuth: () => ({ cookie, csrf }) });
     log("info", inst.id, `loaded ${cameras.size} cameras`);
     await postCameraInventory(arr.map((c) => ({ id: c.id, name: c.name })));
+  }
+
+  async function pollStatus() {
+    try {
+      const r = await fetch(`${base}/proxy/protect/api/cameras`, {
+        headers: { Cookie: cookie, "x-csrf-token": csrf },
+        dispatcher,
+      });
+      if (!r.ok) { log("debug", inst.id, `status HTTP ${r.status}`); return; }
+      const arr = await r.json();
+      cameraDetails = new Map(arr.map((c) => [c.id, c]));
+      const payload = {
+        instance_id: inst.id,
+        cameras: arr.map((c) => ({
+          id: c.id,
+          name: c.name,
+          state: c.state,
+          isConnected: c.isConnected === true || String(c.state ?? "").toUpperCase() === "CONNECTED",
+          lastSeenMs: typeof c.lastSeen === "number" ? c.lastSeen : null,
+        })),
+      };
+      const res = await fetch(STATUS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": String(inst.webhook_secret),
+          apikey: GLANCE_ANON_KEY,
+          Authorization: `Bearer ${GLANCE_ANON_KEY}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) log("info", inst.id, `status POST ${res.status}`);
+    } catch (e) {
+      log("debug", inst.id, "status error", e?.message ?? e);
+    }
   }
 
   async function postCameraInventory(cameraList) {
@@ -566,6 +616,9 @@ async function runInstance(inst) {
     await boot();
     // Periodic camera refresh (in case names change)
     setInterval(() => { loadCameras().catch(() => {}); }, 10 * 60 * 1000);
+    // Periodic camera status push (online / offline / last seen)
+    pollStatus().catch(() => {});
+    setInterval(() => { pollStatus().catch(() => {}); }, STATUS_INTERVAL_MS);
   } catch (e) {
     log("info", inst.id, "boot failed:", e?.message ?? e);
     scheduleReconnect();
@@ -711,4 +764,96 @@ function log(level, id, ...rest) {
   if (level === "debug" && LOG_LEVEL !== "debug") return;
   const ts = new Date().toISOString();
   console.log(`${ts} [${id}]`, ...rest);
+}
+
+// ─────────────── Live view HTTP server (MJPEG snapshot proxy) ───────────────
+//
+// Enable by setting HTTP_PORT in .env. Cameras are served as an animated
+// multipart/x-mixed-replace stream so a plain <img src="..."> tag renders live
+// snapshots at LIVE_FPS. Auth is via ?token= matching BRIDGE_LIVE_TOKEN.
+//
+//   GET /health
+//   GET /snapshot/:instanceId/:cameraId?token=…
+//   GET /stream/:instanceId/:cameraId?token=…   (multipart JPEG)
+//
+if (HTTP_PORT > 0) {
+  const server = http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      // Very permissive CORS — this is behind your LAN / reverse proxy anyway.
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
+      if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+
+      if (url.pathname === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, instances: [...REGISTRY.keys()] }));
+        return;
+      }
+
+      const m = url.pathname.match(/^\/(snapshot|stream)\/([^/]+)\/([^/]+)$/);
+      if (!m) { res.writeHead(404); res.end("not found"); return; }
+      const [, kind, instanceId, cameraId] = m;
+      const token = url.searchParams.get("token") ?? "";
+      if (LIVE_TOKEN && token !== LIVE_TOKEN) { res.writeHead(401); res.end("unauthorized"); return; }
+
+      const entry = REGISTRY.get(instanceId);
+      if (!entry) { res.writeHead(503); res.end("instance not ready"); return; }
+
+      if (kind === "snapshot") {
+        const buf = await grabSnapshot(entry, cameraId);
+        if (!buf) { res.writeHead(502); res.end("snapshot failed"); return; }
+        res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-store" });
+        res.end(buf);
+        return;
+      }
+
+      // MJPEG stream
+      const boundary = "glancemjpeg";
+      res.writeHead(200, {
+        "Content-Type": `multipart/x-mixed-replace; boundary=${boundary}`,
+        "Cache-Control": "no-store",
+        Connection: "close",
+      });
+      let closed = false;
+      req.on("close", () => { closed = true; });
+      const interval = Math.max(100, Math.floor(1000 / LIVE_FPS));
+      while (!closed) {
+        const buf = await grabSnapshot(entry, cameraId);
+        if (buf) {
+          res.write(`--${boundary}\r\n`);
+          res.write(`Content-Type: image/jpeg\r\n`);
+          res.write(`Content-Length: ${buf.length}\r\n\r\n`);
+          res.write(buf);
+          res.write("\r\n");
+        }
+        await new Promise((r) => setTimeout(r, interval));
+      }
+      try { res.end(); } catch {}
+    } catch (e) {
+      try { res.writeHead(500); res.end(String(e?.message ?? e)); } catch {}
+    }
+  });
+  server.listen(HTTP_PORT, () => {
+    console.log(`[bridge] live HTTP server listening on :${HTTP_PORT}${LIVE_TOKEN ? " (token required)" : " (no token — set BRIDGE_LIVE_TOKEN!)"}`);
+  });
+}
+
+async function grabSnapshot(entry, cameraId) {
+  const { base, dispatcher, getAuth } = entry;
+  const { cookie, csrf } = getAuth();
+  const paths = [
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=1280&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?w=1280&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}`,
+  ];
+  for (const p of paths) {
+    try {
+      const r = await fetch(`${base}${p}`, { headers: { Cookie: cookie, "x-csrf-token": csrf }, dispatcher });
+      if (!r.ok) continue;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 500) return buf;
+    } catch {}
+  }
+  return null;
 }

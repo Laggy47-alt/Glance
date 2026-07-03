@@ -16,6 +16,8 @@ const adminItems = [
   { to: "/cameras", label: "Cameras", icon: Video },
   { to: "/nvr-status", label: "NVR Status", icon: HeartPulse },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
+  { to: "/unifi-status", label: "UniFi Status", icon: Radio },
+  { to: "/unifi-live", label: "UniFi Live", icon: Video },
   { to: "/media", label: "Media", icon: Film },
 
   { to: "/callouts", label: "Callout Requests", icon: Phone },
