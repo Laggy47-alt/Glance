@@ -55,11 +55,20 @@ export function AppSidebar() {
   );
   const [sitesOpen, setSitesOpen] = useState(true);
 
+  const isFiberOrg = (activeOrg?.slug ?? "").toLowerCase() === "fiber";
+  // Hide selected pages from the Fibertime org only.
+  const fiberHiddenPaths = new Set<string>(
+    isFiberOrg
+      ? ["/nvr-status", "/camera-status", "/callouts", "/daily-reports", "/whatsapp-alerts"]
+      : []
+  );
+  const filteredAdminItems = adminItems.filter((it) => !fiberHiddenPaths.has(it.to));
+  const filteredUserItems = userItems.filter((it) => !fiberHiddenPaths.has(it.to));
   const items = isAdmin
-    ? [...adminItems, { to: "/users", label: "Users", icon: UsersIcon }]
+    ? [...filteredAdminItems, { to: "/users", label: "Users", icon: UsersIcon }]
     : isCustomer
       ? customerItems
-      : userItems;
+      : filteredUserItems;
   const showSites = !isCustomer || isAdmin;
   const showOrgSwitcher = orgs.length > 1 || isSuperAdmin;
 
