@@ -850,12 +850,13 @@ if (HTTP_PORT > 0) {
   });
 }
 
-async function grabSnapshot(entry, cameraId) {
+async function grabSnapshot(entry, cameraId, width = 1280) {
   const { base, dispatcher, getAuth } = entry;
   const { cookie, csrf } = getAuth();
+  const w = Math.max(160, Math.min(1920, Math.floor(width)));
   const paths = [
-    `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=1280&ts=${Date.now()}`,
-    `/proxy/protect/api/cameras/${cameraId}/snapshot?w=1280&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=${w}&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?w=${w}&ts=${Date.now()}`,
     `/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}`,
   ];
   for (const p of paths) {
