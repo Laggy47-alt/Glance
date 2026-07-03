@@ -26,6 +26,8 @@ const Users = lazy(() => import("./pages/Users.tsx"));
 const Customization = lazy(() => import("./pages/Customization.tsx"));
 const NvrStatus = lazy(() => import("./pages/NvrStatus.tsx"));
 const CameraStatus = lazy(() => import("./pages/CameraStatus.tsx"));
+const UnifiCameraStatus = lazy(() => import("./pages/UnifiCameraStatus.tsx"));
+const UnifiLive = lazy(() => import("./pages/UnifiLive.tsx"));
 const DailyReports = lazy(() => import("./pages/DailyReports.tsx"));
 const WhatsAppAlerts = lazy(() => import("./pages/WhatsAppAlerts.tsx"));
 const Customer = lazy(() => import("./pages/Customer.tsx"));
@@ -91,6 +93,8 @@ const App = () => (
                 <Route path="/cameras" element={protect(<Cameras />, true)} />
                 <Route path="/nvr-status" element={protect(<NvrStatus />)} />
                 <Route path="/camera-status" element={protect(<CameraStatus />)} />
+                <Route path="/unifi-status" element={protect(<UnifiCameraStatus />)} />
+                <Route path="/unifi-live" element={protect(<UnifiLive />)} />
                 <Route path="/wall" element={protect(<Wall />)} />
                 <Route path="/media" element={protect(<Media />)} />
                 <Route path="/auto-read" element={protect(<AutoRead />, true)} />
