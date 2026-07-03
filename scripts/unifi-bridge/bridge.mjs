@@ -101,6 +101,7 @@ async function runInstance(inst) {
   let csrf = "";
   let lastUpdateId = "";
   let cameras = new Map(); // id → name
+  let cameraDetails = new Map(); // id → full camera object from Protect
   let recentEvents = new Map(); // Protect event id → compact state; never stores base64 media
   let postedInitialEvents = new Set();
   let visualRetryScheduled = new Set();
@@ -178,8 +179,46 @@ async function runInstance(inst) {
     if (!r.ok) throw new Error(`cameras HTTP ${r.status}`);
     const arr = await r.json();
     cameras = new Map(arr.map((c) => [c.id, c.name]));
+    cameraDetails = new Map(arr.map((c) => [c.id, c]));
+    // Refresh registry entry every load so /snapshot always has fresh auth.
+    REGISTRY.set(inst.id, { inst, base, dispatcher, cameraDetails, getAuth: () => ({ cookie, csrf }) });
     log("info", inst.id, `loaded ${cameras.size} cameras`);
     await postCameraInventory(arr.map((c) => ({ id: c.id, name: c.name })));
+  }
+
+  async function pollStatus() {
+    try {
+      const r = await fetch(`${base}/proxy/protect/api/cameras`, {
+        headers: { Cookie: cookie, "x-csrf-token": csrf },
+        dispatcher,
+      });
+      if (!r.ok) { log("debug", inst.id, `status HTTP ${r.status}`); return; }
+      const arr = await r.json();
+      cameraDetails = new Map(arr.map((c) => [c.id, c]));
+      const payload = {
+        instance_id: inst.id,
+        cameras: arr.map((c) => ({
+          id: c.id,
+          name: c.name,
+          state: c.state,
+          isConnected: c.isConnected === true || String(c.state ?? "").toUpperCase() === "CONNECTED",
+          lastSeenMs: typeof c.lastSeen === "number" ? c.lastSeen : null,
+        })),
+      };
+      const res = await fetch(STATUS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Webhook-Secret": String(inst.webhook_secret),
+          apikey: GLANCE_ANON_KEY,
+          Authorization: `Bearer ${GLANCE_ANON_KEY}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) log("info", inst.id, `status POST ${res.status}`);
+    } catch (e) {
+      log("debug", inst.id, "status error", e?.message ?? e);
+    }
   }
 
   async function postCameraInventory(cameraList) {
