@@ -616,6 +616,9 @@ async function runInstance(inst) {
     await boot();
     // Periodic camera refresh (in case names change)
     setInterval(() => { loadCameras().catch(() => {}); }, 10 * 60 * 1000);
+    // Periodic camera status push (online / offline / last seen)
+    pollStatus().catch(() => {});
+    setInterval(() => { pollStatus().catch(() => {}); }, STATUS_INTERVAL_MS);
   } catch (e) {
     log("info", inst.id, "boot failed:", e?.message ?? e);
     scheduleReconnect();
