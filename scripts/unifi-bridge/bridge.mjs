@@ -804,7 +804,48 @@ if (HTTP_PORT > 0) {
 
       if (url.pathname === "/health") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, instances: [...REGISTRY.keys()] }));
+        res.end(JSON.stringify({ ok: true, instances: [...REGISTRY.keys()], hls_sessions: [...HLS_SESSIONS.keys()] }));
+        return;
+      }
+
+      // ── HLS live video (fluent) ──
+      // GET /hls/:inst/:cam/index.m3u8?token=…
+      // GET /hls/:inst/:cam/:file
+      const hlsM = url.pathname.match(/^\/hls\/([^/]+)\/([^/]+)\/([^/]+)$/);
+      if (hlsM) {
+        const [, instanceId, cameraId, file] = hlsM;
+        const token = url.searchParams.get("token") ?? "";
+        if (LIVE_TOKEN && token !== LIVE_TOKEN) { res.writeHead(401); res.end("unauthorized"); return; }
+        if (!HLS_ENABLED) { res.writeHead(503); res.end("hls disabled"); return; }
+        const entry = REGISTRY.get(instanceId);
+        if (!entry) { res.writeHead(503); res.end("instance not ready"); return; }
+        if (!/^[A-Za-z0-9._-]+$/.test(file)) { res.writeHead(400); res.end("bad file"); return; }
+        try {
+          const session = await ensureHlsSession(entry, cameraId);
+          session.lastAccess = Date.now();
+          const filePath = path.join(session.dir, file);
+          if (!filePath.startsWith(session.dir)) { res.writeHead(400); res.end("bad path"); return; }
+          // For the playlist, wait briefly for ffmpeg to produce it after cold start.
+          if (file.endsWith(".m3u8")) {
+            const deadline = Date.now() + 8000;
+            while (!fs.existsSync(filePath) && Date.now() < deadline) {
+              await delay(150);
+            }
+          }
+          if (!fs.existsSync(filePath)) { res.writeHead(404); res.end("not ready"); return; }
+          const ct = file.endsWith(".m3u8")
+            ? "application/vnd.apple.mpegurl"
+            : file.endsWith(".m4s") || file.endsWith(".mp4")
+              ? "video/mp4"
+              : file.endsWith(".ts")
+                ? "video/mp2t"
+                : "application/octet-stream";
+          res.writeHead(200, { "Content-Type": ct, "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
+          fs.createReadStream(filePath).pipe(res);
+        } catch (e) {
+          log("info", instanceId, "hls error", e?.message ?? e);
+          try { res.writeHead(502); res.end(String(e?.message ?? e)); } catch {}
+        }
         return;
       }
 
