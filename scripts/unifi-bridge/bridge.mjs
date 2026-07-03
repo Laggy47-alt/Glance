@@ -56,7 +56,7 @@ const STATUS_INTERVAL_MS = envNumber("STATUS_INTERVAL_SEC", 30, 5, 600) * 1000;
 // Optional HTTP server for live snapshot streaming (MJPEG proxy).
 const HTTP_PORT = envNumber("HTTP_PORT", 0, 0, 65535);
 const LIVE_TOKEN = process.env.BRIDGE_LIVE_TOKEN ?? "";
-const LIVE_FPS = envNumber("LIVE_FPS", 2, 1, 10);
+const LIVE_FPS = envNumber("LIVE_FPS", 6, 1, 15);
 // Registry so the HTTP server can look up per-instance session state.
 const REGISTRY = new Map();
 
