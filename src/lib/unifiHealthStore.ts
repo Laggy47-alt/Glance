@@ -1,4 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+// Supabase generated types don't yet include these self-hosted tables.
+const db = supabase as unknown as {
+  from: (t: string) => any;
+};
 import type { UnifiCameraStatus, UnifiOfflineAlertSettings } from "@/lib/webhookStore";
 
 export async function fetchUnifiCameraStatus(instanceId?: string): Promise<UnifiCameraStatus[]> {
