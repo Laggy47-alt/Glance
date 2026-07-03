@@ -19,6 +19,7 @@ export default function UnifiLive() {
   const [running, setRunning] = useState(false); // on-demand
   const [siteName, setSiteName] = useState<string | null>(null);
   const [siteCameraIds, setSiteCameraIds] = useState<Set<string> | null>(null);
+  const [expanded, setExpanded] = useState<UnifiCameraStatus | null>(null);
 
   const instanceId = params.get("instance") || store.unifis[0]?.id || "";
   const siteId = params.get("site");
