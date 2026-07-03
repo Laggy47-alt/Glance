@@ -64,6 +64,7 @@
         "@tailwindcss/typography": "^0.5.16",
         "@testing-library/jest-dom": "^6.6.0",
         "@testing-library/react": "^16.0.0",
+        "@types/hls.js": "^1.0.0",
         "@types/node": "^22.16.5",
         "@types/react": "^18.3.23",
         "@types/react-dom": "^18.3.7",
@@ -432,6 +433,8 @@
     "@types/estree-jsx": ["@types/estree-jsx@1.0.5", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@types/estree-jsx/-/estree-jsx-1.0.5.tgz", { "dependencies": { "@types/estree": "*" } }, "sha512-52CcUVNFyfb1A2ALocQw/Dd1BQFNmSdkuC3BkZ6iqhdMfQz7JWOFRuJFloOzjk+6WijU56m9oKXFAXc7o3Towg=="],
 
     "@types/hast": ["@types/hast@3.0.4", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@types/hast/-/hast-3.0.4.tgz", { "dependencies": { "@types/unist": "*" } }, "sha512-WPs+bbQw5aCj+x6laNGWLH3wviHtoCv/P3+otBhbOhJgG8qtpdAMlTCxLtsTWA7LH1Oh/bFCHsBn0TPS5m30EQ=="],
+
+    "@types/hls.js": ["@types/hls.js@1.0.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@types/hls.js/-/hls.js-1.0.0.tgz", { "dependencies": { "hls.js": "*" } }, "sha512-EGY2QJefX+Z9XH4PAxI7RFoNqBlQEk16UpYR3kbr82CIgMX5SlMe0PjFdFV0JytRhyVPQCiwSyONuI6S1KdSag=="],
 
     "@types/json-schema": ["@types/json-schema@7.0.15", "", {}, "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA=="],
 

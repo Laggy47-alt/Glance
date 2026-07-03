@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { UnifiHlsPlayer } from "@/components/UnifiHlsPlayer";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { fetchUnifiCameraStatus } from "@/lib/unifiHealthStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,7 +98,7 @@ export default function UnifiLive() {
           <div>
             <h1 className="text-xl font-semibold">Live view — {inst.name}</h1>
             <p className="text-xs text-muted-foreground">
-              On-demand MJPEG snapshot stream. Filter: <span className="font-medium">{filterLabel}</span>.
+              Fluid HLS video (falls back to MJPEG snapshots). Filter: <span className="font-medium">{filterLabel}</span>.
               {(siteId || cameraFilter) && (
                 <button type="button" onClick={clearFilter} className="ml-2 underline text-primary">
                   clear filter
@@ -146,9 +147,9 @@ export default function UnifiLive() {
               <Card className="p-4 text-xs text-muted-foreground col-span-full">No online cameras match this filter.</Card>
             )}
             {visible.map((c) => {
-              const src = running
-                ? `${bridge}/stream/${inst.id}/${c.camera_id}?token=${encodeURIComponent(token)}&w=640&fps=6`
-                : "";
+              const q = `token=${encodeURIComponent(token)}`;
+              const hlsUrl = `${bridge}/hls/${inst.id}/${c.camera_id}/index.m3u8?${q}`;
+              const mjpegUrl = `${bridge}/stream/${inst.id}/${c.camera_id}?${q}&w=640&fps=6`;
               return (
                 <Card
                   key={c.camera_id}
@@ -157,7 +158,12 @@ export default function UnifiLive() {
                 >
                   <div className="aspect-video bg-black grid place-items-center">
                     {running ? (
-                      <img src={src} alt={c.name ?? c.camera_id} className="w-full h-full object-contain" />
+                      <UnifiHlsPlayer
+                        hlsUrl={hlsUrl}
+                        mjpegUrl={mjpegUrl}
+                        alt={c.name ?? c.camera_id}
+                        className="w-full h-full object-contain"
+                      />
                     ) : (
                       <span className="text-xs text-muted-foreground">Idle — press Start live</span>
                     )}
@@ -177,8 +183,9 @@ export default function UnifiLive() {
             <DialogTitle className="sr-only">{expanded?.name ?? expanded?.camera_id ?? "Camera"}</DialogTitle>
             {expanded && running && (
               <div className="relative">
-                <img
-                  src={`${bridge}/stream/${inst.id}/${expanded.camera_id}?token=${encodeURIComponent(token)}&w=1280&fps=8&t=big`}
+                <UnifiHlsPlayer
+                  hlsUrl={`${bridge}/hls/${inst.id}/${expanded.camera_id}/index.m3u8?token=${encodeURIComponent(token)}`}
+                  mjpegUrl={`${bridge}/stream/${inst.id}/${expanded.camera_id}?token=${encodeURIComponent(token)}&w=1280&fps=8`}
                   alt={expanded.name ?? expanded.camera_id}
                   className="w-full max-h-[85vh] object-contain bg-black"
                 />

@@ -34,6 +34,9 @@
  */
 
 import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { spawn } from "node:child_process";
 import http from "node:http";
 import zlib from "node:zlib";
 import { Buffer } from "node:buffer";
@@ -57,6 +60,20 @@ const STATUS_INTERVAL_MS = envNumber("STATUS_INTERVAL_SEC", 30, 5, 600) * 1000;
 const HTTP_PORT = envNumber("HTTP_PORT", 0, 0, 65535);
 const LIVE_TOKEN = process.env.BRIDGE_LIVE_TOKEN ?? "";
 const LIVE_FPS = envNumber("LIVE_FPS", 6, 1, 15);
+
+// Live HLS (fluid video via ffmpeg + RTSP(S) from Protect).
+const HLS_ENABLED = String(process.env.HLS_ENABLED ?? "true").toLowerCase() !== "false";
+const HLS_DIR = process.env.HLS_DIR || path.join(os.tmpdir(), "glance-hls");
+const HLS_IDLE_SEC = envNumber("HLS_IDLE_SEC", 25, 5, 300);
+const HLS_SEG_SEC = envNumber("HLS_SEG_SEC", 1, 1, 6);
+const HLS_LIST_SIZE = envNumber("HLS_LIST_SIZE", 6, 3, 20);
+const RTSP_SCHEME = (process.env.RTSP_SCHEME || "rtsps").toLowerCase(); // rtsps | rtsp
+const RTSP_PORT = envNumber("RTSP_PORT", RTSP_SCHEME === "rtsps" ? 7441 : 7447, 1, 65535);
+const FFMPEG_BIN = process.env.FFMPEG_BIN || "ffmpeg";
+const HLS_TRANSCODE = String(process.env.HLS_TRANSCODE ?? "false").toLowerCase() === "true";
+// Sessions: `${instanceId}/${cameraId}` → { proc, dir, ready, lastAccess, startedAt }
+const HLS_SESSIONS = new Map();
+
 // Registry so the HTTP server can look up per-instance session state.
 const REGISTRY = new Map();
 
@@ -787,7 +804,48 @@ if (HTTP_PORT > 0) {
 
       if (url.pathname === "/health") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, instances: [...REGISTRY.keys()] }));
+        res.end(JSON.stringify({ ok: true, instances: [...REGISTRY.keys()], hls_sessions: [...HLS_SESSIONS.keys()] }));
+        return;
+      }
+
+      // ── HLS live video (fluent) ──
+      // GET /hls/:inst/:cam/index.m3u8?token=…
+      // GET /hls/:inst/:cam/:file
+      const hlsM = url.pathname.match(/^\/hls\/([^/]+)\/([^/]+)\/([^/]+)$/);
+      if (hlsM) {
+        const [, instanceId, cameraId, file] = hlsM;
+        const token = url.searchParams.get("token") ?? "";
+        if (LIVE_TOKEN && token !== LIVE_TOKEN) { res.writeHead(401); res.end("unauthorized"); return; }
+        if (!HLS_ENABLED) { res.writeHead(503); res.end("hls disabled"); return; }
+        const entry = REGISTRY.get(instanceId);
+        if (!entry) { res.writeHead(503); res.end("instance not ready"); return; }
+        if (!/^[A-Za-z0-9._-]+$/.test(file)) { res.writeHead(400); res.end("bad file"); return; }
+        try {
+          const session = await ensureHlsSession(entry, cameraId);
+          session.lastAccess = Date.now();
+          const filePath = path.join(session.dir, file);
+          if (!filePath.startsWith(session.dir)) { res.writeHead(400); res.end("bad path"); return; }
+          // For the playlist, wait briefly for ffmpeg to produce it after cold start.
+          if (file.endsWith(".m3u8")) {
+            const deadline = Date.now() + 8000;
+            while (!fs.existsSync(filePath) && Date.now() < deadline) {
+              await delay(150);
+            }
+          }
+          if (!fs.existsSync(filePath)) { res.writeHead(404); res.end("not ready"); return; }
+          const ct = file.endsWith(".m3u8")
+            ? "application/vnd.apple.mpegurl"
+            : file.endsWith(".m4s") || file.endsWith(".mp4")
+              ? "video/mp4"
+              : file.endsWith(".ts")
+                ? "video/mp2t"
+                : "application/octet-stream";
+          res.writeHead(200, { "Content-Type": ct, "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
+          fs.createReadStream(filePath).pipe(res);
+        } catch (e) {
+          log("info", instanceId, "hls error", e?.message ?? e);
+          try { res.writeHead(502); res.end(String(e?.message ?? e)); } catch {}
+        }
         return;
       }
 
@@ -869,3 +927,92 @@ async function grabSnapshot(entry, cameraId, width = 1280) {
   }
   return null;
 }
+
+// ─────────────────────────── HLS via ffmpeg ───────────────────────────
+//
+// Spawns one ffmpeg per (instance, camera) that pulls the Protect RTSP(S)
+// stream and writes LL-HLS fMP4 segments into HLS_DIR/<inst>/<cam>/. The
+// HTTP server serves index.m3u8 + segments to hls.js in the browser.
+//
+// Codec-copy (default) has essentially zero CPU cost. Set HLS_TRANSCODE=true
+// to re-encode to H.264 baseline for players that can't handle the source.
+
+function pickRtspAlias(cameraDetails, cameraId) {
+  const cam = cameraDetails?.get?.(cameraId);
+  const channels = Array.isArray(cam?.channels) ? cam.channels : [];
+  const enabled = channels.filter((c) => c && c.isRtspEnabled && c.rtspAlias);
+  if (!enabled.length) return null;
+  // Prefer the highest-resolution enabled channel (usually the "High" stream).
+  enabled.sort((a, b) => (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0));
+  return enabled[0].rtspAlias;
+}
+
+function hlsKey(instanceId, cameraId) { return `${instanceId}/${cameraId}`; }
+
+async function ensureHlsSession(entry, cameraId) {
+  const { inst, cameraDetails } = entry;
+  const key = hlsKey(inst.id, cameraId);
+  const existing = HLS_SESSIONS.get(key);
+  if (existing && existing.proc && !existing.proc.killed) {
+    existing.lastAccess = Date.now();
+    return existing;
+  }
+  const alias = pickRtspAlias(cameraDetails, cameraId);
+  if (!alias) throw new Error("no rtsp channel enabled on this camera (enable RTSP in Protect → camera → advanced)");
+
+  const dir = path.join(HLS_DIR, inst.id, cameraId);
+  fs.mkdirSync(dir, { recursive: true });
+  // Clean any stale segments/playlists.
+  for (const f of fs.readdirSync(dir)) { try { fs.unlinkSync(path.join(dir, f)); } catch {} }
+
+  const rtspUrl = `${RTSP_SCHEME}://${inst.host}:${RTSP_PORT}/${alias}${RTSP_SCHEME === "rtsps" ? "?enableSrtp" : ""}`;
+  const codecArgs = HLS_TRANSCODE
+    ? ["-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-profile:v", "baseline", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k"]
+    : ["-c", "copy"];
+  const args = [
+    "-hide_banner", "-loglevel", "warning",
+    "-fflags", "nobuffer+genpts", "-flags", "low_delay",
+    "-rtsp_transport", "tcp",
+    "-tls_verify", "0",
+    "-i", rtspUrl,
+    ...codecArgs,
+    "-f", "hls",
+    "-hls_time", String(HLS_SEG_SEC),
+    "-hls_list_size", String(HLS_LIST_SIZE),
+    "-hls_flags", "delete_segments+independent_segments+omit_endlist+program_date_time",
+    "-hls_segment_type", "fmp4",
+    "-hls_fmp4_init_filename", "init.mp4",
+    "-hls_segment_filename", path.join(dir, "seg_%05d.m4s"),
+    path.join(dir, "index.m3u8"),
+  ];
+  log("info", inst.id, `hls start ${cameraId} ← ${RTSP_SCHEME}://${inst.host}:${RTSP_PORT}/${alias}`);
+  const proc = spawn(FFMPEG_BIN, args, { stdio: ["ignore", "ignore", "pipe"] });
+  const session = { proc, dir, lastAccess: Date.now(), startedAt: Date.now(), alias, instanceId: inst.id, cameraId };
+  HLS_SESSIONS.set(key, session);
+  proc.stderr.on("data", (b) => log("debug", inst.id, `ffmpeg[${cameraId}]`, b.toString().trim()));
+  proc.on("exit", (code, sig) => {
+    log("info", inst.id, `hls exit ${cameraId} code=${code} sig=${sig}`);
+    if (HLS_SESSIONS.get(key) === session) HLS_SESSIONS.delete(key);
+    // Best-effort cleanup so the next start begins with a fresh playlist.
+    try { for (const f of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, f)); } catch {}
+  });
+  return session;
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - HLS_IDLE_SEC * 1000;
+  for (const [key, s] of HLS_SESSIONS) {
+    if (s.lastAccess < cutoff) {
+      log("info", s.instanceId, `hls idle stop ${s.cameraId} (${Math.round((Date.now() - s.startedAt) / 1000)}s)`);
+      try { s.proc.kill("SIGTERM"); } catch {}
+      HLS_SESSIONS.delete(key);
+    }
+  }
+}, 5000).unref?.();
+
+function shutdownAllHls() {
+  for (const s of HLS_SESSIONS.values()) { try { s.proc.kill("SIGTERM"); } catch {} }
+  HLS_SESSIONS.clear();
+}
+process.on("SIGTERM", shutdownAllHls);
+process.on("SIGINT", () => { shutdownAllHls(); process.exit(0); });
