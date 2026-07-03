@@ -64,6 +64,13 @@ export function AuthGate({ children, adminOnly = false }: { children: ReactNode;
     return <Navigate to={isCustomer ? "/customer" : "/wall"} replace />;
   }
 
+  // ABC org users should not access the UniFi status/live pages.
+  const activeOrgSlug = (activeOrg?.slug ?? "").toLowerCase();
+  const abcOnlyBlockedPaths = ["/unifi-status", "/unifi-live"];
+  if (activeOrgSlug === "abc-2026" && abcOnlyBlockedPaths.includes(location.pathname)) {
+    return <Navigate to="/" replace />;
+  }
+
   return <>{children}</>;
 }
 
