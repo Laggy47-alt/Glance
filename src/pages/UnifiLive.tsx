@@ -98,7 +98,7 @@ export default function UnifiLive() {
           <div>
             <h1 className="text-xl font-semibold">Live view — {inst.name}</h1>
             <p className="text-xs text-muted-foreground">
-              On-demand MJPEG snapshot stream. Filter: <span className="font-medium">{filterLabel}</span>.
+              Fluid HLS video (falls back to MJPEG snapshots). Filter: <span className="font-medium">{filterLabel}</span>.
               {(siteId || cameraFilter) && (
                 <button type="button" onClick={clearFilter} className="ml-2 underline text-primary">
                   clear filter
