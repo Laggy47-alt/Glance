@@ -119,11 +119,13 @@ curl -X POST \
 
 ## 4. Machine C — Update and restart the bridge
 
+The bridge source is in `/Glance` on this box, but the service runs from `/opt/glance-unifi-bridge`.
+
 ```bash
-cd /home/charl/functions/Glance   # or wherever the repo lives on this box
+cd /Glance
 git pull
 
-cd scripts/unifi-bridge
+cd /Glance/scripts/unifi-bridge
 npm install --omit=dev            # no new deps but safe
 ```
 
@@ -149,8 +151,8 @@ LIVE_FPS=2
 Then:
 
 ```bash
-# Copy fresh bridge.mjs to the deployment dir if you keep it separate:
-sudo cp scripts/unifi-bridge/bridge.mjs /opt/glance-unifi-bridge/bridge.mjs
+# Copy fresh bridge.mjs to the deployment dir:
+sudo cp /Glance/scripts/unifi-bridge/bridge.mjs /opt/glance-unifi-bridge/bridge.mjs
 sudo chown unifi-bridge:unifi-bridge /opt/glance-unifi-bridge/bridge.mjs
 
 sudo systemctl restart unifi-bridge
