@@ -148,6 +148,21 @@ export function UnifiSection() {
                 </div>
               </div>
               <div className="space-y-1.5">
+                <Label className="text-xs">Bridge public URL (for live view)</Label>
+                <Input value={bridgePublicUrl} onChange={(e) => setBridgePublicUrl(e.target.value)}
+                       placeholder="https://bridge.example.com:8787"
+                       className="bg-secondary border-border font-mono" />
+                <p className="text-[10px] text-muted-foreground">
+                  Reachable from your browser. Points at the bridge's HTTP_PORT. Leave blank to disable live view.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Live view token</Label>
+                <Input value={liveToken} onChange={(e) => setLiveToken(e.target.value)}
+                       placeholder="matches BRIDGE_LIVE_TOKEN"
+                       className="bg-secondary border-border font-mono" />
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs">Color</Label>
                 <div className="flex gap-2 flex-wrap">
                   {PALETTE.map((c) => (
@@ -284,6 +299,10 @@ export function UnifiSection() {
                       </div>
 
                       <div className="flex justify-end gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" className="gap-1.5"
+                                onClick={() => setOfflineAlertsFor(u)}>
+                          <BellOff className="h-3.5 w-3.5" /> Offline alerts
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => openEdit(u)}>Edit</Button>
                         <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={async () => {
                           if (!confirm(`Delete "${u.name}"? Its paired webhook source, events and snapshots will be removed.`)) return;
@@ -302,6 +321,11 @@ export function UnifiSection() {
         </div>
       )}
       <UnifiAlertScheduleDialog open={scheduleOpen} onOpenChange={setScheduleOpen} />
+      <UnifiOfflineAlertsDialog
+        instance={offlineAlertsFor}
+        open={!!offlineAlertsFor}
+        onOpenChange={(o) => { if (!o) setOfflineAlertsFor(null); }}
+      />
     </div>
   );
 }
