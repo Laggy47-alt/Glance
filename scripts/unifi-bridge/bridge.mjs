@@ -60,6 +60,20 @@ const STATUS_INTERVAL_MS = envNumber("STATUS_INTERVAL_SEC", 30, 5, 600) * 1000;
 const HTTP_PORT = envNumber("HTTP_PORT", 0, 0, 65535);
 const LIVE_TOKEN = process.env.BRIDGE_LIVE_TOKEN ?? "";
 const LIVE_FPS = envNumber("LIVE_FPS", 6, 1, 15);
+
+// Live HLS (fluid video via ffmpeg + RTSP(S) from Protect).
+const HLS_ENABLED = String(process.env.HLS_ENABLED ?? "true").toLowerCase() !== "false";
+const HLS_DIR = process.env.HLS_DIR || path.join(os.tmpdir(), "glance-hls");
+const HLS_IDLE_SEC = envNumber("HLS_IDLE_SEC", 25, 5, 300);
+const HLS_SEG_SEC = envNumber("HLS_SEG_SEC", 1, 1, 6);
+const HLS_LIST_SIZE = envNumber("HLS_LIST_SIZE", 6, 3, 20);
+const RTSP_SCHEME = (process.env.RTSP_SCHEME || "rtsps").toLowerCase(); // rtsps | rtsp
+const RTSP_PORT = envNumber("RTSP_PORT", RTSP_SCHEME === "rtsps" ? 7441 : 7447, 1, 65535);
+const FFMPEG_BIN = process.env.FFMPEG_BIN || "ffmpeg";
+const HLS_TRANSCODE = String(process.env.HLS_TRANSCODE ?? "false").toLowerCase() === "true";
+// Sessions: `${instanceId}/${cameraId}` → { proc, dir, ready, lastAccess, startedAt }
+const HLS_SESSIONS = new Map();
+
 // Registry so the HTTP server can look up per-instance session state.
 const REGISTRY = new Map();
 
