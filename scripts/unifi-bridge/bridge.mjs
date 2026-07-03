@@ -927,3 +927,92 @@ async function grabSnapshot(entry, cameraId, width = 1280) {
   }
   return null;
 }
+
+// ─────────────────────────── HLS via ffmpeg ───────────────────────────
+//
+// Spawns one ffmpeg per (instance, camera) that pulls the Protect RTSP(S)
+// stream and writes LL-HLS fMP4 segments into HLS_DIR/<inst>/<cam>/. The
+// HTTP server serves index.m3u8 + segments to hls.js in the browser.
+//
+// Codec-copy (default) has essentially zero CPU cost. Set HLS_TRANSCODE=true
+// to re-encode to H.264 baseline for players that can't handle the source.
+
+function pickRtspAlias(cameraDetails, cameraId) {
+  const cam = cameraDetails?.get?.(cameraId);
+  const channels = Array.isArray(cam?.channels) ? cam.channels : [];
+  const enabled = channels.filter((c) => c && c.isRtspEnabled && c.rtspAlias);
+  if (!enabled.length) return null;
+  // Prefer the highest-resolution enabled channel (usually the "High" stream).
+  enabled.sort((a, b) => (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0));
+  return enabled[0].rtspAlias;
+}
+
+function hlsKey(instanceId, cameraId) { return `${instanceId}/${cameraId}`; }
+
+async function ensureHlsSession(entry, cameraId) {
+  const { inst, cameraDetails } = entry;
+  const key = hlsKey(inst.id, cameraId);
+  const existing = HLS_SESSIONS.get(key);
+  if (existing && existing.proc && !existing.proc.killed) {
+    existing.lastAccess = Date.now();
+    return existing;
+  }
+  const alias = pickRtspAlias(cameraDetails, cameraId);
+  if (!alias) throw new Error("no rtsp channel enabled on this camera (enable RTSP in Protect → camera → advanced)");
+
+  const dir = path.join(HLS_DIR, inst.id, cameraId);
+  fs.mkdirSync(dir, { recursive: true });
+  // Clean any stale segments/playlists.
+  for (const f of fs.readdirSync(dir)) { try { fs.unlinkSync(path.join(dir, f)); } catch {} }
+
+  const rtspUrl = `${RTSP_SCHEME}://${inst.host}:${RTSP_PORT}/${alias}${RTSP_SCHEME === "rtsps" ? "?enableSrtp" : ""}`;
+  const codecArgs = HLS_TRANSCODE
+    ? ["-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-profile:v", "baseline", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k"]
+    : ["-c", "copy"];
+  const args = [
+    "-hide_banner", "-loglevel", "warning",
+    "-fflags", "nobuffer+genpts", "-flags", "low_delay",
+    "-rtsp_transport", "tcp",
+    "-tls_verify", "0",
+    "-i", rtspUrl,
+    ...codecArgs,
+    "-f", "hls",
+    "-hls_time", String(HLS_SEG_SEC),
+    "-hls_list_size", String(HLS_LIST_SIZE),
+    "-hls_flags", "delete_segments+independent_segments+omit_endlist+program_date_time",
+    "-hls_segment_type", "fmp4",
+    "-hls_fmp4_init_filename", "init.mp4",
+    "-hls_segment_filename", path.join(dir, "seg_%05d.m4s"),
+    path.join(dir, "index.m3u8"),
+  ];
+  log("info", inst.id, `hls start ${cameraId} ← ${RTSP_SCHEME}://${inst.host}:${RTSP_PORT}/${alias}`);
+  const proc = spawn(FFMPEG_BIN, args, { stdio: ["ignore", "ignore", "pipe"] });
+  const session = { proc, dir, lastAccess: Date.now(), startedAt: Date.now(), alias, instanceId: inst.id, cameraId };
+  HLS_SESSIONS.set(key, session);
+  proc.stderr.on("data", (b) => log("debug", inst.id, `ffmpeg[${cameraId}]`, b.toString().trim()));
+  proc.on("exit", (code, sig) => {
+    log("info", inst.id, `hls exit ${cameraId} code=${code} sig=${sig}`);
+    if (HLS_SESSIONS.get(key) === session) HLS_SESSIONS.delete(key);
+    // Best-effort cleanup so the next start begins with a fresh playlist.
+    try { for (const f of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, f)); } catch {}
+  });
+  return session;
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - HLS_IDLE_SEC * 1000;
+  for (const [key, s] of HLS_SESSIONS) {
+    if (s.lastAccess < cutoff) {
+      log("info", s.instanceId, `hls idle stop ${s.cameraId} (${Math.round((Date.now() - s.startedAt) / 1000)}s)`);
+      try { s.proc.kill("SIGTERM"); } catch {}
+      HLS_SESSIONS.delete(key);
+    }
+  }
+}, 5000).unref?.();
+
+function shutdownAllHls() {
+  for (const s of HLS_SESSIONS.values()) { try { s.proc.kill("SIGTERM"); } catch {} }
+  HLS_SESSIONS.clear();
+}
+process.on("SIGTERM", shutdownAllHls);
+process.on("SIGINT", () => { shutdownAllHls(); process.exit(0); });
