@@ -147,7 +147,7 @@ export default function UnifiLive() {
             )}
             {visible.map((c) => {
               const src = running
-                ? `${bridge}/stream/${inst.id}/${c.camera_id}?token=${encodeURIComponent(token)}`
+                ? `${bridge}/stream/${inst.id}/${c.camera_id}?token=${encodeURIComponent(token)}&w=640&fps=6`
                 : "";
               return (
                 <Card
