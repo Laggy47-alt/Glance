@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { fetchUnifiCameraStatus } from "@/lib/unifiHealthStore";
 import { supabase } from "@/integrations/supabase/client";
