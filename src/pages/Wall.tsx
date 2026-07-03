@@ -284,6 +284,42 @@ const Wall = () => {
     return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, [activeOrg?.id]);
 
+  // UniFi camera → site mapping so alerts can deep-link to a site-scoped live view.
+  const [unifiSiteByCam, setUnifiSiteByCam] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const dbx = supabase as unknown as { from: (t: string) => any };
+      const { data } = await dbx.from("unifi_camera_sites").select("unifi_instance_id,camera_id,site_id");
+      if (cancelled) return;
+      const m = new Map<string, string>();
+      for (const r of (data ?? []) as Array<{ unifi_instance_id: string; camera_id: string; site_id: string | null }>) {
+        if (r.site_id) m.set(`${r.unifi_instance_id}:${r.camera_id}`, r.site_id);
+      }
+      setUnifiSiteByCam(m);
+    };
+    void load();
+    const dbx = supabase as unknown as { channel: typeof supabase.channel };
+    const ch = dbx.channel("wall-unifi-sites")
+      .on("postgres_changes" as never, { event: "*", schema: "public", table: "unifi_camera_sites" } as never, () => void load())
+      .subscribe();
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
+  }, []);
+
+  const unifiLiveUrlFor = (a: Alert): string | null => {
+    const sourceId = a.event?.source_id ?? a.clip?.source_id ?? a.snapshot?.source_id ?? null;
+    const instanceId = a.clip?.instance_id ?? a.snapshot?.instance_id ?? null;
+    const inst = store.unifis.find(
+      (u) => (instanceId && u.id === instanceId) || (sourceId && u.source_id === sourceId),
+    );
+    if (!inst || !a.camera) return null;
+    const siteId = unifiSiteByCam.get(`${inst.id}:${a.camera}`);
+    const qs = siteId
+      ? `instance=${inst.id}&site=${siteId}`
+      : `instance=${inst.id}&camera=${encodeURIComponent(a.camera)}`;
+    return `/unifi-live?${qs}`;
+  };
+
   const isCameraDisarmed = (source_id?: string | null, instance_id?: string | null, camera?: string | null) => {
     if (!camera) return false;
     const inst = store.frigates.find((f) =>
