@@ -765,3 +765,95 @@ function log(level, id, ...rest) {
   const ts = new Date().toISOString();
   console.log(`${ts} [${id}]`, ...rest);
 }
+
+// ─────────────── Live view HTTP server (MJPEG snapshot proxy) ───────────────
+//
+// Enable by setting HTTP_PORT in .env. Cameras are served as an animated
+// multipart/x-mixed-replace stream so a plain <img src="..."> tag renders live
+// snapshots at LIVE_FPS. Auth is via ?token= matching BRIDGE_LIVE_TOKEN.
+//
+//   GET /health
+//   GET /snapshot/:instanceId/:cameraId?token=…
+//   GET /stream/:instanceId/:cameraId?token=…   (multipart JPEG)
+//
+if (HTTP_PORT > 0) {
+  const server = http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      // Very permissive CORS — this is behind your LAN / reverse proxy anyway.
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
+      if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+
+      if (url.pathname === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, instances: [...REGISTRY.keys()] }));
+        return;
+      }
+
+      const m = url.pathname.match(/^\/(snapshot|stream)\/([^/]+)\/([^/]+)$/);
+      if (!m) { res.writeHead(404); res.end("not found"); return; }
+      const [, kind, instanceId, cameraId] = m;
+      const token = url.searchParams.get("token") ?? "";
+      if (LIVE_TOKEN && token !== LIVE_TOKEN) { res.writeHead(401); res.end("unauthorized"); return; }
+
+      const entry = REGISTRY.get(instanceId);
+      if (!entry) { res.writeHead(503); res.end("instance not ready"); return; }
+
+      if (kind === "snapshot") {
+        const buf = await grabSnapshot(entry, cameraId);
+        if (!buf) { res.writeHead(502); res.end("snapshot failed"); return; }
+        res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-store" });
+        res.end(buf);
+        return;
+      }
+
+      // MJPEG stream
+      const boundary = "glancemjpeg";
+      res.writeHead(200, {
+        "Content-Type": `multipart/x-mixed-replace; boundary=${boundary}`,
+        "Cache-Control": "no-store",
+        Connection: "close",
+      });
+      let closed = false;
+      req.on("close", () => { closed = true; });
+      const interval = Math.max(100, Math.floor(1000 / LIVE_FPS));
+      while (!closed) {
+        const buf = await grabSnapshot(entry, cameraId);
+        if (buf) {
+          res.write(`--${boundary}\r\n`);
+          res.write(`Content-Type: image/jpeg\r\n`);
+          res.write(`Content-Length: ${buf.length}\r\n\r\n`);
+          res.write(buf);
+          res.write("\r\n");
+        }
+        await new Promise((r) => setTimeout(r, interval));
+      }
+      try { res.end(); } catch {}
+    } catch (e) {
+      try { res.writeHead(500); res.end(String(e?.message ?? e)); } catch {}
+    }
+  });
+  server.listen(HTTP_PORT, () => {
+    console.log(`[bridge] live HTTP server listening on :${HTTP_PORT}${LIVE_TOKEN ? " (token required)" : " (no token — set BRIDGE_LIVE_TOKEN!)"}`);
+  });
+}
+
+async function grabSnapshot(entry, cameraId) {
+  const { base, dispatcher, getAuth } = entry;
+  const { cookie, csrf } = getAuth();
+  const paths = [
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?force=true&w=1280&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?w=1280&ts=${Date.now()}`,
+    `/proxy/protect/api/cameras/${cameraId}/snapshot?ts=${Date.now()}`,
+  ];
+  for (const p of paths) {
+    try {
+      const r = await fetch(`${base}${p}`, { headers: { Cookie: cookie, "x-csrf-token": csrf }, dispatcher });
+      if (!r.ok) continue;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 500) return buf;
+    } catch {}
+  }
+  return null;
+}
