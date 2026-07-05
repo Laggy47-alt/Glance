@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { signInWithUsername } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,14 @@ const Login = () => {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as { state: { from?: string } | null };
+  const [searchParams] = useSearchParams();
+  // Same-origin relative ?next= takes precedence over router state so OAuth
+  // consent redirects survive the login round-trip.
+  const nextPath = useMemo(() => {
+    const raw = searchParams.get("next");
+    if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
+    return null;
+  }, [searchParams]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +62,7 @@ const Login = () => {
   }, []);
 
   if (!loading && session) {
-    return <Navigate to={location.state?.from ?? "/"} replace />;
+    return <Navigate to={nextPath ?? location.state?.from ?? "/"} replace />;
   }
 
   // Ask the backend which org(s) this username belongs to, then try each.
@@ -134,7 +142,7 @@ const Login = () => {
       setError(err.message);
       return;
     }
-    navigate(location.state?.from ?? "/", { replace: true });
+    navigate(nextPath ?? location.state?.from ?? "/", { replace: true });
   };
 
   return (

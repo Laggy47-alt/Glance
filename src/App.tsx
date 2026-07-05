@@ -41,6 +41,7 @@ const Offline = lazy(() => import("./pages/Offline.tsx"));
 const Terms = lazy(() => import("./pages/Terms.tsx"));
 const RefundPolicy = lazy(() => import("./pages/RefundPolicy.tsx"));
 const Privacy = lazy(() => import("./pages/Privacy.tsx"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent.tsx"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,6 +82,7 @@ const App = () => (
                 <Route path="/refund-policy" element={<RefundPolicy />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="/signup" element={<Navigate to="/login" replace />} />
                 <Route path="/pricing" element={<Navigate to="/login" replace />} />
                 <Route path="/billing" element={<Navigate to="/" replace />} />
