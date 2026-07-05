@@ -142,7 +142,7 @@ const Login = () => {
       setError(err.message);
       return;
     }
-    navigate(location.state?.from ?? "/", { replace: true });
+    navigate(nextPath ?? location.state?.from ?? "/", { replace: true });
   };
 
   return (
