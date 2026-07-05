@@ -62,7 +62,7 @@ const Login = () => {
   }, []);
 
   if (!loading && session) {
-    return <Navigate to={location.state?.from ?? "/"} replace />;
+    return <Navigate to={nextPath ?? location.state?.from ?? "/"} replace />;
   }
 
   // Ask the backend which org(s) this username belongs to, then try each.
