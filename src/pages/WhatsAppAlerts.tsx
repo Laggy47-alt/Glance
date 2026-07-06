@@ -111,6 +111,9 @@ const DEFAULTS: WAS = {
   daily_broadcast_time: "08:00",
   daily_broadcast_template:
     "Hey there! 👋😊\n\nI'm Glance, your friendly ABC CCTV sidekick! 🛡️🤖\n\nKeep an eye out for my updates — I'll ping you whenever something needs attention onsite. 🔔🔧\n\nNeed technical assistance? Just reply to this message and our team will be in touch! 👨‍💻🚀\n\nCheers for now! 🎉👍",
+  positive_alert_enabled: false,
+  positive_alert_group_jid: "",
+  positive_alert_cooldown_seconds: 60,
 };
 
 function RecipientList({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
