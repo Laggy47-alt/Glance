@@ -87,13 +87,15 @@ Deno.serve(async (req) => {
       const list = dueOffline.map((c) => `• ${c.name || c.camera_id}`).join("\n");
       const message = `🚨 UniFi *${inst.name}* — ${dueOffline.length} camera${dueOffline.length === 1 ? "" : "s"} offline (>${s.threshold_minutes} min):\n${list}`;
       const res = await sendWhatsApp(supabase, inst.organization_id, recipientValues, message);
-      if (!res.ok) errors.push(`${inst.name} offline: ${res.error}`);
-      else alertsSent += dueOffline.length;
-
-      await supabase.from("unifi_camera_status")
-        .update({ last_alert_sent_at: nowIso })
-        .eq("instance_id", inst.id)
-        .in("camera_id", dueOffline.map((c) => c.camera_id));
+      if (!res.ok) {
+        errors.push(`${inst.name} offline: ${res.error}`);
+      } else {
+        alertsSent += dueOffline.length;
+        await supabase.from("unifi_camera_status")
+          .update({ last_alert_sent_at: nowIso })
+          .eq("instance_id", inst.id)
+          .in("camera_id", dueOffline.map((c) => c.camera_id));
+      }
     }
 
     // RECOVERY alerts (also grouped)
@@ -101,13 +103,15 @@ Deno.serve(async (req) => {
       const list = dueRecovery.map((c) => `• ${c.name || c.camera_id}`).join("\n");
       const message = `✅ UniFi *${inst.name}* — ${dueRecovery.length} camera${dueRecovery.length === 1 ? "" : "s"} back online:\n${list}`;
       const res = await sendWhatsApp(supabase, inst.organization_id, recipientValues, message);
-      if (!res.ok) errors.push(`${inst.name} recovery: ${res.error}`);
-      else recoveriesSent += dueRecovery.length;
-
-      await supabase.from("unifi_camera_status")
-        .update({ last_recovery_sent_at: nowIso })
-        .eq("instance_id", inst.id)
-        .in("camera_id", dueRecovery.map((c) => c.camera_id));
+      if (!res.ok) {
+        errors.push(`${inst.name} recovery: ${res.error}`);
+      } else {
+        recoveriesSent += dueRecovery.length;
+        await supabase.from("unifi_camera_status")
+          .update({ last_recovery_sent_at: nowIso })
+          .eq("instance_id", inst.id)
+          .in("camera_id", dueRecovery.map((c) => c.camera_id));
+      }
     }
   }
 
