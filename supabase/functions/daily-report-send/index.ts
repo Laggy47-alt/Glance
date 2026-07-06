@@ -21,6 +21,8 @@ type Cfg = {
   enabled: boolean;
   cameras: string[];
   label: string | null;
+  send_times: string[];
+  last_sent_at: string | null;
 };
 
 type Instance = FrigateAuthRow & {
@@ -386,11 +388,48 @@ Deno.serve(async (req) => {
   const preview: boolean = !!body?.preview;
   const overrideRecipients: string[] | undefined = body?.recipients;
   const providedSnapshots: Array<{ name: string; url: string }> | undefined = body?.snapshots;
+  // Manual "send now" from UI always overrides schedule. Cron leaves this false.
+  const forceAll: boolean = !!body?.force;
+  // Window (minutes) around each scheduled HH:MM in which a cron tick counts as "on time".
+  // Set to match your cron interval. Defaults to 15 min.
+  const windowMinutes: number = Math.max(1, Number(body?.window_minutes) || 15);
 
   let q = supabase.from("daily_report_configs").select("*");
   if (onlyConfigId) q = q.eq("id", onlyConfigId); else q = q.eq("enabled", true);
   const { data: cfgs, error: cfgErr } = await q;
   if (cfgErr) return new Response(JSON.stringify({ error: cfgErr.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  // Filter by schedule when this is the cron path (no specific config, no force).
+  const now = new Date();
+  function isDueNow(cfg: Cfg): boolean {
+    const times: string[] = Array.isArray(cfg.send_times) && cfg.send_times.length ? cfg.send_times : ["08:00"];
+    // Compute current wall time in Africa/Johannesburg (SAST, UTC+2, no DST).
+    const sastMs = now.getTime() + 2 * 60 * 60 * 1000;
+    const sast = new Date(sastMs);
+    const curH = sast.getUTCHours();
+    const curM = sast.getUTCMinutes();
+    const curMinutes = curH * 60 + curM;
+    // SAST midnight for "today" in UTC epoch ms
+    const sastMidnightUtcMs = Date.UTC(sast.getUTCFullYear(), sast.getUTCMonth(), sast.getUTCDate()) - 2 * 60 * 60 * 1000;
+    for (const t of times) {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
+      if (!m) continue;
+      const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+      const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+      const slotMinutes = h * 60 + mm;
+      const diff = curMinutes - slotMinutes;
+      if (diff < 0 || diff > windowMinutes) continue;
+      // Was this slot already sent? slot time in UTC epoch ms
+      const slotUtcMs = sastMidnightUtcMs + slotMinutes * 60 * 1000;
+      const lastSentMs = cfg.last_sent_at ? new Date(cfg.last_sent_at).getTime() : 0;
+      if (lastSentMs >= slotUtcMs) continue;
+      return true;
+    }
+    return false;
+  }
+
+  const scheduled = (cfgs ?? []) as (Cfg & { organization_id: string })[];
+  const toRun = (onlyConfigId || forceAll || preview) ? scheduled : scheduled.filter(isDueNow);
 
   // Cache per-org SMTP settings
   const settingsCache = new Map<string, Settings>();
@@ -417,7 +456,7 @@ Deno.serve(async (req) => {
   }
 
   const results: any[] = [];
-  for (const cfg of (cfgs ?? []) as (Cfg & { organization_id: string })[]) {
+  for (const cfg of toRun) {
     const { data: inst } = await supabase.from("frigate_instances").select("id, name, base_url, api_key, auth_username, auth_password, auth_token_cache, auth_token_expires_at").eq("id", cfg.instance_id).maybeSingle();
     if (!inst) { results.push({ config_id: cfg.id, status: "skipped", error: "instance missing" }); continue; }
     const s = await getSettingsForOrg(cfg.organization_id);

@@ -72,6 +72,7 @@ type Cfg = {
   last_sent_at: string | null;
   cameras: string[];
   label: string | null;
+  send_times: string[];
 };
 
 type Settings = {
@@ -94,6 +95,20 @@ const PLACEHOLDERS = [
   "{{cameras_offline_count}}", "{{cameras_offline_list}}",
   "{{positive_incidents_count}}", "{{positive_incidents_list}}",
 ];
+
+function normalizeTimes(times: string[] | null | undefined): string[] {
+  const src = Array.isArray(times) && times.length ? times : ["08:00"];
+  const clean = new Set<string>();
+  for (const raw of src) {
+    const m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(raw));
+    if (!m) continue;
+    const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+    const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+    clean.add(`${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+  }
+  const arr = Array.from(clean).sort();
+  return arr.length ? arr : ["08:00"];
+}
 
 const DEFAULT_SUBJECT = "ABC Glance Status report— {{site_name}}";
 const DEFAULT_BODY = `Dear client,
@@ -125,15 +140,16 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   onDelete: () => void;
 }) {
   const instanceName = instance?.name ?? "(deleted NVR)";
-  const [local, setLocal] = useState<Cfg>(cfg);
+  const [local, setLocal] = useState<Cfg>(() => ({ ...cfg, send_times: normalizeTimes(cfg.send_times) }));
   const [newEmail, setNewEmail] = useState("");
+  const [newTime, setNewTime] = useState("");
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [availableCameras, setAvailableCameras] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => { setLocal(cfg); }, [cfg.id]);
+  useEffect(() => { setLocal({ ...cfg, send_times: normalizeTimes(cfg.send_times) }); }, [cfg.id]);
 
   useEffect(() => {
     if (!instance) return;
@@ -175,11 +191,12 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
       enabled: local.enabled,
       cameras: local.cameras,
       label: local.label?.trim() || null,
+      send_times: normalizeTimes(local.send_times),
     }).eq("id", local.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Saved — will keep sending daily until edited again");
-    onChange(local);
+    toast.success("Saved");
+    onChange({ ...local, send_times: normalizeTimes(local.send_times) });
   };
 
   const persistIfDirty = async () => {
@@ -191,9 +208,10 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
       enabled: local.enabled,
       cameras: local.cameras,
       label: local.label?.trim() || null,
+      send_times: normalizeTimes(local.send_times),
     }).eq("id", local.id);
     if (error) { toast.error(error.message); return false; }
-    onChange(local);
+    onChange({ ...local, send_times: normalizeTimes(local.send_times) });
     return true;
   };
 
@@ -245,6 +263,9 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
           {local.cameras.length > 0 && (
             <Badge variant="outline" className="text-[10px] shrink-0">{local.cameras.length} cam{local.cameras.length === 1 ? "" : "s"}</Badge>
           )}
+          <Badge variant="outline" className="text-[10px] shrink-0 gap-1 font-mono">
+            <Clock className="h-3 w-3" /> {local.send_times.join(", ")}
+          </Badge>
           {cfg.last_sent_at && (
             <Badge variant="outline" className="text-[10px] shrink-0">
               Last sent {new Date(cfg.last_sent_at).toLocaleString()}
@@ -307,6 +328,54 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
           )}
         </div>
       </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs flex items-center gap-1.5">
+          <Clock className="h-3 w-3" />
+          Send times (SAST) — {local.send_times.length} per day
+        </Label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {local.send_times.map((t) => (
+            <Badge key={t} variant="secondary" className="gap-1 pr-1 font-mono">
+              {t}
+              <button
+                onClick={() => setLocal({ ...local, send_times: local.send_times.filter((x) => x !== t) })}
+                className="hover:text-destructive ml-0.5"
+                disabled={local.send_times.length <= 1}
+                title={local.send_times.length <= 1 ? "At least one time required" : "Remove"}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+        <div className="flex gap-2 items-center">
+          <Input
+            type="time"
+            value={newTime}
+            onChange={(e) => setNewTime(e.target.value)}
+            className="bg-secondary border-border w-32"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            onClick={() => {
+              if (!/^\d{2}:\d{2}$/.test(newTime)) { toast.error("Pick a valid time"); return; }
+              if (local.send_times.includes(newTime)) { toast.error("Time already added"); return; }
+              setLocal({ ...local, send_times: normalizeTimes([...local.send_times, newTime]) });
+              setNewTime("");
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" /> Add time
+          </Button>
+          <span className="text-[10px] text-muted-foreground">
+            Cron must run at least as often as your smallest gap.
+          </span>
+        </div>
+      </div>
+
+
 
 
 
@@ -455,14 +524,14 @@ const DailyReports = () => {
   return (
     <DashboardLayout
       title="Daily Reports"
-      subtitle="Per-NVR automated email digests sent every day at 08:00 SAST"
+      subtitle="Per-NVR automated email digests — configurable send times per report (SAST)"
     >
       {/* Sender settings */}
       <Card className="bg-gradient-card border-border shadow-card p-5 mb-5">
         <div className="flex items-center gap-2 mb-3">
           <Mail className="h-4 w-4 text-primary" />
           <h3 className="font-semibold text-foreground">Sender settings</h3>
-          <Badge variant="outline" className="text-[10px] ml-auto gap-1"><Clock className="h-3 w-3" /> Daily 08:00 SAST</Badge>
+          <Badge variant="outline" className="text-[10px] ml-auto gap-1"><Clock className="h-3 w-3" /> Times set per report</Badge>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1.5">

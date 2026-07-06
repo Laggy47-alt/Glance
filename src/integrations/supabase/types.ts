@@ -466,6 +466,7 @@ export type Database = {
           last_sent_at: string | null
           organization_id: string
           recipients: string[]
+          send_times: string[]
           subject: string
           updated_at: string
         }
@@ -480,6 +481,7 @@ export type Database = {
           last_sent_at?: string | null
           organization_id?: string
           recipients?: string[]
+          send_times?: string[]
           subject?: string
           updated_at?: string
         }
@@ -494,6 +496,7 @@ export type Database = {
           last_sent_at?: string | null
           organization_id?: string
           recipients?: string[]
+          send_times?: string[]
           subject?: string
           updated_at?: string
         }
