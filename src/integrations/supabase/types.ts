@@ -1145,6 +1145,36 @@ export type Database = {
         }
         Relationships: []
       }
+      positive_alert_dispatches: {
+        Row: {
+          created_at: string
+          group_jid: string
+          id: string
+          media_id: string
+          organization_id: string
+          sent_at: string
+          tag_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          group_jid: string
+          id?: string
+          media_id: string
+          organization_id: string
+          sent_at?: string
+          tag_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          group_jid?: string
+          id?: string
+          media_id?: string
+          organization_id?: string
+          sent_at?: string
+          tag_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           contact_email: string | null
@@ -1701,6 +1731,9 @@ export type Database = {
           mudslide_token: string | null
           mudslide_url: string | null
           organization_id: string
+          positive_alert_cooldown_seconds: number
+          positive_alert_enabled: boolean
+          positive_alert_group_jid: string | null
           quiet_end: string | null
           quiet_hours_enabled: boolean
           quiet_start: string | null
@@ -1731,6 +1764,9 @@ export type Database = {
           mudslide_token?: string | null
           mudslide_url?: string | null
           organization_id: string
+          positive_alert_cooldown_seconds?: number
+          positive_alert_enabled?: boolean
+          positive_alert_group_jid?: string | null
           quiet_end?: string | null
           quiet_hours_enabled?: boolean
           quiet_start?: string | null
@@ -1761,6 +1797,9 @@ export type Database = {
           mudslide_token?: string | null
           mudslide_url?: string | null
           organization_id?: string
+          positive_alert_cooldown_seconds?: number
+          positive_alert_enabled?: boolean
+          positive_alert_group_jid?: string | null
           quiet_end?: string | null
           quiet_hours_enabled?: boolean
           quiet_start?: string | null
