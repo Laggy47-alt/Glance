@@ -1,60 +1,63 @@
-# Positive-tag WhatsApp group alert
 
-## What triggers it
-When an operator adds a tag whose name starts with `positive` (e.g. the existing "positive incident" suggested tag) to a media item in `MediaLightbox`, the app dispatches a WhatsApp message to a single per-organization group. Removing the tag does not send anything. Adding a second positive tag to the same media within a short window is deduped so the group isn't spammed.
+# Dispatch & Response Tracking
 
-The operator's comment on that tag (the `note` column on `media_tags`, editable in the lightbox — a small edit for the note is added if it's not already writable there) is included in the message.
+Operators create a dispatch (from an alert or manually), assign a vehicle + driver, and the driver's phone streams GPS. When the phone enters the site's geofence, arrival is auto-stamped and response time is calculated.
 
-## What the message contains
-Plain WhatsApp text (Mudslide `/send` only accepts text today, so we don't try to upload a binary image), formatted like:
+## What we're building
 
-```
-✅ Positive incident confirmed
-Camera: <camera / source name>
-Time:   <local time>
-Tagged by: <operator display name>
-Note:   <operator comment, if any>
+### 1. Data model (self-hosted Supabase — cloud mirrored on request)
 
-Snapshot: <public snapshot URL>
-Video:    <public video URL, if the media_item has one>
-```
+- `vehicles` — call sign, registration, org, active driver (nullable FK to profiles), status (`available` / `dispatched` / `on_site` / `offline`), last known lat/lng/heading/speed/updated_at.
+- `responders` — links a profile to an org as a responder, current vehicle_id, on_duty flag, device push token (for future notifications).
+- `sites` — physical location per org: name, address, lat, lng, geofence_radius_m (default 100), linked NVR/instance id (nullable). Sites are what get dispatched to.
+- `dispatches` — org, site_id, vehicle_id, responder_id, source (`manual` | `unifi_offline` | `hikvision_event`), source_ref (nullable id of the triggering alert/event), status (`pending` | `en_route` | `on_site` | `completed` | `cancelled`), priority, notes, created_by, dispatched_at, acknowledged_at, arrived_at, completed_at, response_seconds (generated).
+- `dispatch_location_pings` — dispatch_id, lat, lng, accuracy_m, speed, heading, recorded_at. Append-only breadcrumb trail.
+- `dispatch_events` — dispatch_id, kind (`created` | `acknowledged` | `geofence_entered` | `geofence_exited` | `arrived` | `completed` | `cancelled` | `note`), payload, at.
 
-WhatsApp auto-renders the snapshot URL as an inline preview, so the group sees the image without us needing multipart upload. If the media has no video the "Video:" line is omitted.
+RLS: standard org-boundary via `can_read_org` / `can_admin_org`; responders can read/update only their own active dispatches.
 
-## Where the tag lives
-`media_tags` (columns: `id, media_id, tag, note, created_by, organization_id, created_at`) joined to `media_items` for the snapshot/video URLs and camera/source name. The lightbox already inserts rows here and the suggested tag `"positive incident"` already exists — no schema change needed for tagging itself.
+### 2. Mobile responder app (Capacitor)
 
-## Configuration (per organization)
-Extend `whatsapp_settings` with three columns:
-- `positive_alert_enabled boolean default false`
-- `positive_alert_group_jid text` — a single WhatsApp group JID (`…@g.us`)
-- `positive_alert_cooldown_seconds int default 60` — dedupe window per media_item
+New Capacitor build of the existing app with a dedicated `/responder` route stack:
 
-Add a small "Positive-incident alerts" card to `src/pages/WhatsAppAlerts.tsx` with an enable switch, a group JID input (with a "Pick from groups" helper that calls the existing Mudslide `/groups` endpoint), and the cooldown field.
+- Login → shows the current on-duty vehicle assignment.
+- Toggle "On duty" → registers push token, starts background location.
+- Active dispatch screen: site name, address, map with route line, ETA, big Acknowledge / Arrived / Complete buttons (Arrived auto-fires from geofence but stays tappable as fallback).
+- Uses `@capacitor/geolocation` for foreground and `@capacitor-community/background-geolocation` for background tracking (screen off).
+- Ping cadence: 5s while `en_route`, 30s idle, stops on `completed`/`cancelled`.
+- Pings post to a new edge function `dispatch-ping` (validates responder owns the dispatch, appends to `dispatch_location_pings`, updates `vehicles.last_*`).
+- Geofence handled server-side: `dispatch-ping` checks distance to site; on entry it stamps `arrived_at`, sets status `on_site`, emits `dispatch_events` row, sends WhatsApp confirmation to ops.
 
-## Dispatch path
-1. `MediaLightbox.addTag()` — after a successful insert, if the tag matches `/^positive/i`, call `supabase.functions.invoke("positive-alert-dispatch", { body: { media_tag_id } })`. Fire-and-forget; failures show a toast but don't block tagging.
-2. New edge function `supabase/functions/positive-alert-dispatch/index.ts`:
-   - Validates JWT, loads `media_tags` + `media_items` + camera name + operator profile.
-   - Loads `whatsapp_settings` for that org; exits early if disabled or no group JID.
-   - Checks `camera_offline_alerts`-style dedupe (or a new lightweight `positive_alert_dispatches` audit table keyed on `media_id` + `last_sent_at`) against `positive_alert_cooldown_seconds`.
-   - Builds the message text above.
-   - POSTs to the Mudslide listener using the same pattern as `escalate-offline-whatsapp` (reads `whatsapp_settings.mudslide_url` + `mudslide_token`, `POST /send` with `{ to: group_jid, message }`).
-   - Writes an audit row on success.
-3. Add `positive_alert_dispatches` table (org_id, media_id, tag_id, sent_at, group_jid) with the standard `GRANT` + RLS scoped to `has_role(auth.uid(), 'admin')` for reads; writes are service-role only.
+### 3. Operator dispatch console (web)
 
-## Files touched
+- New `/dispatch` page: split view — left: live list of active dispatches with status chips + response timer; right: Google Maps view with vehicle markers (using existing Google Maps connector) and site pins.
+- **Create dispatch (manual):** pick site → pick available vehicle → optional priority/notes → send. Responder gets a push + the dispatch shows in their app.
+- **Create dispatch (from alert):** on the UniFi offline alerts view and Hikvision events view, add a "Dispatch" button that opens the create-dispatch dialog pre-filled with the linked site (via `unifi_instances.site_id` / `hikvision_instances.site_id` — new nullable FKs).
+- Realtime updates via Supabase Realtime on `dispatches` and `dispatch_location_pings`.
+- Completed dispatch drawer: timeline of events, breadcrumb trail on map, response time.
 
-Frontend
-- `src/components/MediaLightbox.tsx` — trigger dispatch after positive-tag insert; allow editing the tag's `note` inline so the operator comment reaches WhatsApp.
-- `src/pages/WhatsAppAlerts.tsx` — new "Positive-incident alerts" section.
-- `src/lib/webhookStore.ts` (or a new `positiveAlertStore.ts`) — read/write helpers for the three new `whatsapp_settings` fields.
+### 4. Reporting
 
-Backend
-- Migration: add three columns to `whatsapp_settings`, create `positive_alert_dispatches` with GRANTs + RLS.
-- New edge function: `supabase/functions/positive-alert-dispatch/index.ts`.
+- `/dispatch/reports`: response-time averages per site / vehicle / responder, count of dispatches, and a leaderboard. CSV export.
 
-No changes to the Mudslide listener (`scripts/mudslide-listener/listener.mjs`) — it already exposes `POST /send` and `GET /groups` that this feature reuses.
+## Technical notes
 
-## Applies to
-Self-hosted stack only (that's where the Mudslide listener and `whatsapp_settings.mudslide_url` live). Say the word if you also want the migration replayed on the Lovable Cloud instance.
+- Capacitor setup uses the existing `appID: app.lovable.4f9bcc9958834392b282343ada7ada87` / `appName: abc-glance` — after this ships you'll `git pull`, `npm i`, `npx cap add ios/android`, `npx cap sync`, then `npx cap run`.
+- Background geolocation requires `ACCESS_BACKGROUND_LOCATION` (Android) and `NSLocationAlwaysAndWhenInUseUsageDescription` (iOS) — added to `capacitor.config.ts` and native manifests.
+- New edge functions: `dispatch-create`, `dispatch-ping`, `dispatch-update-status`, `dispatch-notify` (WhatsApp using existing `whatsapp_settings` + Mudslide, same pattern as `unifi-offline-check`).
+- Geofence check is server-side (haversine) — trusting client-declared arrival is trivially spoofable. Client can *suggest* arrival for UX responsiveness but the authoritative `arrived_at` is stamped by `dispatch-ping`.
+- No Traccar for now — reuses the phones you already deploy.
+- Migrations, RLS, GRANTs, and updated_at triggers included in the first migration.
+
+## Rollout order
+
+1. Migration + types.
+2. Sites CRUD + link existing NVRs to sites.
+3. Vehicles + responders CRUD.
+4. Operator `/dispatch` console (manual creation) + realtime map.
+5. Capacitor responder route + `dispatch-ping` + geofence auto-arrival.
+6. "Dispatch" buttons on UniFi/Hikvision alerts.
+7. Reports page.
+8. WhatsApp notifications on dispatch lifecycle.
+
+Say "go" and I'll start with step 1 (migration). If you want anything renamed, cut, or reordered first, tell me now.
