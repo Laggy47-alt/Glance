@@ -147,7 +147,7 @@ function RecipientList({ value, onChange, placeholder }: { value: string[]; onCh
   );
 }
 
-type Section = "connection" | "recipients" | "templates" | "schedule" | "daily" | "broadcast" | "nvrs" | "inbox";
+type Section = "connection" | "recipients" | "templates" | "schedule" | "daily" | "positive" | "broadcast" | "nvrs" | "inbox";
 
 const NAV: { id: Section; label: string; icon: any }[] = [
   { id: "connection", label: "Connection", icon: Settings2 },
@@ -155,6 +155,7 @@ const NAV: { id: Section; label: string; icon: any }[] = [
   { id: "templates", label: "Templates", icon: FileText },
   { id: "schedule", label: "Schedule & limits", icon: Clock },
   { id: "daily", label: "Daily broadcast", icon: Megaphone },
+  { id: "positive", label: "Positive incidents", icon: ShieldAlert },
   { id: "broadcast", label: "Send message", icon: Radio },
   { id: "nvrs", label: "Per-NVR recipients", icon: Server },
   { id: "inbox", label: "Reply inbox", icon: Inbox },
