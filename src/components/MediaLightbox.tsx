@@ -148,12 +148,28 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                         </Badge>
                         <Input
                           defaultValue={t.note ?? ""}
-                          placeholder="Add a comment…"
+                          placeholder={/^positive/i.test(t.tag) ? "Add a comment, then Enter to send…" : "Add a comment…"}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                          }}
                           onBlur={(e) => {
-                            if ((e.target.value ?? "") !== (t.note ?? "")) updateNote(t.id, e.target.value);
+                            if ((e.target.value ?? "") !== (t.note ?? "")) updateNote(t.id, e.target.value, t.tag);
                           }}
                           className="h-7 text-xs bg-background border-border flex-1 min-w-[180px]"
                         />
+                        {/^positive/i.test(t.tag) && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={sending === t.id || dispatched.has(t.id)}
+                            onClick={() => dispatchPositive(t.id)}
+                            className="h-7 gap-1 px-2 text-xs"
+                          >
+                            <Send className="h-3 w-3" />
+                            {dispatched.has(t.id) ? "Sent" : sending === t.id ? "Sending…" : "Send WhatsApp"}
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>
