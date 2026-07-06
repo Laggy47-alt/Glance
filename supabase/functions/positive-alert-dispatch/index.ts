@@ -27,16 +27,25 @@ function j(status: number, body: unknown) {
   });
 }
 
-async function sendViaMudslide(mudslideUrl: string, token: string | null, to: string, message: string) {
+async function sendViaMudslide(
+  mudslideUrl: string,
+  token: string | null,
+  to: string,
+  message: string,
+  extras: { image_url?: string | null; video_url?: string | null } = {},
+) {
   const url = mudslideUrl.replace(/\/+$/, "") + "/send";
+  const payload: Record<string, unknown> = { to, message };
+  if (extras.image_url) payload.image_url = extras.image_url;
+  if (extras.video_url) payload.video_url = extras.video_url;
   const r = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ to, message }),
-    signal: AbortSignal.timeout(30000),
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(60000),
   });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
