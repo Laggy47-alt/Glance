@@ -1,6 +1,6 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Film, Camera, Tag as TagIcon, X, Plus, ImageOff, Send } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,9 +36,13 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
   // so blurring the note field a second time doesn't re-fire.
   const [dispatched, setDispatched] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState<string | null>(null);
+  // Synchronous guard — updated BEFORE the async call so a second trigger
+  // (e.g. Enter also firing blur, or a double-click) can't slip through
+  // while `dispatched` state hasn't been flushed yet.
+  const inflightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!item?.mediaId) { setTags([]); setDispatched(new Set()); return; }
+    if (!item?.mediaId) { setTags([]); setDispatched(new Set()); inflightRef.current = new Set(); return; }
     let active = true;
     (async () => {
       const { data } = await supabase
@@ -46,13 +50,14 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
         .select("id, tag, note")
         .eq("media_id", item.mediaId!)
         .order("created_at", { ascending: false });
-      if (active) { setTags((data ?? []) as MediaTag[]); setDispatched(new Set()); }
+      if (active) { setTags((data ?? []) as MediaTag[]); setDispatched(new Set()); inflightRef.current = new Set(); }
     })();
     return () => { active = false; };
   }, [item?.mediaId]);
 
   const dispatchPositive = async (tagId: string) => {
-    if (dispatched.has(tagId)) return;
+    if (inflightRef.current.has(tagId) || dispatched.has(tagId)) return;
+    inflightRef.current.add(tagId);
     setSending(tagId);
     const { data: res, error: fnErr } = await supabase.functions.invoke("positive-alert-dispatch", {
       body: { media_tag_id: tagId },
@@ -75,15 +80,20 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
       } catch { /* ignore */ }
       console.warn("positive-alert-dispatch failed:", fnErr, detail);
       toast.error(`WhatsApp alert failed: ${String(detail).slice(0, 300)}`);
+      inflightRef.current.delete(tagId); // allow retry
       return;
     }
-    if (res?.error) { toast.error(`WhatsApp alert failed: ${String(res.error).slice(0, 300)}`); return; }
+    if (res?.error) {
+      toast.error(`WhatsApp alert failed: ${String(res.error).slice(0, 300)}`);
+      inflightRef.current.delete(tagId);
+      return;
+    }
     if (res?.sent) { toast.success("WhatsApp positive-incident alert sent"); setDispatched((s) => new Set(s).add(tagId)); }
     else if (res?.skipped === "disabled") toast.info("Positive alerts are disabled in WhatsApp settings");
     else if (res?.skipped === "cooldown") { toast.info("Positive alert skipped (cooldown)"); setDispatched((s) => new Set(s).add(tagId)); }
-    else if (res?.skipped === "no_group_jid") toast.info("Configure the positive-alert group in WhatsApp settings");
-    else if (res?.skipped === "no_mudslide_url") toast.info("Mudslide URL not configured");
-    else if (res?.skipped) toast.info(`Positive alert skipped: ${res.skipped}`);
+    else if (res?.skipped === "no_group_jid") { toast.info("Configure the positive-alert group in WhatsApp settings"); inflightRef.current.delete(tagId); }
+    else if (res?.skipped === "no_mudslide_url") { toast.info("Mudslide URL not configured"); inflightRef.current.delete(tagId); }
+    else if (res?.skipped) { toast.info(`Positive alert skipped: ${res.skipped}`); inflightRef.current.delete(tagId); }
   };
 
   const addTag = async (value: string, note?: string) => {
