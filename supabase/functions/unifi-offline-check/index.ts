@@ -84,6 +84,16 @@ Deno.serve(async (req) => {
   }
 
 
+  // Group per organization so we send a single combined WhatsApp per org
+  // covering all its NVRs (instead of one message per NVR).
+  type NvrBucket = {
+    inst: any;
+    settings: any;
+    dueOffline: any[];
+    dueRecovery: any[];
+  };
+  const orgBuckets = new Map<string, NvrBucket[]>();
+
   for (const s of settings as any[]) {
     const inst = instMap.get(s.unifi_instance_id);
     if (!inst) continue;
@@ -113,44 +123,69 @@ Deno.serve(async (req) => {
 
     if (!dueOffline.length && !dueRecovery.length) continue;
 
-    const recipients: Recipient[] = Array.isArray(s.recipients) ? s.recipients : [];
-    const recipientValues = recipients
-      .map((r) => (typeof r === "string" ? r : r?.value))
-      .map((v: any) => String(v ?? "").trim())
-      .filter(Boolean);
+    const arr = orgBuckets.get(inst.organization_id) ?? [];
+    arr.push({ inst, settings: s, dueOffline, dueRecovery });
+    orgBuckets.set(inst.organization_id, arr);
+  }
+
+  for (const [orgId, buckets] of orgBuckets) {
+    // Union recipients across all NVRs in this org (dedupe by value)
+    const recipSet = new Map<string, string>();
+    for (const b of buckets) {
+      const list: Recipient[] = Array.isArray(b.settings.recipients) ? b.settings.recipients : [];
+      for (const r of list) {
+        const v = String((typeof r === "string" ? r : r?.value) ?? "").trim();
+        if (v) recipSet.set(v, v);
+      }
+    }
+    const recipientValues = Array.from(recipSet.values());
     if (!recipientValues.length) continue;
 
-    // OFFLINE alert (single message per NVR listing all offline cameras)
-    if (dueOffline.length) {
-      const list = dueOffline.map((c) => `• ${c.name || c.camera_id}`).join("\n");
-      const message = `🚨 UniFi *${inst.name}* — ${dueOffline.length} camera${dueOffline.length === 1 ? "" : "s"} offline (>${s.threshold_minutes} min):\n${list}`;
-      const ws = await getWhatsAppSettings(inst.organization_id);
+    const ws = await getWhatsAppSettings(orgId);
+
+    // Combined OFFLINE message
+    const offlineBuckets = buckets.filter((b) => b.dueOffline.length);
+    if (offlineBuckets.length) {
+      const totalCams = offlineBuckets.reduce((n, b) => n + b.dueOffline.length, 0);
+      const blocks = offlineBuckets.map((b) => {
+        const lines = b.dueOffline.map((c) => `• ${c.name || c.camera_id}`).join("\n");
+        return `*${b.inst.name}* (>${b.settings.threshold_minutes} min)\n${lines}`;
+      });
+      const message = `🚨 UniFi — ${totalCams} camera${totalCams === 1 ? "" : "s"} offline across ${offlineBuckets.length} NVR${offlineBuckets.length === 1 ? "" : "s"}:\n\n${blocks.join("\n\n")}`;
       const res = await sendWhatsApp(ws, recipientValues, message);
       if (!res.ok) {
-        errors.push(`${inst.name} offline: ${res.error}`);
+        errors.push(`org ${orgId} offline: ${res.error}`);
       } else {
-        alertsSent += dueOffline.length;
-        await supabase.from("unifi_camera_status")
-          .update({ last_alert_sent_at: nowIso })
-          .eq("instance_id", inst.id)
-          .in("camera_id", dueOffline.map((c) => c.camera_id));
+        alertsSent += totalCams;
+        for (const b of offlineBuckets) {
+          await supabase.from("unifi_camera_status")
+            .update({ last_alert_sent_at: nowIso })
+            .eq("instance_id", b.inst.id)
+            .in("camera_id", b.dueOffline.map((c) => c.camera_id));
+        }
       }
     }
 
-    // RECOVERY alerts (also grouped)
-    if (dueRecovery.length) {
-      const list = dueRecovery.map((c) => `• ${c.name || c.camera_id}`).join("\n");
-      const message = `✅ UniFi *${inst.name}* — ${dueRecovery.length} camera${dueRecovery.length === 1 ? "" : "s"} back online:\n${list}`;
-      const ws = await getWhatsAppSettings(inst.organization_id);
+    // Combined RECOVERY message
+    const recoveryBuckets = buckets.filter((b) => b.dueRecovery.length);
+    if (recoveryBuckets.length) {
+      const totalCams = recoveryBuckets.reduce((n, b) => n + b.dueRecovery.length, 0);
+      const blocks = recoveryBuckets.map((b) => {
+        const lines = b.dueRecovery.map((c) => `• ${c.name || c.camera_id}`).join("\n");
+        return `*${b.inst.name}*\n${lines}`;
+      });
+      const message = `✅ UniFi — ${totalCams} camera${totalCams === 1 ? "" : "s"} back online:\n\n${blocks.join("\n\n")}`;
       const res = await sendWhatsApp(ws, recipientValues, message);
       if (!res.ok) {
-        errors.push(`${inst.name} recovery: ${res.error}`);
+        errors.push(`org ${orgId} recovery: ${res.error}`);
       } else {
-        recoveriesSent += dueRecovery.length;
-        await supabase.from("unifi_camera_status")
-          .update({ last_recovery_sent_at: nowIso })
-          .eq("instance_id", inst.id)
-          .in("camera_id", dueRecovery.map((c) => c.camera_id));
+        recoveriesSent += totalCams;
+        for (const b of recoveryBuckets) {
+          await supabase.from("unifi_camera_status")
+            .update({ last_recovery_sent_at: nowIso })
+            .eq("instance_id", b.inst.id)
+            .in("camera_id", b.dueRecovery.map((c) => c.camera_id));
+        }
       }
     }
   }
