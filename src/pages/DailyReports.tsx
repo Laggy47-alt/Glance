@@ -96,6 +96,20 @@ const PLACEHOLDERS = [
   "{{positive_incidents_count}}", "{{positive_incidents_list}}",
 ];
 
+function normalizeTimes(times: string[] | null | undefined): string[] {
+  const src = Array.isArray(times) && times.length ? times : ["08:00"];
+  const clean = new Set<string>();
+  for (const raw of src) {
+    const m = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(raw));
+    if (!m) continue;
+    const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+    const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+    clean.add(`${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+  }
+  const arr = Array.from(clean).sort();
+  return arr.length ? arr : ["08:00"];
+}
+
 const DEFAULT_SUBJECT = "ABC Glance Status report— {{site_name}}";
 const DEFAULT_BODY = `Dear client,
 
