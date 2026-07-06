@@ -711,6 +711,13 @@ const Wall = () => {
         })()}
       </div>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
+      <DispatchDialog
+        open={!!dispatchFor}
+        onClose={() => setDispatchFor(null)}
+        hint={dispatchFor ? `Dispatching for alert: ${dispatchFor.site} · ${dispatchFor.camera}` : undefined}
+        source="other"
+        sourceRef={dispatchFor?.event?.id ?? dispatchFor?.key ?? null}
+      />
     </DashboardLayout>
   );
 };
