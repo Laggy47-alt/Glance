@@ -59,16 +59,30 @@ Deno.serve(async (req) => {
     fallbackOrgId = abcOrg?.id ?? null;
   }
 
-  async function resolveWhatsAppOrg(orgId: string): Promise<string> {
-    const { data: ws } = await supabase
+  // Cache whatsapp_settings per org (with ABC fallback) so we only fetch once.
+  const wsCache = new Map<string, any | null>();
+  async function getWhatsAppSettings(orgId: string): Promise<any | null> {
+    if (wsCache.has(orgId)) return wsCache.get(orgId)!;
+    const { data } = await supabase
       .from("whatsapp_settings")
-      .select("organization_id, enabled")
+      .select("mudslide_url, mudslide_token, enabled")
       .eq("organization_id", orgId)
       .eq("enabled", true)
       .maybeSingle();
-    if (ws?.organization_id) return orgId;
-    return fallbackOrgId ?? orgId;
+    let ws = data;
+    if ((!ws || !ws.mudslide_url) && fallbackOrgId && fallbackOrgId !== orgId) {
+      const { data: fb } = await supabase
+        .from("whatsapp_settings")
+        .select("mudslide_url, mudslide_token, enabled")
+        .eq("organization_id", fallbackOrgId)
+        .eq("enabled", true)
+        .maybeSingle();
+      ws = fb ?? null;
+    }
+    wsCache.set(orgId, ws ?? null);
+    return ws ?? null;
   }
+
 
   for (const s of settings as any[]) {
     const inst = instMap.get(s.unifi_instance_id);
@@ -110,8 +124,8 @@ Deno.serve(async (req) => {
     if (dueOffline.length) {
       const list = dueOffline.map((c) => `• ${c.name || c.camera_id}`).join("\n");
       const message = `🚨 UniFi *${inst.name}* — ${dueOffline.length} camera${dueOffline.length === 1 ? "" : "s"} offline (>${s.threshold_minutes} min):\n${list}`;
-      const waOrg = await resolveWhatsAppOrg(inst.organization_id);
-      const res = await sendWhatsApp(supabase, waOrg, recipientValues, message);
+      const ws = await getWhatsAppSettings(inst.organization_id);
+      const res = await sendWhatsApp(ws, recipientValues, message);
       if (!res.ok) {
         errors.push(`${inst.name} offline: ${res.error}`);
       } else {
@@ -127,8 +141,8 @@ Deno.serve(async (req) => {
     if (dueRecovery.length) {
       const list = dueRecovery.map((c) => `• ${c.name || c.camera_id}`).join("\n");
       const message = `✅ UniFi *${inst.name}* — ${dueRecovery.length} camera${dueRecovery.length === 1 ? "" : "s"} back online:\n${list}`;
-      const waOrg = await resolveWhatsAppOrg(inst.organization_id);
-      const res = await sendWhatsApp(supabase, waOrg, recipientValues, message);
+      const ws = await getWhatsAppSettings(inst.organization_id);
+      const res = await sendWhatsApp(ws, recipientValues, message);
       if (!res.ok) {
         errors.push(`${inst.name} recovery: ${res.error}`);
       } else {
@@ -145,28 +159,45 @@ Deno.serve(async (req) => {
 });
 
 async function sendWhatsApp(
-  supabase: any,
-  organization_id: string,
+  ws: { mudslide_url: string | null; mudslide_token: string | null } | null,
   recipients: string[],
   message: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/whatsapp-send`;
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      },
-      body: JSON.stringify({ organization_id, recipients, message }),
-    });
-    if (!r.ok) {
-      const t = await r.text().catch(() => "");
-      return { ok: false, error: `whatsapp-send ${r.status}: ${t.slice(0, 200)}` };
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
+  if (!ws || !ws.mudslide_url) {
+    return { ok: false, error: "no enabled whatsapp_settings (Mudslide URL missing) for org or fallback" };
   }
+  const url = ws.mudslide_url.replace(/\/+$/, "") + "/send";
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (ws.mudslide_token) headers["Authorization"] = `Bearer ${ws.mudslide_token}`;
+
+  const errors: string[] = [];
+  for (const raw of recipients) {
+    const to = raw === "me" || /@/.test(raw) ? raw : raw.replace(/^\+/, "");
+    let sent = false;
+    let lastErr = "";
+    for (let attempt = 0; attempt < 2 && !sent; attempt++) {
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ to, message }),
+          signal: AbortSignal.timeout(30000),
+        });
+        if (!r.ok) {
+          const t = await r.text().catch(() => "");
+          lastErr = `Mudslide ${r.status}: ${t.slice(0, 200)}`;
+        } else {
+          await r.text().catch(() => "");
+          sent = true;
+        }
+      } catch (e) {
+        lastErr = (e as Error).message;
+      }
+      if (!sent && attempt === 0) await new Promise((res) => setTimeout(res, 2000));
+    }
+    if (!sent) errors.push(`${to}: ${lastErr}`);
+  }
+  if (errors.length) return { ok: false, error: errors.join("; ") };
+  return { ok: true };
 }
+
