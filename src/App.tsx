@@ -37,6 +37,7 @@ const Callouts = lazy(() => import("./pages/Callouts.tsx"));
 const Sites = lazy(() => import("./pages/Sites.tsx"));
 const Responders = lazy(() => import("./pages/Responders.tsx"));
 const Vehicles = lazy(() => import("./pages/Vehicles.tsx"));
+const Dispatches = lazy(() => import("./pages/Dispatches.tsx"));
 const SuperAdmin = lazy(() => import("./pages/SuperAdmin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Demo = lazy(() => import("./pages/Demo.tsx"));
@@ -113,6 +114,7 @@ const App = () => (
                 <Route path="/sites" element={protect(<Sites />, true)} />
                 <Route path="/responders" element={protect(<Responders />, true)} />
                 <Route path="/vehicles" element={protect(<Vehicles />, true)} />
+                <Route path="/dispatches" element={protect(<Dispatches />, true)} />
                 <Route path="/customer" element={protect(<Customer />)} />
                 <Route path="/customer/events" element={protect(<CustomerEvents />)} />
                 <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />

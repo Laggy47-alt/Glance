@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check, PanelLeftClose, PanelLeftOpen, Tag as TagIcon } from "lucide-react";
+import { Bell, BellOff, Camera, X, Archive as ArchiveIcon, Filter, Check, PanelLeftClose, PanelLeftOpen, Tag as TagIcon, Siren } from "lucide-react";
+import { DispatchDialog } from "@/components/DispatchDialog";
 import { resolveMediaUrl, getAckStamp, type MediaItem, type WebhookEvent } from "@/lib/webhookStore";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -157,6 +158,8 @@ const Wall = () => {
   const [alerts, setAlerts] = useState<Alert[]>(wallAlertsStore.alerts);
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [dispatchFor, setDispatchFor] = useState<Alert | null>(null);
+  
   
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
   const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set(["person"]));
@@ -696,6 +699,7 @@ const Wall = () => {
                         onDismiss={() => dismiss(a)}
                         onOpen={() => openMedia("clip")}
                         onTag={() => openMedia("snapshot")}
+                        onDispatch={() => setDispatchFor(a)}
                         liveUrl={unifiLiveUrlFor(a)}
                       />
                     );
@@ -707,6 +711,13 @@ const Wall = () => {
         })()}
       </div>
       <MediaLightbox item={lightbox} onClose={() => setLightbox(null)} />
+      <DispatchDialog
+        open={!!dispatchFor}
+        onClose={() => setDispatchFor(null)}
+        hint={dispatchFor ? `Dispatching for alert: ${dispatchFor.site} · ${dispatchFor.camera}` : undefined}
+        source="other"
+        sourceRef={dispatchFor?.event?.id ?? dispatchFor?.key ?? null}
+      />
     </DashboardLayout>
   );
 };
@@ -718,6 +729,7 @@ function AlertCard({
   onDismiss,
   onOpen,
   onTag,
+  onDispatch,
   liveUrl,
 }: {
   alert: Alert;
@@ -726,6 +738,7 @@ function AlertCard({
   onDismiss: () => void;
   onOpen: () => void;
   onTag: () => void;
+  onDispatch: () => void;
   liveUrl?: string | null;
 }) {
   const withBbox = (raw: string) => {
@@ -807,6 +820,15 @@ function AlertCard({
             title="Add tag"
           >
             <TagIcon className="h-3 w-3" />
+          </Button>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={onDispatch}
+            className="gap-1 h-7 px-2 text-[11px]"
+            title="Dispatch responder"
+          >
+            <Siren className="h-3 w-3" /> Dispatch
           </Button>
           <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
             <ArchiveIcon className="h-3 w-3" /> ACK

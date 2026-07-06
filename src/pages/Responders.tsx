@@ -14,7 +14,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, Users, Phone, Mail } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Users, Phone, Mail, Smartphone } from "lucide-react";
+import { ProvisionDeviceDialog } from "@/components/ProvisionDeviceDialog";
 
 type Responder = {
   id: string;
@@ -43,6 +44,7 @@ const Responders = () => {
   const [form, setForm] = useState<Partial<Responder>>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [provisionFor, setProvisionFor] = useState<Responder | null>(null);
 
   const load = async () => {
     if (!activeOrg?.id) { setRows([]); setLoading(false); return; }
@@ -153,6 +155,10 @@ const Responders = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs"
+                        onClick={() => setProvisionFor(r)} title="Provision phone">
+                        <Smartphone className="h-3.5 w-3.5" />
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-7" onClick={() => openEdit(r)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -210,6 +216,13 @@ const Responders = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProvisionDeviceDialog
+        open={!!provisionFor}
+        onClose={() => setProvisionFor(null)}
+        responderId={provisionFor?.id ?? null}
+        responderName={provisionFor?.name ?? ""}
+      />
     </DashboardLayout>
   );
 };

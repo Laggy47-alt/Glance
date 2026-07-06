@@ -59,3 +59,10 @@ verify_jwt = false
 
 [functions.hikvision-watch]
 verify_jwt = false
+
+[functions.dispatch-ping]
+verify_jwt = false
+
+[functions.dispatch-state]
+verify_jwt = false
+
