@@ -44,6 +44,9 @@ export function ProvisionDeviceDialog({ open, onClose, responderId, responderNam
   const [copied, setCopied] = useState(false);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const anonKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+    ?? import.meta.env.VITE_SUPABASE_ANON_KEY
+    ?? "") as string;
 
   const load = async () => {
     if (!responderId) return;
@@ -107,7 +110,9 @@ export function ProvisionDeviceDialog({ open, onClose, responderId, responderNam
     v: 1,
     token: device.token,
     endpoint: `${supabaseUrl}/functions/v1`,
-    responder: responderName,
+    anon_key: anonKey,
+    responder_id: responderId,
+    responder_name: responderName,
   }) : "";
 
   return (
