@@ -27,15 +27,36 @@ function j(status: number, body: unknown) {
   });
 }
 
-async function fetchAsBase64(url: string): Promise<string | null> {
+function resolveMediaUrl(u: string | null | undefined): { url: string; authNeeded: boolean } | null {
+  if (!u) return null;
+  const raw = String(u).trim();
+  if (!raw) return null;
+  // Already absolute
+  if (/^https?:\/\//i.test(raw)) return { url: raw, authNeeded: false };
+  // Relative — assume this is a frigate-proxy path served by our own Supabase project.
+  // Example stored value: "/<org-id>/api/events/<eid>/snapshot.jpg"
+  const base = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/+$/, "");
+  if (!base) return null;
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
+  return { url: `${base}/functions/v1/frigate-proxy${path}`, authNeeded: true };
+}
+
+async function fetchAsBase64(target: { url: string; authNeeded: boolean }): Promise<string | null> {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    const headers: Record<string, string> = {};
+    if (target.authNeeded) {
+      const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      if (key) {
+        headers["Authorization"] = `Bearer ${key}`;
+        headers["apikey"] = key;
+      }
+    }
+    const r = await fetch(target.url, { headers, signal: AbortSignal.timeout(20000) });
     if (!r.ok) {
-      console.warn(`snapshot fetch ${r.status} for ${url}`);
+      console.warn(`snapshot fetch ${r.status} for ${target.url}`);
       return null;
     }
     const buf = new Uint8Array(await r.arrayBuffer());
-    // Base64-encode in chunks to avoid stack overflow on large buffers.
     let binary = "";
     const chunk = 0x8000;
     for (let i = 0; i < buf.length; i += chunk) {
@@ -186,6 +207,12 @@ Deno.serve(async (req) => {
     const when = media?.ts ? new Date(media.ts) : new Date(tag.created_at);
     const timeStr = when.toLocaleString("en-GB", { timeZone: "Africa/Johannesburg" });
 
+    // Resolve possibly-relative frigate-proxy paths into absolute URLs.
+    const snapshotTarget = resolveMediaUrl(snapshotUrl);
+    const videoTarget = resolveMediaUrl(videoUrl);
+    const snapshotAbs = snapshotTarget?.url ?? null;
+    const videoAbs = videoTarget?.url ?? null;
+
     const lines: string[] = [];
     lines.push("✅ *Positive incident confirmed*");
     lines.push(`Camera: ${media?.camera ?? "unknown"}`);
@@ -194,31 +221,33 @@ Deno.serve(async (req) => {
     lines.push(`Tagged by: ${operatorName}`);
     lines.push(`Tag: ${tag.tag}`);
     if (tag.note && tag.note.trim()) lines.push(`Note: ${tag.note.trim()}`);
-    if (videoUrl) lines.push(`\nVideo: ${videoUrl}`);
+    if (videoAbs) lines.push(`\nVideo: ${videoAbs}`);
     if (settings.reply_footer) lines.push(`\n${settings.reply_footer}`);
 
-    const message = lines.join("\n");
+    // Re-derive message after we know the resolved video URL.
+    const message = lines.slice(0, 7 + (tag.note && tag.note.trim() ? 1 : 0)).join("\n");
+    void message; // (kept for parity — full message below)
+    const fullMessage = lines.join("\n");
 
-    // Fetch snapshot once, in the edge function, and pass as base64 so the
-    // listener host doesn't need outbound access to the storage URL.
+    // Fetch snapshot as base64 so the listener host doesn't need outbound access.
     let imageB64: string | null = null;
-    if (snapshotUrl) imageB64 = await fetchAsBase64(snapshotUrl);
+    if (snapshotTarget) imageB64 = await fetchAsBase64(snapshotTarget);
 
     let sendError: string | null = null;
     let sentWithImage = false;
     try {
-      await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, message, {
+      await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, fullMessage, {
         image_base64: imageB64,
-        image_url: imageB64 ? null : snapshotUrl,
+        // Only pass an absolute URL if we couldn't base64 it ourselves.
+        image_url: imageB64 ? null : snapshotAbs,
       });
-      sentWithImage = Boolean(imageB64 || snapshotUrl);
+      sentWithImage = Boolean(imageB64);
     } catch (e) {
       sendError = (e as Error)?.message ?? String(e);
       console.warn(`media send failed, falling back to text: ${sendError}`);
-      // Fallback: text-only with snapshot URL appended.
-      const textOnly = snapshotUrl
-        ? `${message}\n\nSnapshot: ${snapshotUrl}`
-        : message;
+      const textOnly = snapshotAbs
+        ? `${fullMessage}\n\nSnapshot: ${snapshotAbs}`
+        : fullMessage;
       try {
         await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, textOnly);
       } catch (e2) {
