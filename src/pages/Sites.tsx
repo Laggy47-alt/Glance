@@ -31,8 +31,8 @@ import {
   Trash2,
   Building2,
   Link2,
-  Crosshair,
 } from "lucide-react";
+import { SiteMapPicker } from "@/components/SiteMapPicker";
 
 type Site = {
   id: string;
