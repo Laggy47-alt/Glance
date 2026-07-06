@@ -37,20 +37,23 @@ const Callouts = () => {
   const store = useWebhookStore();
   const { activeOrg } = useAuth();
   const [rows, setRows] = useState<Callout[]>([]);
+  const [responders, setResponders] = useState<Responder[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Callout | null>(null);
 
   const load = async () => {
     setLoading(true);
-    if (!activeOrg?.id) { setRows([]); setLoading(false); return; }
-    const { data } = await supabase
-      .from("callout_requests")
-      .select("*")
-      .eq("organization_id", activeOrg.id)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    setRows((data ?? []) as Callout[]);
+    if (!activeOrg?.id) { setRows([]); setResponders([]); setVehicles([]); setLoading(false); return; }
+    const [c, r, v] = await Promise.all([
+      supabase.from("callout_requests").select("*").eq("organization_id", activeOrg.id).order("created_at", { ascending: false }).limit(200),
+      sb.from("responders").select("id,name").eq("organization_id", activeOrg.id).eq("active", true).order("name"),
+      sb.from("vehicles").select("id,plate,responder_id").eq("organization_id", activeOrg.id).eq("active", true).order("plate"),
+    ]);
+    setRows((c.data ?? []) as Callout[]);
+    setResponders((r.data ?? []) as Responder[]);
+    setVehicles((v.data ?? []) as Vehicle[]);
     setLoading(false);
   };
 
@@ -62,6 +65,29 @@ const Callouts = () => {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [activeOrg?.id]);
+
+  const assignResponder = async (id: string, responder_id: string | null) => {
+    const patch: any = { assigned_responder_id: responder_id, assigned_at: responder_id ? new Date().toISOString() : null };
+    // Auto-pick a vehicle assigned to that responder if none set yet
+    const cur = rows.find((r) => r.id === id);
+    if (responder_id && !cur?.assigned_vehicle_id) {
+      const v = vehicles.find((v) => v.responder_id === responder_id);
+      if (v) patch.assigned_vehicle_id = v.id;
+    }
+    const { error } = await supabase.from("callout_requests").update(patch).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(responder_id ? "Responder assigned" : "Responder unassigned");
+  };
+
+  const assignVehicle = async (id: string, vehicle_id: string | null) => {
+    const patch: any = { assigned_vehicle_id: vehicle_id };
+    const cur = rows.find((r) => r.id === id);
+    if (vehicle_id && !cur?.assigned_at) patch.assigned_at = new Date().toISOString();
+    const { error } = await supabase.from("callout_requests").update(patch).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(vehicle_id ? "Vehicle assigned" : "Vehicle unassigned");
+  };
+
 
   const updateStatus = async (id: string, status: string, admin_note?: string) => {
     const patch: { status: string; resolved_at?: string; admin_note?: string } = { status };
