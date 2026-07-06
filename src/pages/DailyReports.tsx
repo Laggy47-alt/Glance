@@ -521,7 +521,7 @@ const DailyReports = () => {
   return (
     <DashboardLayout
       title="Daily Reports"
-      subtitle="Per-NVR automated email digests sent every day at 08:00 SAST"
+      subtitle="Per-NVR automated email digests — configurable send times per report (SAST)"
     >
       {/* Sender settings */}
       <Card className="bg-gradient-card border-border shadow-card p-5 mb-5">
