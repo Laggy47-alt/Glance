@@ -27,15 +27,36 @@ function j(status: number, body: unknown) {
   });
 }
 
-async function fetchAsBase64(url: string): Promise<string | null> {
+function resolveMediaUrl(u: string | null | undefined): { url: string; authNeeded: boolean } | null {
+  if (!u) return null;
+  const raw = String(u).trim();
+  if (!raw) return null;
+  // Already absolute
+  if (/^https?:\/\//i.test(raw)) return { url: raw, authNeeded: false };
+  // Relative — assume this is a frigate-proxy path served by our own Supabase project.
+  // Example stored value: "/<org-id>/api/events/<eid>/snapshot.jpg"
+  const base = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/+$/, "");
+  if (!base) return null;
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
+  return { url: `${base}/functions/v1/frigate-proxy${path}`, authNeeded: true };
+}
+
+async function fetchAsBase64(target: { url: string; authNeeded: boolean }): Promise<string | null> {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    const headers: Record<string, string> = {};
+    if (target.authNeeded) {
+      const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      if (key) {
+        headers["Authorization"] = `Bearer ${key}`;
+        headers["apikey"] = key;
+      }
+    }
+    const r = await fetch(target.url, { headers, signal: AbortSignal.timeout(20000) });
     if (!r.ok) {
-      console.warn(`snapshot fetch ${r.status} for ${url}`);
+      console.warn(`snapshot fetch ${r.status} for ${target.url}`);
       return null;
     }
     const buf = new Uint8Array(await r.arrayBuffer());
-    // Base64-encode in chunks to avoid stack overflow on large buffers.
     let binary = "";
     const chunk = 0x8000;
     for (let i = 0; i < buf.length; i += chunk) {
