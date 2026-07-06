@@ -212,15 +212,28 @@ async function runInstance(inst) {
       if (!r.ok) { log("debug", inst.id, `status HTTP ${r.status}`); return; }
       const arr = await r.json();
       cameraDetails = new Map(arr.map((c) => [c.id, c]));
+      // Protect's own UI treats anything other than state === "CONNECTED"
+      // (CONNECTING, UPGRADING, ADOPTING, REBOOTING, DISCONNECTED, ...) as
+      // offline. We also require lastSeen to be recent, because Protect
+      // occasionally leaves state=CONNECTED on a camera whose stream has
+      // actually died. STALE_MS should match a bit more than one keepalive.
+      const STALE_MS = 120_000;
+      const nowMs = Date.now();
       const payload = {
         instance_id: inst.id,
-        cameras: arr.map((c) => ({
-          id: c.id,
-          name: c.name,
-          state: c.state,
-          isConnected: c.isConnected === true || String(c.state ?? "").toUpperCase() === "CONNECTED",
-          lastSeenMs: typeof c.lastSeen === "number" ? c.lastSeen : null,
-        })),
+        cameras: arr.map((c) => {
+          const state = String(c.state ?? "").toUpperCase();
+          const lastSeenMs = typeof c.lastSeen === "number" ? c.lastSeen : null;
+          const fresh = lastSeenMs ? (nowMs - lastSeenMs) < STALE_MS : true;
+          const isConnected = state === "CONNECTED" && fresh;
+          return {
+            id: c.id,
+            name: c.name,
+            state: c.state,
+            isConnected,
+            lastSeenMs,
+          };
+        }),
       };
       const res = await fetch(STATUS_URL, {
         method: "POST",
