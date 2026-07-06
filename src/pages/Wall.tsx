@@ -158,6 +158,8 @@ const Wall = () => {
   const [alerts, setAlerts] = useState<Alert[]>(wallAlertsStore.alerts);
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [dispatchFor, setDispatchFor] = useState<Alert | null>(null);
+  
   
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
   const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set(["person"]));
