@@ -456,7 +456,7 @@ Deno.serve(async (req) => {
   }
 
   const results: any[] = [];
-  for (const cfg of (cfgs ?? []) as (Cfg & { organization_id: string })[]) {
+  for (const cfg of toRun) {
     const { data: inst } = await supabase.from("frigate_instances").select("id, name, base_url, api_key, auth_username, auth_password, auth_token_cache, auth_token_expires_at").eq("id", cfg.instance_id).maybeSingle();
     if (!inst) { results.push({ config_id: cfg.id, status: "skipped", error: "instance missing" }); continue; }
     const s = await getSettingsForOrg(cfg.organization_id);
