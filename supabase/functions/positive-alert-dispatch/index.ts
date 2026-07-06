@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
     // include both snapshot and video URLs.
     const { data: media } = await supabase
       .from("media_items")
-      .select("id, kind, url, clip_url, camera, topic, ts, event_id")
+      .select("id, kind, url, clip_url, camera, topic, ts, event_id, instance_id")
       .eq("id", tag.media_id)
       .maybeSingle();
 
@@ -213,10 +213,36 @@ Deno.serve(async (req) => {
     const snapshotAbs = snapshotTarget?.url ?? null;
     const videoAbs = videoTarget?.url ?? null;
 
+    // Resolve the "source" to the human-readable NVR / site / instance name
+    // instead of the raw MQTT topic. We probe hikvision → unifi → frigate by
+    // instance_id (they all use uuid PKs).
+    let sourceLabel: string | null = null;
+    if (media?.instance_id) {
+      const [{ data: hik }, { data: uni }, { data: fri }] = await Promise.all([
+        supabase.from("hikvision_instances").select("name").eq("id", media.instance_id).maybeSingle(),
+        supabase.from("unifi_instances").select("name").eq("id", media.instance_id).maybeSingle(),
+        supabase.from("frigate_instances").select("name").eq("id", media.instance_id).maybeSingle(),
+      ]);
+      sourceLabel = hik?.name ?? uni?.name ?? fri?.name ?? null;
+
+      // For Unifi, prefer the specific site name if the camera is mapped to one.
+      if (uni?.name && media.camera) {
+        const { data: site } = await supabase
+          .from("unifi_camera_sites")
+          .select("site_id, unifi_sites(name)")
+          .eq("unifi_instance_id", media.instance_id)
+          .eq("camera_id", media.camera)
+          .maybeSingle();
+        const siteName = (site as any)?.unifi_sites?.name;
+        if (siteName) sourceLabel = `${uni.name} · ${siteName}`;
+      }
+    }
+    if (!sourceLabel) sourceLabel = media?.topic ?? null;
+
     const lines: string[] = [];
     lines.push("✅ *Positive incident confirmed*");
     lines.push(`Camera: ${media?.camera ?? "unknown"}`);
-    if (media?.topic) lines.push(`Source: ${media.topic}`);
+    if (sourceLabel) lines.push(`Source: ${sourceLabel}`);
     lines.push(`Time: ${timeStr}`);
     lines.push(`Tagged by: ${operatorName}`);
     lines.push(`Tag: ${tag.tag}`);
@@ -224,10 +250,25 @@ Deno.serve(async (req) => {
     if (videoAbs) lines.push(`\nVideo: ${videoAbs}`);
     if (settings.reply_footer) lines.push(`\n${settings.reply_footer}`);
 
-    // Re-derive message after we know the resolved video URL.
-    const message = lines.slice(0, 7 + (tag.note && tag.note.trim() ? 1 : 0)).join("\n");
-    void message; // (kept for parity — full message below)
     const fullMessage = lines.join("\n");
+
+    // ATOMIC DEDUPE — insert the dispatch row BEFORE sending. A unique index
+    // on (media_id, group_jid) means a duplicate insert fails with 23505 and
+    // we return early. This blocks races (double-click, network retry, two
+    // handlers firing) at the database level, no matter what the client does.
+    const { error: insErr } = await supabase.from("positive_alert_dispatches").insert({
+      organization_id: orgId,
+      media_id: tag.media_id,
+      tag_id: tag.id,
+      group_jid: groupJid,
+    });
+    if (insErr) {
+      // 23505 = unique_violation
+      if ((insErr as any).code === "23505" || /duplicate key/i.test(insErr.message ?? "")) {
+        return j(200, { ok: true, skipped: "already_dispatched" });
+      }
+      return j(500, { error: `dispatch record failed: ${insErr.message}` });
+    }
 
     // Fetch snapshot as base64 so the listener host doesn't need outbound access.
     let imageB64: string | null = null;
@@ -238,7 +279,6 @@ Deno.serve(async (req) => {
     try {
       await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, fullMessage, {
         image_base64: imageB64,
-        // Only pass an absolute URL if we couldn't base64 it ourselves.
         image_url: imageB64 ? null : snapshotAbs,
       });
       sentWithImage = Boolean(imageB64);
@@ -251,16 +291,14 @@ Deno.serve(async (req) => {
       try {
         await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, textOnly);
       } catch (e2) {
+        // Roll back the dispatch record so a retry can succeed.
+        await supabase.from("positive_alert_dispatches")
+          .delete()
+          .eq("media_id", tag.media_id)
+          .eq("group_jid", groupJid);
         return j(502, { error: `send failed: ${sendError}; fallback: ${(e2 as Error)?.message ?? e2}` });
       }
     }
-
-    await supabase.from("positive_alert_dispatches").insert({
-      organization_id: orgId,
-      media_id: tag.media_id,
-      tag_id: tag.id,
-      group_jid: groupJid,
-    });
 
     return j(200, { ok: true, sent: true, group: groupJid, with_image: sentWithImage, fallback: sendError });
   } catch (e) {
