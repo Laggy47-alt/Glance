@@ -1,8 +1,14 @@
-// Runs hourly via pg_cron. For each org with daily_broadcast_enabled,
-// if the current hour (in the org's quiet_timezone) matches the configured
-// daily_broadcast_time, send a WhatsApp summary of currently offline cameras
-// (sourced from camera_status, maintained by camera-watch) to the configured
-// daily_broadcast_recipients group(s).
+// Sends per-org WhatsApp offline-camera broadcasts on a per-day schedule.
+//
+// Two modes per org:
+//   * Multi-slot (preferred when whatsapp_settings.daily_broadcast_times is
+//     non-empty): fire once per configured HH:MM slot per day, gated by
+//     daily_broadcast_last_sent_at + a window.
+//   * Legacy single slot (daily_broadcast_time): fires when current HH:MM
+//     matches. Kept for orgs that haven't opted into the array.
+//
+// Cron: run at least every windowMinutes. Manual triggers with ?force=1
+// bypass the schedule (useful for testing).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -20,25 +26,82 @@ function currentHM(tz: string): { h: number; m: number } {
   } catch { const d = new Date(); return { h: d.getUTCHours(), m: d.getUTCMinutes() }; }
 }
 
+// Compute the UTC timestamp (ms) of "today HH:MM" in the given timezone.
+// Uses fixed offset heuristic — good enough for gating "already sent this slot today".
+function slotUtcMs(tz: string, hh: number, mm: number): number {
+  // Get org-local Y-M-D
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+  const parts = fmt.formatToParts(new Date());
+  const y = Number(parts.find((p) => p.type === "year")?.value);
+  const mo = Number(parts.find((p) => p.type === "month")?.value);
+  const d = Number(parts.find((p) => p.type === "day")?.value);
+  // Compute offset (minutes) of tz vs UTC right now
+  const nowUtc = Date.now();
+  const fmt2 = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false, year: "numeric", month: "2-digit", day: "2-digit" });
+  const p2 = fmt2.formatToParts(new Date(nowUtc));
+  const ly = Number(p2.find((p) => p.type === "year")?.value);
+  const lmo = Number(p2.find((p) => p.type === "month")?.value);
+  const ld = Number(p2.find((p) => p.type === "day")?.value);
+  const lh = Number(p2.find((p) => p.type === "hour")?.value);
+  const lm = Number(p2.find((p) => p.type === "minute")?.value);
+  const localAsUtc = Date.UTC(ly, lmo - 1, ld, lh, lm);
+  const offsetMs = localAsUtc - nowUtc; // tz-local minus real utc
+  return Date.UTC(y, mo - 1, d, hh, mm) - offsetMs;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
   const force = url.searchParams.get("force") === "1";
+  // Match the cron interval; slots fire once when curTime is within [slot, slot+window].
+  const windowMinutes = Math.max(1, Number(url.searchParams.get("window_minutes")) || 15);
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: orgs, error } = await supabase
     .from("whatsapp_settings")
-    .select("organization_id, enabled, daily_broadcast_enabled, daily_broadcast_recipients, daily_broadcast_time, quiet_timezone, default_recipients");
+    .select("organization_id, enabled, daily_broadcast_enabled, daily_broadcast_recipients, daily_broadcast_time, daily_broadcast_times, daily_broadcast_last_sent_at, quiet_timezone, default_recipients");
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   const results: any[] = [];
   for (const o of orgs ?? []) {
     if (!o.enabled || !o.daily_broadcast_enabled) continue;
-    const [hh, mm] = String(o.daily_broadcast_time ?? "08:00").split(":").map(Number);
-    const now = currentHM(o.quiet_timezone || "UTC");
-    // Per-minute cron — fire when both hour and minute match the configured time
-    if (!force && (now.h !== hh || now.m !== mm)) continue;
+
+    const tz = o.quiet_timezone || "UTC";
+    const now = currentHM(tz);
+    const curMinutes = now.h * 60 + now.m;
+    const nowMs = Date.now();
+    const times: string[] = Array.isArray(o.daily_broadcast_times) && o.daily_broadcast_times.length
+      ? o.daily_broadcast_times
+      : [String(o.daily_broadcast_time ?? "08:00")];
+    const multiSlot = Array.isArray(o.daily_broadcast_times) && o.daily_broadcast_times.length > 0;
+
+    // Decide whether this run should fire.
+    let dueSlot: string | null = null;
+    if (force) {
+      dueSlot = times[0] ?? "08:00";
+    } else if (multiSlot) {
+      const lastSentMs = o.daily_broadcast_last_sent_at ? new Date(o.daily_broadcast_last_sent_at).getTime() : 0;
+      for (const t of times) {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
+        if (!m) continue;
+        const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+        const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+        const slotMinutes = hh * 60 + mm;
+        const diff = curMinutes - slotMinutes;
+        if (diff < 0 || diff > windowMinutes) continue;
+        // Already fired this slot today?
+        const slotMs = slotUtcMs(tz, hh, mm);
+        if (lastSentMs >= slotMs) continue;
+        dueSlot = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+        break;
+      }
+    } else {
+      // Legacy single-slot: fire when hour+minute match exactly.
+      const [hh, mm] = String(o.daily_broadcast_time ?? "08:00").split(":").map(Number);
+      if (now.h === hh && now.m === mm) dueSlot = String(o.daily_broadcast_time ?? "08:00");
+    }
+    if (!dueSlot) continue;
 
     // Get NVRs for this org and their offline cameras
     const { data: insts } = await supabase
@@ -55,7 +118,6 @@ Deno.serve(async (req) => {
     );
     const instIds = Array.from(instMap.keys());
 
-
     let nvrsPayload: Array<{ name: string; reachable: boolean; offlineCameras: string[] }> = [];
     if (instIds.length) {
       const { data: states } = await supabase
@@ -66,7 +128,6 @@ Deno.serve(async (req) => {
       // Note: offline alerts fire regardless of armed state — clients need to
       // know when cameras are offline even during scheduled disarm windows.
       const grouped = new Map<string, string[]>();
-      const nowMs = Date.now();
       for (const s of states ?? []) {
         const mins = Math.max(0, Math.floor((nowMs - new Date(s.since).getTime()) / 60_000));
         const list = grouped.get(s.instance_id) ?? [];
@@ -84,10 +145,10 @@ Deno.serve(async (req) => {
 
     let message: string;
     if (!nvrsPayload.length) {
-      message = "✅ Daily report — no cameras are currently offline.";
+      message = `✅ Daily report (${dueSlot}) — no cameras are currently offline.`;
     } else {
       const blocks = nvrsPayload.map((n) => `🚨 *${n.name}* — ${n.offlineCameras.length} offline:\n${n.offlineCameras.map((c) => `• ${c}`).join("\n")}`);
-      message = `📋 Daily offline summary\n\n${blocks.join("\n\n")}`;
+      message = `📋 Daily offline summary (${dueSlot})\n\n${blocks.join("\n\n")}`;
     }
 
     async function sendWA(toRecipients: string[], msg: string) {
@@ -105,16 +166,19 @@ Deno.serve(async (req) => {
       return { status: r.status, response: j };
     }
 
+    let anySent = false;
+
     // 1) Org-wide summary
     if (recipients.length) {
       try {
         const out = await sendWA(recipients, message);
-        results.push({ org: o.organization_id, scope: "org", sent: nvrsPayload.length, ...out });
+        anySent = true;
+        results.push({ org: o.organization_id, slot: dueSlot, scope: "org", sent: nvrsPayload.length, ...out });
       } catch (e: any) {
-        results.push({ org: o.organization_id, scope: "org", error: String(e?.message ?? e) });
+        results.push({ org: o.organization_id, slot: dueSlot, scope: "org", error: String(e?.message ?? e) });
       }
     } else {
-      results.push({ org: o.organization_id, scope: "org", skipped: "no recipients" });
+      results.push({ org: o.organization_id, slot: dueSlot, scope: "org", skipped: "no recipients" });
     }
 
     // 2) Per-NVR client summaries (only NVRs with daily_broadcast_enabled + recipients)
@@ -124,14 +188,23 @@ Deno.serve(async (req) => {
       if (!nvrRecips.length) { results.push({ org: o.organization_id, nvr: info.name, skipped: "no recipients" }); continue; }
       const cams = (nvrsPayload.find((n) => n.name === info.name)?.offlineCameras) ?? [];
       const nvrMsg = cams.length
-        ? `📋 Daily offline summary\n\n🚨 *${info.name}* — ${cams.length} offline:\n${cams.map((c) => `• ${c}`).join("\n")}`
-        : `✅ Daily report — *${info.name}*: all cameras online.`;
+        ? `📋 Daily offline summary (${dueSlot})\n\n🚨 *${info.name}* — ${cams.length} offline:\n${cams.map((c) => `• ${c}`).join("\n")}`
+        : `✅ Daily report (${dueSlot}) — *${info.name}*: all cameras online.`;
       try {
         const out = await sendWA(nvrRecips, nvrMsg);
-        results.push({ org: o.organization_id, nvr: info.name, scope: "nvr", sent: cams.length, ...out });
+        anySent = true;
+        results.push({ org: o.organization_id, slot: dueSlot, nvr: info.name, scope: "nvr", sent: cams.length, ...out });
       } catch (e: any) {
-        results.push({ org: o.organization_id, nvr: info.name, scope: "nvr", error: String(e?.message ?? e) });
+        results.push({ org: o.organization_id, slot: dueSlot, nvr: info.name, scope: "nvr", error: String(e?.message ?? e) });
       }
+    }
+
+    // Mark this slot as fired for multi-slot mode. In force mode we skip the
+    // stamp so a manual test doesn't consume the next real slot.
+    if (multiSlot && anySent && !force) {
+      await supabase.from("whatsapp_settings")
+        .update({ daily_broadcast_last_sent_at: new Date().toISOString() })
+        .eq("organization_id", o.organization_id);
     }
   }
 

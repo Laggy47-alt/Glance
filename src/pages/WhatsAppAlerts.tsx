@@ -66,6 +66,7 @@ type WAS = {
   daily_broadcast_enabled: boolean;
   daily_broadcast_recipients: string[];
   daily_broadcast_time: string;
+  daily_broadcast_times: string[];
   daily_broadcast_template: string | null;
   last_heartbeat_at?: string | null;
   last_heartbeat_status?: string | null;
@@ -109,12 +110,131 @@ const DEFAULTS: WAS = {
   daily_broadcast_enabled: false,
   daily_broadcast_recipients: [],
   daily_broadcast_time: "08:00",
+  daily_broadcast_times: [],
   daily_broadcast_template:
     "Hey there! 👋😊\n\nI'm Glance, your friendly ABC CCTV sidekick! 🛡️🤖\n\nKeep an eye out for my updates — I'll ping you whenever something needs attention onsite. 🔔🔧\n\nNeed technical assistance? Just reply to this message and our team will be in touch! 👨‍💻🚀\n\nCheers for now! 🎉👍",
   positive_alert_enabled: false,
   positive_alert_group_jid: "",
   positive_alert_cooldown_seconds: 60,
 };
+
+function normalizeTimes(times: string[]): string[] {
+  return Array.from(new Set((times ?? []).filter((t) => /^\d{2}:\d{2}$/.test(t)))).sort();
+}
+
+function BroadcastDailySection({
+  settings, setSettings, save, saving, setSection,
+}: {
+  settings: WAS;
+  setSettings: (s: WAS) => void;
+  save: () => void;
+  saving: boolean;
+  setSection: (s: Section) => void;
+}) {
+  const [newTime, setNewTime] = useState("");
+  const times = settings.daily_broadcast_times ?? [];
+  const multi = times.length > 0;
+  return (
+    <div className="space-y-4">
+      <Header
+        icon={Megaphone}
+        title="Scheduled daily broadcast"
+        subtitle={multi
+          ? `Sends ${times.length} time(s) per day — a summary of currently-offline cameras.`
+          : "One summary per day of currently-offline cameras."}
+      />
+      <ToggleRow label="Enabled" checked={settings.daily_broadcast_enabled} onChange={(v) => setSettings({ ...settings, daily_broadcast_enabled: v })} />
+
+      <div className="space-y-1.5">
+        <Label className="text-xs flex items-center gap-1.5">
+          <Clock className="h-3 w-3" />
+          Send times ({settings.quiet_timezone}) — {multi ? `${times.length} per day` : "single-slot (legacy)"}
+        </Label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {times.length === 0 && (
+            <span className="text-[11px] text-muted-foreground italic">
+              No slots configured — falling back to single time <span className="font-mono">{settings.daily_broadcast_time}</span>. Add a slot below to switch to multi-time mode.
+            </span>
+          )}
+          {times.map((t) => (
+            <Badge key={t} variant="secondary" className="gap-1 pr-1 font-mono">
+              {t}
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, daily_broadcast_times: normalizeTimes(times.filter((x) => x !== t)) })}
+                className="hover:text-destructive ml-0.5"
+                title="Remove"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+        <div className="flex gap-2 items-center flex-wrap">
+          <Input
+            type="time"
+            value={newTime}
+            onChange={(e) => setNewTime(e.target.value)}
+            className="bg-secondary border-border w-32"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            onClick={() => {
+              if (!/^\d{2}:\d{2}$/.test(newTime)) { toast.error("Pick a valid time"); return; }
+              if (times.includes(newTime)) { toast.error("Time already added"); return; }
+              setSettings({ ...settings, daily_broadcast_times: normalizeTimes([...times, newTime]) });
+              setNewTime("");
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" /> Add time
+          </Button>
+          {multi && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-[11px] text-muted-foreground"
+              onClick={() => setSettings({ ...settings, daily_broadcast_times: [] })}
+            >
+              Clear (revert to single slot)
+            </Button>
+          )}
+          <span className="text-[10px] text-muted-foreground">
+            Cron must run at least as often as your smallest gap.
+          </span>
+        </div>
+      </div>
+
+      {!multi && (
+        <Field label={`Legacy single send time (HH:MM, ${settings.quiet_timezone})`}>
+          <Input
+            type="time"
+            value={settings.daily_broadcast_time}
+            onChange={(e) => setSettings({ ...settings, daily_broadcast_time: e.target.value || "08:00" })}
+            className="bg-secondary border-border w-40"
+          />
+        </Field>
+      )}
+
+      <Field label="Global daily-broadcast recipients" hint="Receive the consolidated org-wide daily report. Falls back to Global recipients if empty.">
+        <RecipientList
+          value={settings.daily_broadcast_recipients}
+          onChange={(v) => setSettings({ ...settings, daily_broadcast_recipients: v })}
+          placeholder="+27821234567 or 12345-67890@g.us"
+        />
+      </Field>
+
+      <p className="text-[11px] text-muted-foreground">
+        Each NVR can also send its own daily report to its assigned recipients — enable it under{" "}
+        <button onClick={() => setSection("nvrs")} className="text-primary hover:underline">Per-NVR recipients</button>.
+      </p>
+      <SaveBar onSave={save} saving={saving} />
+    </div>
+  );
+}
 
 function RecipientList({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
   const [draft, setDraft] = useState("");
@@ -230,6 +350,9 @@ export default function WhatsAppAlerts() {
     setSaving(true);
     const payload = { ...settings, organization_id: activeOrg.id };
     delete (payload as any).last_sent_at;
+    delete (payload as any).last_heartbeat_at;
+    delete (payload as any).last_heartbeat_status;
+    delete (payload as any).daily_broadcast_last_sent_at;
     const { error } = await supabase.from("whatsapp_settings").upsert(payload, { onConflict: "organization_id" });
     setSaving(false);
     if (error) { toast.error(error.message); return; }
@@ -479,20 +602,13 @@ export default function WhatsAppAlerts() {
           )}
 
           {section === "daily" && (
-            <div className="space-y-4">
-              <Header icon={Megaphone} title="Scheduled daily broadcast" subtitle="One summary per day of currently-offline cameras." />
-              <ToggleRow label="Enabled" checked={settings.daily_broadcast_enabled} onChange={(v) => setSettings({ ...settings, daily_broadcast_enabled: v })} />
-              <div className="grid md:grid-cols-2 gap-3">
-                <Field label={`Send at (HH:MM, ${settings.quiet_timezone})`}>
-                  <Input type="time" value={settings.daily_broadcast_time} onChange={(e) => setSettings({ ...settings, daily_broadcast_time: e.target.value || "08:00" })} className="bg-secondary border-border w-40" />
-                </Field>
-                <Field label="Global daily-broadcast recipients" hint="Receive the consolidated org-wide daily report. Falls back to Global recipients if empty.">
-                  <RecipientList value={settings.daily_broadcast_recipients} onChange={(v) => setSettings({ ...settings, daily_broadcast_recipients: v })} placeholder="+27821234567 or 12345-67890@g.us" />
-                </Field>
-              </div>
-              <p className="text-[11px] text-muted-foreground">Each NVR can also send its own daily report to its assigned recipients — enable it under <button onClick={() => setSection("nvrs")} className="text-primary hover:underline">Per-NVR recipients</button>.</p>
-              <SaveBar onSave={save} saving={saving} />
-            </div>
+            <BroadcastDailySection
+              settings={settings}
+              setSettings={setSettings}
+              save={save}
+              saving={saving}
+              setSection={setSection}
+            />
           )}
 
           {section === "positive" && (
