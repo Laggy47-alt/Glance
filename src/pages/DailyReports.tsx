@@ -140,8 +140,9 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   onDelete: () => void;
 }) {
   const instanceName = instance?.name ?? "(deleted NVR)";
-  const [local, setLocal] = useState<Cfg>(cfg);
+  const [local, setLocal] = useState<Cfg>(() => ({ ...cfg, send_times: normalizeTimes(cfg.send_times) }));
   const [newEmail, setNewEmail] = useState("");
+  const [newTime, setNewTime] = useState("");
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
