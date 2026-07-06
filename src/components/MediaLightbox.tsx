@@ -49,7 +49,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
 
 
 
-  const addTag = async (value: string) => {
+  const addTag = async (value: string, note?: string) => {
     if (!item?.mediaId) return;
     const tag = value.trim();
     if (!tag) return;
@@ -57,7 +57,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("media_tags")
-      .insert({ organization_id: item.organizationId, media_id: item.mediaId, tag, created_by: user?.id ?? null })
+      .insert({ organization_id: item.organizationId, media_id: item.mediaId, tag, note: note?.trim() || null, created_by: user?.id ?? null })
       .select("id, tag, note")
       .single();
     setLoading(false);
@@ -67,6 +67,27 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     }
     setTags((prev) => [data as MediaTag, ...prev]);
     setNewTag("");
+
+    // Fire-and-forget WhatsApp group alert for positive-incident tags.
+    if (/^positive/i.test(tag)) {
+      supabase.functions
+        .invoke("positive-alert-dispatch", { body: { media_tag_id: (data as MediaTag).id } })
+        .then(({ data: res, error: fnErr }) => {
+          if (fnErr) { console.warn("positive-alert-dispatch error", fnErr); return; }
+          if (res?.sent) toast.success("WhatsApp positive-incident alert sent");
+          else if (res?.skipped === "disabled") { /* silent */ }
+          else if (res?.skipped === "cooldown") toast.info("Positive alert skipped (cooldown)");
+          else if (res?.skipped === "no_group_jid") toast.info("Configure the positive-alert group in WhatsApp settings");
+        })
+        .catch((e) => console.warn("positive-alert-dispatch failed", e));
+    }
+  };
+
+  const updateNote = async (id: string, note: string) => {
+    const clean = note.trim();
+    const { error } = await supabase.from("media_tags").update({ note: clean || null }).eq("id", id);
+    if (error) { toast.error("Failed to save note"); return; }
+    setTags((prev) => prev.map((t) => t.id === id ? { ...t, note: clean || null } : t));
   };
 
   const removeTag = async (id: string) => {
@@ -102,18 +123,28 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                   <TagIcon className="h-3.5 w-3.5 text-primary" /> Tags
                 </div>
                 {tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="space-y-1.5">
                     {tags.map((t) => (
-                      <Badge key={t.id} variant="secondary" className="gap-1 pr-1 bg-primary/15 text-primary border border-primary/30">
-                        {t.tag}
-                        <button
-                          onClick={() => removeTag(t.id)}
-                          className="hover:bg-primary/20 rounded-sm h-3.5 w-3.5 grid place-items-center"
-                          aria-label="Remove tag"
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      </Badge>
+                      <div key={t.id} className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="secondary" className="gap-1 pr-1 bg-primary/15 text-primary border border-primary/30">
+                          {t.tag}
+                          <button
+                            onClick={() => removeTag(t.id)}
+                            className="hover:bg-primary/20 rounded-sm h-3.5 w-3.5 grid place-items-center"
+                            aria-label="Remove tag"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </Badge>
+                        <Input
+                          defaultValue={t.note ?? ""}
+                          placeholder="Add a comment…"
+                          onBlur={(e) => {
+                            if ((e.target.value ?? "") !== (t.note ?? "")) updateNote(t.id, e.target.value);
+                          }}
+                          className="h-7 text-xs bg-background border-border flex-1 min-w-[180px]"
+                        />
+                      </div>
                     ))}
                   </div>
                 )}

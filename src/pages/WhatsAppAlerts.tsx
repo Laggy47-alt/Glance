@@ -69,6 +69,9 @@ type WAS = {
   daily_broadcast_template: string | null;
   last_heartbeat_at?: string | null;
   last_heartbeat_status?: string | null;
+  positive_alert_enabled: boolean;
+  positive_alert_group_jid: string | null;
+  positive_alert_cooldown_seconds: number;
 };
 
 type Nvr = {
@@ -108,6 +111,9 @@ const DEFAULTS: WAS = {
   daily_broadcast_time: "08:00",
   daily_broadcast_template:
     "Hey there! 👋😊\n\nI'm Glance, your friendly ABC CCTV sidekick! 🛡️🤖\n\nKeep an eye out for my updates — I'll ping you whenever something needs attention onsite. 🔔🔧\n\nNeed technical assistance? Just reply to this message and our team will be in touch! 👨‍💻🚀\n\nCheers for now! 🎉👍",
+  positive_alert_enabled: false,
+  positive_alert_group_jid: "",
+  positive_alert_cooldown_seconds: 60,
 };
 
 function RecipientList({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
@@ -141,7 +147,7 @@ function RecipientList({ value, onChange, placeholder }: { value: string[]; onCh
   );
 }
 
-type Section = "connection" | "recipients" | "templates" | "schedule" | "daily" | "broadcast" | "nvrs" | "inbox";
+type Section = "connection" | "recipients" | "templates" | "schedule" | "daily" | "positive" | "broadcast" | "nvrs" | "inbox";
 
 const NAV: { id: Section; label: string; icon: any }[] = [
   { id: "connection", label: "Connection", icon: Settings2 },
@@ -149,6 +155,7 @@ const NAV: { id: Section; label: string; icon: any }[] = [
   { id: "templates", label: "Templates", icon: FileText },
   { id: "schedule", label: "Schedule & limits", icon: Clock },
   { id: "daily", label: "Daily broadcast", icon: Megaphone },
+  { id: "positive", label: "Positive incidents", icon: ShieldAlert },
   { id: "broadcast", label: "Send message", icon: Radio },
   { id: "nvrs", label: "Per-NVR recipients", icon: Server },
   { id: "inbox", label: "Reply inbox", icon: Inbox },
@@ -487,6 +494,46 @@ export default function WhatsAppAlerts() {
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}
+
+          {section === "positive" && (
+            <div className="space-y-4">
+              <Header
+                icon={ShieldAlert}
+                title="Positive-incident group alert"
+                subtitle="When an operator tags a media item with a tag starting with “positive”, send the snapshot, video link and their comment to a single WhatsApp group."
+              />
+              <ToggleRow
+                label="Send WhatsApp when a positive tag is added"
+                checked={settings.positive_alert_enabled}
+                onChange={(v) => setSettings({ ...settings, positive_alert_enabled: v })}
+              />
+              <div className="grid md:grid-cols-2 gap-3">
+                <Field label="WhatsApp group ID (JID)" hint="Format looks like 120363000000000000@g.us. Get it from the mudslide listener’s /groups endpoint.">
+                  <Input
+                    value={settings.positive_alert_group_jid ?? ""}
+                    onChange={(e) => setSettings({ ...settings, positive_alert_group_jid: e.target.value })}
+                    placeholder="120363000000000000@g.us"
+                    className="bg-secondary border-border font-mono text-xs"
+                  />
+                </Field>
+                <Field label="Per-media cooldown (seconds)" hint="Suppress repeat sends for the same media within this window.">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={settings.positive_alert_cooldown_seconds}
+                    onChange={(e) => setSettings({ ...settings, positive_alert_cooldown_seconds: Math.max(0, Number(e.target.value) || 0) })}
+                    className="bg-secondary border-border w-40"
+                  />
+                </Field>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                The message includes camera name, timestamp, operator name, the tag’s comment, and public snapshot + video URLs — WhatsApp renders the snapshot URL inline.
+              </p>
+              <SaveBar onSave={save} saving={saving} />
+            </div>
+          )}
+
+
 
           {section === "broadcast" && (
             <div className="space-y-5">
