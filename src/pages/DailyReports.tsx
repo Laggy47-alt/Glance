@@ -176,11 +176,12 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
       enabled: local.enabled,
       cameras: local.cameras,
       label: local.label?.trim() || null,
+      send_times: normalizeTimes(local.send_times),
     }).eq("id", local.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Saved — will keep sending daily until edited again");
-    onChange(local);
+    toast.success("Saved");
+    onChange({ ...local, send_times: normalizeTimes(local.send_times) });
   };
 
   const persistIfDirty = async () => {
@@ -192,9 +193,10 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
       enabled: local.enabled,
       cameras: local.cameras,
       label: local.label?.trim() || null,
+      send_times: normalizeTimes(local.send_times),
     }).eq("id", local.id);
     if (error) { toast.error(error.message); return false; }
-    onChange(local);
+    onChange({ ...local, send_times: normalizeTimes(local.send_times) });
     return true;
   };
 
