@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
     // include both snapshot and video URLs.
     const { data: media } = await supabase
       .from("media_items")
-      .select("id, kind, url, clip_url, camera, topic, ts, event_id")
+      .select("id, kind, url, clip_url, camera, topic, ts, event_id, instance_id")
       .eq("id", tag.media_id)
       .maybeSingle();
 
