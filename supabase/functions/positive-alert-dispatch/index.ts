@@ -199,9 +199,32 @@ Deno.serve(async (req) => {
 
     const message = lines.join("\n");
 
-    await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, message, {
-      image_url: snapshotUrl,
-    });
+    // Fetch snapshot once, in the edge function, and pass as base64 so the
+    // listener host doesn't need outbound access to the storage URL.
+    let imageB64: string | null = null;
+    if (snapshotUrl) imageB64 = await fetchAsBase64(snapshotUrl);
+
+    let sendError: string | null = null;
+    let sentWithImage = false;
+    try {
+      await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, message, {
+        image_base64: imageB64,
+        image_url: imageB64 ? null : snapshotUrl,
+      });
+      sentWithImage = Boolean(imageB64 || snapshotUrl);
+    } catch (e) {
+      sendError = (e as Error)?.message ?? String(e);
+      console.warn(`media send failed, falling back to text: ${sendError}`);
+      // Fallback: text-only with snapshot URL appended.
+      const textOnly = snapshotUrl
+        ? `${message}\n\nSnapshot: ${snapshotUrl}`
+        : message;
+      try {
+        await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, textOnly);
+      } catch (e2) {
+        return j(502, { error: `send failed: ${sendError}; fallback: ${(e2 as Error)?.message ?? e2}` });
+      }
+    }
 
     await supabase.from("positive_alert_dispatches").insert({
       organization_id: orgId,
@@ -210,7 +233,7 @@ Deno.serve(async (req) => {
       group_jid: groupJid,
     });
 
-    return j(200, { ok: true, sent: true, group: groupJid });
+    return j(200, { ok: true, sent: true, group: groupJid, with_image: sentWithImage, fallback: sendError });
   } catch (e) {
     return j(500, { error: String((e as Error)?.message ?? e) });
   }
