@@ -114,7 +114,10 @@ Deno.serve(async (req) => {
       const lastRec = c.last_recovery_sent_at ? new Date(c.last_recovery_sent_at).getTime() : 0;
 
       if (!c.is_online && offMs && (nowMs - offMs) >= thresholdMs) {
-        if (!lastAlert || (nowMs - lastAlert) >= cooldownMs) dueOffline.push(c);
+        // Alert once per offline event: only if we haven't already alerted
+        // since this camera went offline. cooldownMs is kept as a safety
+        // floor in case last_offline_at wasn't updated for some reason.
+        if (lastAlert < offMs && (nowMs - lastAlert) >= cooldownMs) dueOffline.push(c);
       }
       if (s.notify_on_recovery && c.is_online && onMs && lastAlert && onMs > lastAlert && (!lastRec || lastRec < onMs)) {
         dueRecovery.push(c);
