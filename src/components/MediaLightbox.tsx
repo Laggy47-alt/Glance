@@ -80,15 +80,20 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
       } catch { /* ignore */ }
       console.warn("positive-alert-dispatch failed:", fnErr, detail);
       toast.error(`WhatsApp alert failed: ${String(detail).slice(0, 300)}`);
+      inflightRef.current.delete(tagId); // allow retry
       return;
     }
-    if (res?.error) { toast.error(`WhatsApp alert failed: ${String(res.error).slice(0, 300)}`); return; }
+    if (res?.error) {
+      toast.error(`WhatsApp alert failed: ${String(res.error).slice(0, 300)}`);
+      inflightRef.current.delete(tagId);
+      return;
+    }
     if (res?.sent) { toast.success("WhatsApp positive-incident alert sent"); setDispatched((s) => new Set(s).add(tagId)); }
     else if (res?.skipped === "disabled") toast.info("Positive alerts are disabled in WhatsApp settings");
     else if (res?.skipped === "cooldown") { toast.info("Positive alert skipped (cooldown)"); setDispatched((s) => new Set(s).add(tagId)); }
-    else if (res?.skipped === "no_group_jid") toast.info("Configure the positive-alert group in WhatsApp settings");
-    else if (res?.skipped === "no_mudslide_url") toast.info("Mudslide URL not configured");
-    else if (res?.skipped) toast.info(`Positive alert skipped: ${res.skipped}`);
+    else if (res?.skipped === "no_group_jid") { toast.info("Configure the positive-alert group in WhatsApp settings"); inflightRef.current.delete(tagId); }
+    else if (res?.skipped === "no_mudslide_url") { toast.info("Mudslide URL not configured"); inflightRef.current.delete(tagId); }
+    else if (res?.skipped) { toast.info(`Positive alert skipped: ${res.skipped}`); inflightRef.current.delete(tagId); }
   };
 
   const addTag = async (value: string, note?: string) => {
