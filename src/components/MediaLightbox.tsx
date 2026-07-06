@@ -123,18 +123,28 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                   <TagIcon className="h-3.5 w-3.5 text-primary" /> Tags
                 </div>
                 {tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="space-y-1.5">
                     {tags.map((t) => (
-                      <Badge key={t.id} variant="secondary" className="gap-1 pr-1 bg-primary/15 text-primary border border-primary/30">
-                        {t.tag}
-                        <button
-                          onClick={() => removeTag(t.id)}
-                          className="hover:bg-primary/20 rounded-sm h-3.5 w-3.5 grid place-items-center"
-                          aria-label="Remove tag"
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      </Badge>
+                      <div key={t.id} className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="secondary" className="gap-1 pr-1 bg-primary/15 text-primary border border-primary/30">
+                          {t.tag}
+                          <button
+                            onClick={() => removeTag(t.id)}
+                            className="hover:bg-primary/20 rounded-sm h-3.5 w-3.5 grid place-items-center"
+                            aria-label="Remove tag"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </Badge>
+                        <Input
+                          defaultValue={t.note ?? ""}
+                          placeholder="Add a comment…"
+                          onBlur={(e) => {
+                            if ((e.target.value ?? "") !== (t.note ?? "")) updateNote(t.id, e.target.value);
+                          }}
+                          className="h-7 text-xs bg-background border-border flex-1 min-w-[180px]"
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
