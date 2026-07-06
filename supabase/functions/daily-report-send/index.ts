@@ -21,6 +21,8 @@ type Cfg = {
   enabled: boolean;
   cameras: string[];
   label: string | null;
+  send_times: string[];
+  last_sent_at: string | null;
 };
 
 type Instance = FrigateAuthRow & {
