@@ -82,6 +82,9 @@ export type Database = {
       callout_requests: {
         Row: {
           admin_note: string | null
+          assigned_at: string | null
+          assigned_responder_id: string | null
+          assigned_vehicle_id: string | null
           camera: string | null
           created_at: string
           id: string
@@ -96,6 +99,9 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          assigned_at?: string | null
+          assigned_responder_id?: string | null
+          assigned_vehicle_id?: string | null
           camera?: string | null
           created_at?: string
           id?: string
@@ -110,6 +116,9 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          assigned_at?: string | null
+          assigned_responder_id?: string | null
+          assigned_vehicle_id?: string | null
           camera?: string | null
           created_at?: string
           id?: string
@@ -122,7 +131,22 @@ export type Database = {
           resolved_by?: string | null
           status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "callout_requests_assigned_responder_id_fkey"
+            columns: ["assigned_responder_id"]
+            isOneToOne: false
+            referencedRelation: "responders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "callout_requests_assigned_vehicle_id_fkey"
+            columns: ["assigned_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       callout_settings: {
         Row: {
@@ -1208,6 +1232,53 @@ export type Database = {
         }
         Relationships: []
       }
+      responders: {
+        Row: {
+          active: boolean
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          phone: string | null
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id: string
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "responders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       super_callout_requests: {
         Row: {
           admin_note: string | null
@@ -1569,6 +1640,63 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      vehicles: {
+        Row: {
+          active: boolean
+          color: string | null
+          created_at: string
+          id: string
+          make: string | null
+          model: string | null
+          notes: string | null
+          organization_id: string
+          plate: string
+          responder_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          color?: string | null
+          created_at?: string
+          id?: string
+          make?: string | null
+          model?: string | null
+          notes?: string | null
+          organization_id: string
+          plate: string
+          responder_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          color?: string | null
+          created_at?: string
+          id?: string
+          make?: string | null
+          model?: string | null
+          notes?: string | null
+          organization_id?: string
+          plate?: string
+          responder_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_responder_id_fkey"
+            columns: ["responder_id"]
+            isOneToOne: false
+            referencedRelation: "responders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_events: {
         Row: {

@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Loader2, Phone, Settings, CheckCircle2, Clock, Trash2 } from "lucide-react";
+import { Loader2, Phone, Settings, CheckCircle2, Clock, Trash2, Car, User } from "lucide-react";
 
 type Callout = {
   id: string;
@@ -22,26 +23,37 @@ type Callout = {
   created_at: string;
   resolved_at: string | null;
   admin_note: string | null;
+  assigned_responder_id: string | null;
+  assigned_vehicle_id: string | null;
+  assigned_at: string | null;
 };
+
+type Responder = { id: string; name: string };
+type Vehicle = { id: string; plate: string; responder_id: string | null };
+
+const sb = supabase as any;
 
 const Callouts = () => {
   const store = useWebhookStore();
   const { activeOrg } = useAuth();
   const [rows, setRows] = useState<Callout[]>([]);
+  const [responders, setResponders] = useState<Responder[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [noteFor, setNoteFor] = useState<Callout | null>(null);
 
   const load = async () => {
     setLoading(true);
-    if (!activeOrg?.id) { setRows([]); setLoading(false); return; }
-    const { data } = await supabase
-      .from("callout_requests")
-      .select("*")
-      .eq("organization_id", activeOrg.id)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    setRows((data ?? []) as Callout[]);
+    if (!activeOrg?.id) { setRows([]); setResponders([]); setVehicles([]); setLoading(false); return; }
+    const [c, r, v] = await Promise.all([
+      supabase.from("callout_requests").select("*").eq("organization_id", activeOrg.id).order("created_at", { ascending: false }).limit(200),
+      sb.from("responders").select("id,name").eq("organization_id", activeOrg.id).eq("active", true).order("name"),
+      sb.from("vehicles").select("id,plate,responder_id").eq("organization_id", activeOrg.id).eq("active", true).order("plate"),
+    ]);
+    setRows((c.data ?? []) as Callout[]);
+    setResponders((r.data ?? []) as Responder[]);
+    setVehicles((v.data ?? []) as Vehicle[]);
     setLoading(false);
   };
 
@@ -53,6 +65,29 @@ const Callouts = () => {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [activeOrg?.id]);
+
+  const assignResponder = async (id: string, responder_id: string | null) => {
+    const patch: any = { assigned_responder_id: responder_id, assigned_at: responder_id ? new Date().toISOString() : null };
+    // Auto-pick a vehicle assigned to that responder if none set yet
+    const cur = rows.find((r) => r.id === id);
+    if (responder_id && !cur?.assigned_vehicle_id) {
+      const v = vehicles.find((v) => v.responder_id === responder_id);
+      if (v) patch.assigned_vehicle_id = v.id;
+    }
+    const { error } = await supabase.from("callout_requests").update(patch).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(responder_id ? "Responder assigned" : "Responder unassigned");
+  };
+
+  const assignVehicle = async (id: string, vehicle_id: string | null) => {
+    const patch: any = { assigned_vehicle_id: vehicle_id };
+    const cur = rows.find((r) => r.id === id);
+    if (vehicle_id && !cur?.assigned_at) patch.assigned_at = new Date().toISOString();
+    const { error } = await supabase.from("callout_requests").update(patch).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success(vehicle_id ? "Vehicle assigned" : "Vehicle unassigned");
+  };
+
 
   const updateStatus = async (id: string, status: string, admin_note?: string) => {
     const patch: { status: string; resolved_at?: string; admin_note?: string } = { status };
@@ -99,17 +134,18 @@ const Callouts = () => {
               <TableHead>NVR / Camera</TableHead>
               <TableHead>Reason</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Dispatch</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 inline animate-spin mr-2" /> Loading…
               </TableCell></TableRow>
             )}
             {!loading && rows.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No callout requests yet</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">No callout requests yet</TableCell></TableRow>
             )}
             {rows.map((r) => {
               const inst = store.frigates.find((f) => f.id === r.instance_id);
@@ -131,6 +167,46 @@ const Callouts = () => {
                     {r.status === "open" && <Badge variant="destructive" className="gap-1 text-[10px]"><Clock className="h-3 w-3" /> Open</Badge>}
                     {r.status === "acknowledged" && <Badge className="gap-1 text-[10px] bg-amber-500/20 text-amber-600 border border-amber-500/40"><Clock className="h-3 w-3" /> Acknowledged</Badge>}
                     {r.status === "resolved" && <Badge variant="secondary" className="gap-1 text-[10px]"><CheckCircle2 className="h-3 w-3" /> Resolved</Badge>}
+                  </TableCell>
+                  <TableCell className="min-w-[220px]">
+                    <div className="flex flex-col gap-1">
+                      <Select
+                        value={r.assigned_responder_id ?? "__none__"}
+                        onValueChange={(v) => assignResponder(r.id, v === "__none__" ? null : v)}
+                        disabled={r.status === "resolved"}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <User className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <SelectValue placeholder="Assign responder" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Unassigned</SelectItem>
+                          {responders.map((rr) => (
+                            <SelectItem key={rr.id} value={rr.id}>{rr.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={r.assigned_vehicle_id ?? "__none__"}
+                        onValueChange={(v) => assignVehicle(r.id, v === "__none__" ? null : v)}
+                        disabled={r.status === "resolved"}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Car className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <SelectValue placeholder="Assign vehicle" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Unassigned</SelectItem>
+                          {vehicles.map((vv) => (
+                            <SelectItem key={vv.id} value={vv.id}>{vv.plate}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
