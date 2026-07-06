@@ -20,6 +20,7 @@ const adminItems = [
   { to: "/unifi-live", label: "UniFi Live", icon: Video },
   { to: "/media", label: "Media", icon: Film },
 
+  { to: "/sites", label: "Sites", icon: Building2 },
   { to: "/callouts", label: "Callout Requests", icon: Phone },
   { to: "/daily-reports", label: "Daily Reports", icon: Mail },
   { to: "/whatsapp-alerts", label: "WhatsApp Alerts", icon: MessageCircle },
