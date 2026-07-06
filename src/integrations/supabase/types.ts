@@ -342,6 +342,8 @@ export type Database = {
           last_checked: string
           online: boolean
           organization_id: string
+          pending_online: boolean | null
+          pending_since: string | null
           since: string
         }
         Insert: {
@@ -351,6 +353,8 @@ export type Database = {
           last_checked?: string
           online: boolean
           organization_id?: string
+          pending_online?: boolean | null
+          pending_since?: string | null
           since?: string
         }
         Update: {
@@ -360,6 +364,8 @@ export type Database = {
           last_checked?: string
           online?: boolean
           organization_id?: string
+          pending_online?: boolean | null
+          pending_since?: string | null
           since?: string
         }
         Relationships: []
@@ -1847,9 +1853,11 @@ export type Database = {
           cooldown_minutes: number
           created_at: string
           daily_broadcast_enabled: boolean
+          daily_broadcast_last_sent_at: string | null
           daily_broadcast_recipients: string[]
           daily_broadcast_template: string | null
           daily_broadcast_time: string
+          daily_broadcast_times: string[]
           default_recipients: string[]
           enabled: boolean
           id: string
@@ -1880,9 +1888,11 @@ export type Database = {
           cooldown_minutes?: number
           created_at?: string
           daily_broadcast_enabled?: boolean
+          daily_broadcast_last_sent_at?: string | null
           daily_broadcast_recipients?: string[]
           daily_broadcast_template?: string | null
           daily_broadcast_time?: string
+          daily_broadcast_times?: string[]
           default_recipients?: string[]
           enabled?: boolean
           id?: string
@@ -1913,9 +1923,11 @@ export type Database = {
           cooldown_minutes?: number
           created_at?: string
           daily_broadcast_enabled?: boolean
+          daily_broadcast_last_sent_at?: string | null
           daily_broadcast_recipients?: string[]
           daily_broadcast_template?: string | null
           daily_broadcast_time?: string
+          daily_broadcast_times?: string[]
           default_recipients?: string[]
           enabled?: boolean
           id?: string
