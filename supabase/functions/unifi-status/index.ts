@@ -96,16 +96,46 @@ Deno.serve(async (req) => {
       };
     });
 
+  let removed = 0;
   if (rows.length) {
     const { error } = await supabase
       .from("unifi_camera_status")
       .upsert(rows, { onConflict: "instance_id,camera_id" });
     if (error) return json({ error: "upsert failed", detail: error.message }, 500);
+
+    // Prune cameras that no longer exist on the NVR.
+    // Only runs when we received a non-empty snapshot, so a transient bridge
+    // failure that sends {cameras: []} won't wipe the roster.
+    const currentIds = rows.map((r) => r.camera_id);
+    const stale = (existing ?? []).filter((r: any) => !currentIds.includes(r.camera_id));
+    if (stale.length) {
+      const staleIds = stale.map((r: any) => r.camera_id);
+      const { error: delErr, count } = await supabase
+        .from("unifi_camera_status")
+        .delete({ count: "exact" })
+        .eq("instance_id", inst.id)
+        .in("camera_id", staleIds);
+      if (!delErr) removed = count ?? staleIds.length;
+
+      // Also clean up site assignments for removed cameras.
+      await supabase
+        .from("unifi_camera_sites")
+        .delete()
+        .eq("unifi_instance_id", inst.id)
+        .in("camera_id", staleIds);
+
+      // And drop any pending offline alert rows for them.
+      await supabase
+        .from("camera_offline_alerts")
+        .delete()
+        .eq("instance_id", inst.id)
+        .in("camera_id", staleIds);
+    }
   }
 
   await supabase.from("unifi_instances")
     .update({ last_seen_at: nowIso, last_error: null })
     .eq("id", inst.id);
 
-  return json({ ok: true, upserted: rows.length });
+  return json({ ok: true, upserted: rows.length, removed });
 });
