@@ -172,13 +172,14 @@ Deno.serve(async (req) => {
     lines.push(`Tagged by: ${operatorName}`);
     lines.push(`Tag: ${tag.tag}`);
     if (tag.note && tag.note.trim()) lines.push(`Note: ${tag.note.trim()}`);
-    if (snapshotUrl) lines.push(`\nSnapshot: ${snapshotUrl}`);
-    if (videoUrl) lines.push(`Video: ${videoUrl}`);
+    if (videoUrl) lines.push(`\nVideo: ${videoUrl}`);
     if (settings.reply_footer) lines.push(`\n${settings.reply_footer}`);
 
     const message = lines.join("\n");
 
-    await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, message);
+    await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, message, {
+      image_url: snapshotUrl,
+    });
 
     await supabase.from("positive_alert_dispatches").insert({
       organization_id: orgId,
