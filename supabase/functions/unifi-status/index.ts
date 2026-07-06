@@ -64,13 +64,20 @@ Deno.serve(async (req) => {
     .eq("instance_id", inst.id);
   const prev = new Map<string, any>((existing ?? []).map((r: any) => [r.camera_id, r]));
 
+  const STALE_MS = 120_000;
+  const nowMs = Date.now();
+
   const rows = cameras
     .filter((c) => c && c.id)
     .map((c) => {
       const camId = String(c.id);
       const lastSeenMs = typeof c.lastSeenMs === "number" ? c.lastSeenMs : (typeof c.lastSeen === "number" ? c.lastSeen : null);
       const lastSeenIso = lastSeenMs ? new Date(lastSeenMs).toISOString() : null;
-      const isOnline = Boolean(c.isConnected ?? (c.state && String(c.state).toUpperCase() === "CONNECTED"));
+      const state = String(c.state ?? "").toUpperCase();
+      const fresh = lastSeenMs ? (nowMs - lastSeenMs) < STALE_MS : true;
+      // Match Protect's UI: only state === CONNECTED with a recent lastSeen
+      // counts as online. isConnected===false is always offline.
+      const isOnline = state === "CONNECTED" && fresh && c.isConnected !== false;
       const before = prev.get(camId);
       const flippedOff = before?.is_online === true && !isOnline;
       const flippedOn = before?.is_online === false && isOnline;
