@@ -1,96 +1,60 @@
-# UniFi Camera Health + Live View
+# Positive-tag WhatsApp group alert
 
-Three additions, all built around the existing on-site UniFi bridge.
+## What triggers it
+When an operator adds a tag whose name starts with `positive` (e.g. the existing "positive incident" suggested tag) to a media item in `MediaLightbox`, the app dispatches a WhatsApp message to a single per-organization group. Removing the tag does not send anything. Adding a second positive tag to the same media within a short window is deduped so the group isn't spammed.
 
-## 1. Camera status (bridge polls Protect every 30s)
+The operator's comment on that tag (the `note` column on `media_tags`, editable in the lightbox — a small edit for the note is added if it's not already writable there) is included in the message.
 
-**Bridge (`scripts/unifi-bridge/bridge.mjs`)**
-- New poller per instance: every 30s hit `/proxy/protect/api/cameras`, extract `id, name, state, lastSeen, isConnected, wiredConnectionState, wifiConnectionState`.
-- POST the full snapshot to a new edge function `unifi-status` (bulk upsert, one call per NVR).
+## What the message contains
+Plain WhatsApp text (Mudslide `/send` only accepts text today, so we don't try to upload a binary image), formatted like:
 
-**Backend**
-- New table `unifi_camera_status` — per `(instance_id, camera_id)` row: `name`, `state`, `is_online bool`, `last_seen_at`, `last_offline_at`, `last_alert_sent_at`, `updated_at`.
-- New table `unifi_offline_alert_settings` — per `unifi_instance_id`: `enabled bool`, `threshold_minutes int default 5`, `recipients jsonb` (list of `{type:'number'|'group', value}`), `cooldown_minutes int default 60`.
-- Edge function `unifi-status` (bridge → cloud): validates `webhook_secret`, upserts rows, flips `is_online` based on `isConnected` + `lastSeen` age.
-- Edge function `unifi-offline-check` (cron every minute): finds cameras where `is_online=false` AND `now - last_offline_at ≥ threshold` AND `now - last_alert_sent_at ≥ cooldown`, sends WhatsApp via existing `whatsapp-send`, stamps `last_alert_sent_at`. Runs 24/7.
-- Second alert when a camera recovers ("Camera X back online").
+```
+✅ Positive incident confirmed
+Camera: <camera / source name>
+Time:   <local time>
+Tagged by: <operator display name>
+Note:   <operator comment, if any>
 
-**Frontend**
-- New page `/unifi-status` mirroring `CameraStatus.tsx` but sourced from `unifi_camera_status` (realtime subscription). Groups by NVR, shows online/offline/last-seen, offline pill and count badges on the sidebar.
-- Sidebar: add "UniFi Status" under NVRs, with `!` badge when any camera offline (reusing the pattern in `useOfflineStatus`).
-- In `UnifiSection.tsx`, add a "Camera-down alerts" button per NVR that opens a dialog to toggle enable, set threshold (minutes), cooldown, and manage recipients (numbers + group JIDs, picker uses `/groups` from the Mudslide listener already wired).
-
-## 2. Per-NVR WhatsApp recipients
-
-- Recipients live on `unifi_offline_alert_settings.recipients` so each NVR has its own list.
-- Dialog reuses existing WhatsApp settings client for the send path — no new secrets needed.
-- Alerts bypass the nightly UniFi event schedule (that only gates event alerts, not health alerts).
-
-## 3. Live view — bridge proxies RTSPS → HLS
-
-**Bridge**
-- Add `ffmpeg` requirement (documented in `UNIFI_BRIDGE.md`).
-- New HTTP server on the bridge (localhost + optional LAN bind) exposing:
-  - `GET /live/:instance/:camera/index.m3u8` — starts an on-demand `ffmpeg` transcode from `rtsps://<host>:7441/<streamName>?enableSrtp` to HLS (low-latency, 2s segments, 6-segment window) written to a tmp dir, streamed back.
-  - Idle timeout: kills ffmpeg 15s after the last segment fetch.
-  - Auth: shared bearer token (`LIVE_TOKEN` in bridge `.env`).
-- Bridge fetches each camera's active `rtspAlias` from Protect bootstrap and caches it.
-
-**Cloud proxy**
-- New edge function `unifi-live-token` mints a short-lived signed URL (JWT, 5 min) that the frontend uses to hit the bridge through a user-supplied public bridge URL saved on `unifi_instances.bridge_public_url`.
-- If `bridge_public_url` is empty the live view is hidden (LAN-only user just points at `http://bridge.local:8787` from browser).
-
-**Frontend**
-- New page `/cameras/live?site=…` using `hls.js`.
-- On existing `/cameras` page, add a "Live view" action per site → opens grid of `<video>` elements, one per assigned camera, 2/3/4-column layout auto-fit.
-- Add `bridge_public_url` field to the UniFi NVR edit form.
-
-## Technical details
-
-```text
-unifi_camera_status (
-  instance_id uuid, camera_id text, name text, state text,
-  is_online bool, last_seen_at timestamptz,
-  last_offline_at timestamptz, last_alert_sent_at timestamptz,
-  updated_at timestamptz,
-  PRIMARY KEY(instance_id, camera_id)
-)
-
-unifi_offline_alert_settings (
-  unifi_instance_id uuid PRIMARY KEY,
-  enabled bool default true,
-  threshold_minutes int default 5,
-  cooldown_minutes int default 60,
-  recipients jsonb default '[]',
-  notify_on_recovery bool default true
-)
-
-unifi_instances + bridge_public_url text null
+Snapshot: <public snapshot URL>
+Video:    <public video URL, if the media_item has one>
 ```
 
-New/changed files:
-- `self-hosted-migrations/20260703_unifi_camera_health.sql`
-- `supabase/functions/unifi-status/index.ts` (new)
-- `supabase/functions/unifi-offline-check/index.ts` (new, cron)
-- `supabase/functions/unifi-live-token/index.ts` (new)
-- `scripts/unifi-bridge/bridge.mjs` (poller + HLS server)
-- `scripts/unifi-bridge/package.json` (+ `hls-server` deps, ffmpeg docs)
-- `scripts/unifi-bridge/.env.example` (+ `LIVE_TOKEN`, `LIVE_PORT`)
-- `src/pages/UnifiStatus.tsx` (new)
-- `src/pages/CamerasLive.tsx` (new)
-- `src/components/UnifiOfflineAlertsDialog.tsx` (new)
-- `src/components/UnifiSection.tsx` (+ button, + bridge URL field)
-- `src/components/AppSidebar.tsx` (+ link + badge)
-- `src/App.tsx` (+ routes)
-- `help/UNIFI_BRIDGE_MACHINE.md` + `help/UNIFI_BRIDGE.md` (ffmpeg, new ports, tokens)
+WhatsApp auto-renders the snapshot URL as an inline preview, so the group sees the image without us needing multipart upload. If the media has no video the "Video:" line is omitted.
 
-## Order of work
-1. Migration + `unifi-status` function.
-2. Bridge poller.
-3. `UnifiStatus.tsx` + sidebar badge.
-4. Offline-alerts dialog + `unifi-offline-check` cron + recovery message.
-5. Bridge HLS server + `unifi-live-token` + `CamerasLive.tsx`.
-6. Update help docs.
+## Where the tag lives
+`media_tags` (columns: `id, media_id, tag, note, created_by, organization_id, created_at`) joined to `media_items` for the snapshot/video URLs and camera/source name. The lightbox already inserts rows here and the suggested tag `"positive incident"` already exists — no schema change needed for tagging itself.
 
-## Answer to "should we do it on the bridge?"
-Yes — the bridge already holds an authenticated Protect session and sits on the LAN with the NVR, so polling for state and transcoding RTSPS are both cheapest and most reliable there. The cloud only receives status upserts and issues short-lived tokens for the live view.
+## Configuration (per organization)
+Extend `whatsapp_settings` with three columns:
+- `positive_alert_enabled boolean default false`
+- `positive_alert_group_jid text` — a single WhatsApp group JID (`…@g.us`)
+- `positive_alert_cooldown_seconds int default 60` — dedupe window per media_item
+
+Add a small "Positive-incident alerts" card to `src/pages/WhatsAppAlerts.tsx` with an enable switch, a group JID input (with a "Pick from groups" helper that calls the existing Mudslide `/groups` endpoint), and the cooldown field.
+
+## Dispatch path
+1. `MediaLightbox.addTag()` — after a successful insert, if the tag matches `/^positive/i`, call `supabase.functions.invoke("positive-alert-dispatch", { body: { media_tag_id } })`. Fire-and-forget; failures show a toast but don't block tagging.
+2. New edge function `supabase/functions/positive-alert-dispatch/index.ts`:
+   - Validates JWT, loads `media_tags` + `media_items` + camera name + operator profile.
+   - Loads `whatsapp_settings` for that org; exits early if disabled or no group JID.
+   - Checks `camera_offline_alerts`-style dedupe (or a new lightweight `positive_alert_dispatches` audit table keyed on `media_id` + `last_sent_at`) against `positive_alert_cooldown_seconds`.
+   - Builds the message text above.
+   - POSTs to the Mudslide listener using the same pattern as `escalate-offline-whatsapp` (reads `whatsapp_settings.mudslide_url` + `mudslide_token`, `POST /send` with `{ to: group_jid, message }`).
+   - Writes an audit row on success.
+3. Add `positive_alert_dispatches` table (org_id, media_id, tag_id, sent_at, group_jid) with the standard `GRANT` + RLS scoped to `has_role(auth.uid(), 'admin')` for reads; writes are service-role only.
+
+## Files touched
+
+Frontend
+- `src/components/MediaLightbox.tsx` — trigger dispatch after positive-tag insert; allow editing the tag's `note` inline so the operator comment reaches WhatsApp.
+- `src/pages/WhatsAppAlerts.tsx` — new "Positive-incident alerts" section.
+- `src/lib/webhookStore.ts` (or a new `positiveAlertStore.ts`) — read/write helpers for the three new `whatsapp_settings` fields.
+
+Backend
+- Migration: add three columns to `whatsapp_settings`, create `positive_alert_dispatches` with GRANTs + RLS.
+- New edge function: `supabase/functions/positive-alert-dispatch/index.ts`.
+
+No changes to the Mudslide listener (`scripts/mudslide-listener/listener.mjs`) — it already exposes `POST /send` and `GET /groups` that this feature reuses.
+
+## Applies to
+Self-hosted stack only (that's where the Mudslide listener and `whatsapp_settings.mudslide_url` live). Say the word if you also want the migration replayed on the Lovable Cloud instance.
