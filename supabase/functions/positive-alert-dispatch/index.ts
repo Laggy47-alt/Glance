@@ -27,16 +27,38 @@ function j(status: number, body: unknown) {
   });
 }
 
+async function fetchAsBase64(url: string): Promise<string | null> {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) {
+      console.warn(`snapshot fetch ${r.status} for ${url}`);
+      return null;
+    }
+    const buf = new Uint8Array(await r.arrayBuffer());
+    // Base64-encode in chunks to avoid stack overflow on large buffers.
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < buf.length; i += chunk) {
+      binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  } catch (e) {
+    console.warn(`snapshot fetch error: ${(e as Error)?.message ?? e}`);
+    return null;
+  }
+}
+
 async function sendViaMudslide(
   mudslideUrl: string,
   token: string | null,
   to: string,
   message: string,
-  extras: { image_url?: string | null; video_url?: string | null } = {},
+  extras: { image_base64?: string | null; image_url?: string | null; video_url?: string | null } = {},
 ) {
   const url = mudslideUrl.replace(/\/+$/, "") + "/send";
   const payload: Record<string, unknown> = { to, message };
-  if (extras.image_url) payload.image_url = extras.image_url;
+  if (extras.image_base64) payload.image_base64 = extras.image_base64;
+  else if (extras.image_url) payload.image_url = extras.image_url;
   if (extras.video_url) payload.video_url = extras.video_url;
   const r = await fetch(url, {
     method: "POST",
@@ -45,7 +67,7 @@ async function sendViaMudslide(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(90000),
   });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
@@ -177,9 +199,32 @@ Deno.serve(async (req) => {
 
     const message = lines.join("\n");
 
-    await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, message, {
-      image_url: snapshotUrl,
-    });
+    // Fetch snapshot once, in the edge function, and pass as base64 so the
+    // listener host doesn't need outbound access to the storage URL.
+    let imageB64: string | null = null;
+    if (snapshotUrl) imageB64 = await fetchAsBase64(snapshotUrl);
+
+    let sendError: string | null = null;
+    let sentWithImage = false;
+    try {
+      await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, message, {
+        image_base64: imageB64,
+        image_url: imageB64 ? null : snapshotUrl,
+      });
+      sentWithImage = Boolean(imageB64 || snapshotUrl);
+    } catch (e) {
+      sendError = (e as Error)?.message ?? String(e);
+      console.warn(`media send failed, falling back to text: ${sendError}`);
+      // Fallback: text-only with snapshot URL appended.
+      const textOnly = snapshotUrl
+        ? `${message}\n\nSnapshot: ${snapshotUrl}`
+        : message;
+      try {
+        await sendViaMudslide(settings.mudslide_url, settings.mudslide_token, groupJid, textOnly);
+      } catch (e2) {
+        return j(502, { error: `send failed: ${sendError}; fallback: ${(e2 as Error)?.message ?? e2}` });
+      }
+    }
 
     await supabase.from("positive_alert_dispatches").insert({
       organization_id: orgId,
@@ -188,7 +233,7 @@ Deno.serve(async (req) => {
       group_jid: groupJid,
     });
 
-    return j(200, { ok: true, sent: true, group: groupJid });
+    return j(200, { ok: true, sent: true, group: groupJid, with_image: sentWithImage, fallback: sendError });
   } catch (e) {
     return j(500, { error: String((e as Error)?.message ?? e) });
   }
