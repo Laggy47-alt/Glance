@@ -814,6 +814,15 @@ function AlertCard({
           >
             <TagIcon className="h-3 w-3" />
           </Button>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={onDispatch}
+            className="gap-1 h-7 px-2 text-[11px]"
+            title="Dispatch responder"
+          >
+            <Siren className="h-3 w-3" /> Dispatch
+          </Button>
           <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
             <ArchiveIcon className="h-3 w-3" /> ACK
           </Button>
