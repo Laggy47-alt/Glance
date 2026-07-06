@@ -27,16 +27,38 @@ function j(status: number, body: unknown) {
   });
 }
 
+async function fetchAsBase64(url: string): Promise<string | null> {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) {
+      console.warn(`snapshot fetch ${r.status} for ${url}`);
+      return null;
+    }
+    const buf = new Uint8Array(await r.arrayBuffer());
+    // Base64-encode in chunks to avoid stack overflow on large buffers.
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < buf.length; i += chunk) {
+      binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  } catch (e) {
+    console.warn(`snapshot fetch error: ${(e as Error)?.message ?? e}`);
+    return null;
+  }
+}
+
 async function sendViaMudslide(
   mudslideUrl: string,
   token: string | null,
   to: string,
   message: string,
-  extras: { image_url?: string | null; video_url?: string | null } = {},
+  extras: { image_base64?: string | null; image_url?: string | null; video_url?: string | null } = {},
 ) {
   const url = mudslideUrl.replace(/\/+$/, "") + "/send";
   const payload: Record<string, unknown> = { to, message };
-  if (extras.image_url) payload.image_url = extras.image_url;
+  if (extras.image_base64) payload.image_base64 = extras.image_base64;
+  else if (extras.image_url) payload.image_url = extras.image_url;
   if (extras.video_url) payload.video_url = extras.video_url;
   const r = await fetch(url, {
     method: "POST",
@@ -45,7 +67,7 @@ async function sendViaMudslide(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60000),
+    signal: AbortSignal.timeout(90000),
   });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
