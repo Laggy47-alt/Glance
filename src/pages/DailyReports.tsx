@@ -149,7 +149,7 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
   const [availableCameras, setAvailableCameras] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => { setLocal(cfg); }, [cfg.id]);
+  useEffect(() => { setLocal({ ...cfg, send_times: normalizeTimes(cfg.send_times) }); }, [cfg.id]);
 
   useEffect(() => {
     if (!instance) return;
