@@ -115,12 +115,12 @@ function toJid(to) {
   return `${digits}@s.whatsapp.net`;
 }
 
-function readJsonBody(req) {
+function readJsonBody(req, maxBytes = 1_000_000) {
   return new Promise((resolve, reject) => {
     let data = "";
     req.on("data", (c) => {
       data += c;
-      if (data.length > 1_000_000) {
+      if (data.length > maxBytes) {
         req.destroy();
         reject(new Error("body too large"));
       }
