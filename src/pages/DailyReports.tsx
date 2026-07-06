@@ -72,6 +72,7 @@ type Cfg = {
   last_sent_at: string | null;
   cameras: string[];
   label: string | null;
+  send_times: string[];
 };
 
 type Settings = {
