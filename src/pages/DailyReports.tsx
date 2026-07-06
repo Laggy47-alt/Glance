@@ -326,6 +326,54 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
         </div>
       </div>
 
+      <div className="space-y-1.5">
+        <Label className="text-xs flex items-center gap-1.5">
+          <Clock className="h-3 w-3" />
+          Send times (SAST) — {local.send_times.length} per day
+        </Label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {local.send_times.map((t) => (
+            <Badge key={t} variant="secondary" className="gap-1 pr-1 font-mono">
+              {t}
+              <button
+                onClick={() => setLocal({ ...local, send_times: local.send_times.filter((x) => x !== t) })}
+                className="hover:text-destructive ml-0.5"
+                disabled={local.send_times.length <= 1}
+                title={local.send_times.length <= 1 ? "At least one time required" : "Remove"}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+        <div className="flex gap-2 items-center">
+          <Input
+            type="time"
+            value={newTime}
+            onChange={(e) => setNewTime(e.target.value)}
+            className="bg-secondary border-border w-32"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            onClick={() => {
+              if (!/^\d{2}:\d{2}$/.test(newTime)) { toast.error("Pick a valid time"); return; }
+              if (local.send_times.includes(newTime)) { toast.error("Time already added"); return; }
+              setLocal({ ...local, send_times: normalizeTimes([...local.send_times, newTime]) });
+              setNewTime("");
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" /> Add time
+          </Button>
+          <span className="text-[10px] text-muted-foreground">
+            Cron must run at least as often as your smallest gap.
+          </span>
+        </div>
+      </div>
+
+
+
 
 
       <div className="space-y-1.5">
