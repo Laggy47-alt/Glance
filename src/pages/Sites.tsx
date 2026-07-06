@@ -141,22 +141,6 @@ const Sites = () => {
     setDialogOpen(true);
   };
 
-  const useMyLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not available");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (p) =>
-        setForm((f) => ({
-          ...f,
-          latitude: Number(p.coords.latitude.toFixed(6)),
-          longitude: Number(p.coords.longitude.toFixed(6)),
-        })),
-      (err) => toast.error(err.message || "Location denied"),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  };
 
   const save = async () => {
     if (!activeOrg?.id) return;
