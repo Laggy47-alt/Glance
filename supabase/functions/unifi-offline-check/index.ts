@@ -46,6 +46,30 @@ Deno.serve(async (req) => {
   let recoveriesSent = 0;
   const errors: string[] = [];
 
+  // Resolve fallback WhatsApp org (ABC) once per run. Any UniFi instance whose
+  // own organization has no enabled whatsapp_settings row will send via this
+  // fallback org so alerts still go out on the shared Mudslide connection.
+  let fallbackOrgId: string | null = null;
+  {
+    const { data: abcOrg } = await supabase
+      .from("organizations")
+      .select("id")
+      .eq("slug", "abc-2026")
+      .maybeSingle();
+    fallbackOrgId = abcOrg?.id ?? null;
+  }
+
+  async function resolveWhatsAppOrg(orgId: string): Promise<string> {
+    const { data: ws } = await supabase
+      .from("whatsapp_settings")
+      .select("organization_id, enabled")
+      .eq("organization_id", orgId)
+      .eq("enabled", true)
+      .maybeSingle();
+    if (ws?.organization_id) return orgId;
+    return fallbackOrgId ?? orgId;
+  }
+
   for (const s of settings as any[]) {
     const inst = instMap.get(s.unifi_instance_id);
     if (!inst) continue;
