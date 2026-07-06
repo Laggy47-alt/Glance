@@ -34,6 +34,7 @@ const Customer = lazy(() => import("./pages/Customer.tsx"));
 const CustomerEvents = lazy(() => import("./pages/CustomerEvents.tsx"));
 const CustomerInstructions = lazy(() => import("./pages/CustomerInstructions.tsx"));
 const Callouts = lazy(() => import("./pages/Callouts.tsx"));
+const Sites = lazy(() => import("./pages/Sites.tsx"));
 const SuperAdmin = lazy(() => import("./pages/SuperAdmin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Demo = lazy(() => import("./pages/Demo.tsx"));
@@ -107,6 +108,7 @@ const App = () => (
                 <Route path="/whatsapp-alerts" element={protect(<WhatsAppAlerts />, true)} />
 
                 <Route path="/callouts" element={protect(<Callouts />, true)} />
+                <Route path="/sites" element={protect(<Sites />, true)} />
                 <Route path="/customer" element={protect(<Customer />)} />
                 <Route path="/customer/events" element={protect(<CustomerEvents />)} />
                 <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />
