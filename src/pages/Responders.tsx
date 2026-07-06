@@ -216,6 +216,13 @@ const Responders = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProvisionDeviceDialog
+        open={!!provisionFor}
+        onClose={() => setProvisionFor(null)}
+        responderId={provisionFor?.id ?? null}
+        responderName={provisionFor?.name ?? ""}
+      />
     </DashboardLayout>
   );
 };
