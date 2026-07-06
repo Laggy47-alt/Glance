@@ -60,7 +60,7 @@ export function AppSidebar() {
   // Hide selected pages from the Fibertime org only.
   const fiberHiddenPaths = new Set<string>(
     isFiberOrg
-      ? ["/nvr-status", "/camera-status", "/callouts", "/daily-reports", "/whatsapp-alerts"]
+      ? ["/nvr-status", "/camera-status", "/callouts", "/daily-reports"]
       : []
   );
   // Hide UniFi health/live pages from the ABC org only.
