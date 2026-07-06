@@ -58,12 +58,32 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
       body: { media_tag_id: tagId },
     });
     setSending(null);
-    if (fnErr) { toast.error("WhatsApp alert failed"); console.warn(fnErr); return; }
+    // Surface the actual error from the edge function — supabase-js puts
+    // the response body on FunctionsHttpError.context (a Response). Read it
+    // so the operator can see WHY the send failed instead of a generic toast.
+    if (fnErr) {
+      let detail = fnErr.message || String(fnErr);
+      try {
+        const ctx: any = (fnErr as any).context;
+        if (ctx && typeof ctx.text === "function") {
+          const raw = await ctx.text();
+          try {
+            const parsed = JSON.parse(raw);
+            detail = parsed.error || parsed.message || raw || detail;
+          } catch { if (raw) detail = raw; }
+        }
+      } catch { /* ignore */ }
+      console.warn("positive-alert-dispatch failed:", fnErr, detail);
+      toast.error(`WhatsApp alert failed: ${String(detail).slice(0, 300)}`);
+      return;
+    }
+    if (res?.error) { toast.error(`WhatsApp alert failed: ${String(res.error).slice(0, 300)}`); return; }
     if (res?.sent) { toast.success("WhatsApp positive-incident alert sent"); setDispatched((s) => new Set(s).add(tagId)); }
     else if (res?.skipped === "disabled") toast.info("Positive alerts are disabled in WhatsApp settings");
     else if (res?.skipped === "cooldown") { toast.info("Positive alert skipped (cooldown)"); setDispatched((s) => new Set(s).add(tagId)); }
     else if (res?.skipped === "no_group_jid") toast.info("Configure the positive-alert group in WhatsApp settings");
     else if (res?.skipped === "no_mudslide_url") toast.info("Mudslide URL not configured");
+    else if (res?.skipped) toast.info(`Positive alert skipped: ${res.skipped}`);
   };
 
   const addTag = async (value: string, note?: string) => {
