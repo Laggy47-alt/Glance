@@ -263,6 +263,9 @@ function ConfigCard({ cfg, instance, onChange, onDelete }: {
           {local.cameras.length > 0 && (
             <Badge variant="outline" className="text-[10px] shrink-0">{local.cameras.length} cam{local.cameras.length === 1 ? "" : "s"}</Badge>
           )}
+          <Badge variant="outline" className="text-[10px] shrink-0 gap-1 font-mono">
+            <Clock className="h-3 w-3" /> {local.send_times.join(", ")}
+          </Badge>
           {cfg.last_sent_at && (
             <Badge variant="outline" className="text-[10px] shrink-0">
               Last sent {new Date(cfg.last_sent_at).toLocaleString()}
