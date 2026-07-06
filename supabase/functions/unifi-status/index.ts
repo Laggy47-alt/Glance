@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
         .from("camera_offline_alerts")
         .delete()
         .eq("instance_id", inst.id)
-        .in("camera_id", staleIds);
+        .in("camera", staleIds);
     }
   }
 
