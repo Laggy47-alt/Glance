@@ -722,6 +722,7 @@ function AlertCard({
   onDismiss,
   onOpen,
   onTag,
+  onDispatch,
   liveUrl,
 }: {
   alert: Alert;
@@ -730,6 +731,7 @@ function AlertCard({
   onDismiss: () => void;
   onOpen: () => void;
   onTag: () => void;
+  onDispatch: () => void;
   liveUrl?: string | null;
 }) {
   const withBbox = (raw: string) => {
