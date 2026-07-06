@@ -127,7 +127,8 @@ Deno.serve(async (req) => {
     if (dueRecovery.length) {
       const list = dueRecovery.map((c) => `• ${c.name || c.camera_id}`).join("\n");
       const message = `✅ UniFi *${inst.name}* — ${dueRecovery.length} camera${dueRecovery.length === 1 ? "" : "s"} back online:\n${list}`;
-      const res = await sendWhatsApp(supabase, inst.organization_id, recipientValues, message);
+      const waOrg = await resolveWhatsAppOrg(inst.organization_id);
+      const res = await sendWhatsApp(supabase, waOrg, recipientValues, message);
       if (!res.ok) {
         errors.push(`${inst.name} recovery: ${res.error}`);
       } else {
