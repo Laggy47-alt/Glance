@@ -108,6 +108,7 @@ const App = () => (
                 <Route path="/whatsapp-alerts" element={protect(<WhatsAppAlerts />, true)} />
 
                 <Route path="/callouts" element={protect(<Callouts />, true)} />
+                <Route path="/sites" element={protect(<Sites />, true)} />
                 <Route path="/customer" element={protect(<Customer />)} />
                 <Route path="/customer/events" element={protect(<CustomerEvents />)} />
                 <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />
