@@ -59,16 +59,30 @@ Deno.serve(async (req) => {
     fallbackOrgId = abcOrg?.id ?? null;
   }
 
-  async function resolveWhatsAppOrg(orgId: string): Promise<string> {
-    const { data: ws } = await supabase
+  // Cache whatsapp_settings per org (with ABC fallback) so we only fetch once.
+  const wsCache = new Map<string, any | null>();
+  async function getWhatsAppSettings(orgId: string): Promise<any | null> {
+    if (wsCache.has(orgId)) return wsCache.get(orgId)!;
+    const { data } = await supabase
       .from("whatsapp_settings")
-      .select("organization_id, enabled")
+      .select("mudslide_url, mudslide_token, enabled")
       .eq("organization_id", orgId)
       .eq("enabled", true)
       .maybeSingle();
-    if (ws?.organization_id) return orgId;
-    return fallbackOrgId ?? orgId;
+    let ws = data;
+    if ((!ws || !ws.mudslide_url) && fallbackOrgId && fallbackOrgId !== orgId) {
+      const { data: fb } = await supabase
+        .from("whatsapp_settings")
+        .select("mudslide_url, mudslide_token, enabled")
+        .eq("organization_id", fallbackOrgId)
+        .eq("enabled", true)
+        .maybeSingle();
+      ws = fb ?? null;
+    }
+    wsCache.set(orgId, ws ?? null);
+    return ws ?? null;
   }
+
 
   for (const s of settings as any[]) {
     const inst = instMap.get(s.unifi_instance_id);
