@@ -31,8 +31,8 @@ import {
   Trash2,
   Building2,
   Link2,
-  Crosshair,
 } from "lucide-react";
+import { SiteMapPicker } from "@/components/SiteMapPicker";
 
 type Site = {
   id: string;
@@ -141,22 +141,6 @@ const Sites = () => {
     setDialogOpen(true);
   };
 
-  const useMyLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not available");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (p) =>
-        setForm((f) => ({
-          ...f,
-          latitude: Number(p.coords.latitude.toFixed(6)),
-          longitude: Number(p.coords.longitude.toFixed(6)),
-        })),
-      (err) => toast.error(err.message || "Location denied"),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  };
 
   const save = async () => {
     if (!activeOrg?.id) return;
@@ -349,40 +333,26 @@ const Sites = () => {
                 placeholder="123 Example St"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Latitude</Label>
-                <Input
-                  type="number"
-                  step="0.000001"
-                  value={form.latitude ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      latitude: e.target.value === "" ? null : Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Longitude</Label>
-                <Input
-                  type="number"
-                  step="0.000001"
-                  value={form.longitude ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      longitude:
-                        e.target.value === "" ? null : Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Location</Label>
+              <SiteMapPicker
+                latitude={form.latitude ?? null}
+                longitude={form.longitude ?? null}
+                radiusM={Number(form.geofence_radius_m ?? 100)}
+                onChange={(lat, lng) =>
+                  setForm((f) => ({
+                    ...f,
+                    latitude: Number(lat.toFixed(6)),
+                    longitude: Number(lng.toFixed(6)),
+                  }))
+                }
+              />
+              {form.latitude != null && form.longitude != null && (
+                <p className="text-[11px] text-muted-foreground tabular-nums">
+                  {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+                </p>
+              )}
             </div>
-            <Button variant="outline" size="sm" onClick={useMyLocation}>
-              <Crosshair className="h-3.5 w-3.5 mr-1.5" /> Use my current location
-            </Button>
             <div className="space-y-1.5">
               <Label>Geofence radius (meters)</Label>
               <Input
