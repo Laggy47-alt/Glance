@@ -528,7 +528,7 @@ const DailyReports = () => {
         <div className="flex items-center gap-2 mb-3">
           <Mail className="h-4 w-4 text-primary" />
           <h3 className="font-semibold text-foreground">Sender settings</h3>
-          <Badge variant="outline" className="text-[10px] ml-auto gap-1"><Clock className="h-3 w-3" /> Daily 08:00 SAST</Badge>
+          <Badge variant="outline" className="text-[10px] ml-auto gap-1"><Clock className="h-3 w-3" /> Times set per report</Badge>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1.5">
