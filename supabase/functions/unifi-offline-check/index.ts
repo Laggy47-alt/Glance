@@ -110,7 +110,8 @@ Deno.serve(async (req) => {
     if (dueOffline.length) {
       const list = dueOffline.map((c) => `• ${c.name || c.camera_id}`).join("\n");
       const message = `🚨 UniFi *${inst.name}* — ${dueOffline.length} camera${dueOffline.length === 1 ? "" : "s"} offline (>${s.threshold_minutes} min):\n${list}`;
-      const res = await sendWhatsApp(supabase, inst.organization_id, recipientValues, message);
+      const waOrg = await resolveWhatsAppOrg(inst.organization_id);
+      const res = await sendWhatsApp(supabase, waOrg, recipientValues, message);
       if (!res.ok) {
         errors.push(`${inst.name} offline: ${res.error}`);
       } else {
