@@ -49,7 +49,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
 
 
 
-  const addTag = async (value: string) => {
+  const addTag = async (value: string, note?: string) => {
     if (!item?.mediaId) return;
     const tag = value.trim();
     if (!tag) return;
@@ -57,7 +57,7 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("media_tags")
-      .insert({ organization_id: item.organizationId, media_id: item.mediaId, tag, created_by: user?.id ?? null })
+      .insert({ organization_id: item.organizationId, media_id: item.mediaId, tag, note: note?.trim() || null, created_by: user?.id ?? null })
       .select("id, tag, note")
       .single();
     setLoading(false);
@@ -67,6 +67,27 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     }
     setTags((prev) => [data as MediaTag, ...prev]);
     setNewTag("");
+
+    // Fire-and-forget WhatsApp group alert for positive-incident tags.
+    if (/^positive/i.test(tag)) {
+      supabase.functions
+        .invoke("positive-alert-dispatch", { body: { media_tag_id: (data as MediaTag).id } })
+        .then(({ data: res, error: fnErr }) => {
+          if (fnErr) { console.warn("positive-alert-dispatch error", fnErr); return; }
+          if (res?.sent) toast.success("WhatsApp positive-incident alert sent");
+          else if (res?.skipped === "disabled") { /* silent */ }
+          else if (res?.skipped === "cooldown") toast.info("Positive alert skipped (cooldown)");
+          else if (res?.skipped === "no_group_jid") toast.info("Configure the positive-alert group in WhatsApp settings");
+        })
+        .catch((e) => console.warn("positive-alert-dispatch failed", e));
+    }
+  };
+
+  const updateNote = async (id: string, note: string) => {
+    const clean = note.trim();
+    const { error } = await supabase.from("media_tags").update({ note: clean || null }).eq("id", id);
+    if (error) { toast.error("Failed to save note"); return; }
+    setTags((prev) => prev.map((t) => t.id === id ? { ...t, note: clean || null } : t));
   };
 
   const removeTag = async (id: string) => {
