@@ -134,17 +134,18 @@ const Callouts = () => {
               <TableHead>NVR / Camera</TableHead>
               <TableHead>Reason</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Dispatch</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 inline animate-spin mr-2" /> Loading…
               </TableCell></TableRow>
             )}
             {!loading && rows.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No callout requests yet</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">No callout requests yet</TableCell></TableRow>
             )}
             {rows.map((r) => {
               const inst = store.frigates.find((f) => f.id === r.instance_id);
@@ -166,6 +167,46 @@ const Callouts = () => {
                     {r.status === "open" && <Badge variant="destructive" className="gap-1 text-[10px]"><Clock className="h-3 w-3" /> Open</Badge>}
                     {r.status === "acknowledged" && <Badge className="gap-1 text-[10px] bg-amber-500/20 text-amber-600 border border-amber-500/40"><Clock className="h-3 w-3" /> Acknowledged</Badge>}
                     {r.status === "resolved" && <Badge variant="secondary" className="gap-1 text-[10px]"><CheckCircle2 className="h-3 w-3" /> Resolved</Badge>}
+                  </TableCell>
+                  <TableCell className="min-w-[220px]">
+                    <div className="flex flex-col gap-1">
+                      <Select
+                        value={r.assigned_responder_id ?? "__none__"}
+                        onValueChange={(v) => assignResponder(r.id, v === "__none__" ? null : v)}
+                        disabled={r.status === "resolved"}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <User className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <SelectValue placeholder="Assign responder" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Unassigned</SelectItem>
+                          {responders.map((rr) => (
+                            <SelectItem key={rr.id} value={rr.id}>{rr.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={r.assigned_vehicle_id ?? "__none__"}
+                        onValueChange={(v) => assignVehicle(r.id, v === "__none__" ? null : v)}
+                        disabled={r.status === "resolved"}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Car className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <SelectValue placeholder="Assign vehicle" />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Unassigned</SelectItem>
+                          {vehicles.map((vv) => (
+                            <SelectItem key={vv.id} value={vv.id}>{vv.plate}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
