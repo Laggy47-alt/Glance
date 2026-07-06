@@ -6,11 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Loader2, Phone, Settings, CheckCircle2, Clock, Trash2 } from "lucide-react";
+import { Loader2, Phone, Settings, CheckCircle2, Clock, Trash2, Car, User } from "lucide-react";
 
 type Callout = {
   id: string;
@@ -22,7 +23,15 @@ type Callout = {
   created_at: string;
   resolved_at: string | null;
   admin_note: string | null;
+  assigned_responder_id: string | null;
+  assigned_vehicle_id: string | null;
+  assigned_at: string | null;
 };
+
+type Responder = { id: string; name: string };
+type Vehicle = { id: string; plate: string; responder_id: string | null };
+
+const sb = supabase as any;
 
 const Callouts = () => {
   const store = useWebhookStore();
