@@ -64,10 +64,17 @@ async function fetchStats(supabase: any, inst: Instance) {
   }
 }
 
+// Cameras must observe the opposite state for FLAP_STABILITY_MS before the
+// confirmed online/since flip. This suppresses brief RTSP/ffmpeg hiccups that
+// otherwise reset "offline since" every minute and make cameras appear to be
+// perpetually 2m offline in the daily broadcast.
+const FLAP_STABILITY_MS = 5 * 60 * 1000;
+
 async function reconcile(supabase: any, instId: string, orgId: string, online: string[], offline: string[]) {
   const { data: existing } = await supabase.from("camera_status").select("*").eq("instance_id", instId);
   const map = new Map<string, any>((existing ?? []).map((r: any) => [r.camera, r]));
-  const now = new Date().toISOString();
+  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
   const upserts: any[] = [];
   const result: Array<{ camera: string; online: boolean; since: string }> = [];
   for (const { n, isOnline } of [
@@ -75,12 +82,46 @@ async function reconcile(supabase: any, instId: string, orgId: string, online: s
     ...offline.map((n) => ({ n, isOnline: false })),
   ]) {
     const prev = map.get(n);
-    const since = (!prev || prev.online !== isOnline) ? now : prev.since;
+    let confirmedOnline: boolean;
+    let confirmedSince: string;
+    let pendingOnline: boolean | null = null;
+    let pendingSince: string | null = null;
+
+    if (!prev) {
+      // First sighting — accept immediately.
+      confirmedOnline = isOnline;
+      confirmedSince = nowIso;
+    } else if (prev.online === isOnline) {
+      // Stable in the confirmed state; clear any pending flip.
+      confirmedOnline = prev.online;
+      confirmedSince = prev.since;
+    } else if (prev.pending_online === isOnline && prev.pending_since) {
+      // Same pending direction as last check — accumulate.
+      const pendingElapsed = nowMs - new Date(prev.pending_since).getTime();
+      if (pendingElapsed >= FLAP_STABILITY_MS) {
+        // Sustained long enough — flip.
+        confirmedOnline = isOnline;
+        confirmedSince = nowIso;
+      } else {
+        confirmedOnline = prev.online;
+        confirmedSince = prev.since;
+        pendingOnline = isOnline;
+        pendingSince = prev.pending_since;
+      }
+    } else {
+      // New pending direction (or first flap from stable state) — start the window.
+      confirmedOnline = prev.online;
+      confirmedSince = prev.since;
+      pendingOnline = isOnline;
+      pendingSince = nowIso;
+    }
+
     upserts.push({
       instance_id: instId, organization_id: orgId, camera: n,
-      online: isOnline, since, last_checked: now,
+      online: confirmedOnline, since: confirmedSince, last_checked: nowIso,
+      pending_online: pendingOnline, pending_since: pendingSince,
     });
-    result.push({ camera: n, online: isOnline, since });
+    result.push({ camera: n, online: confirmedOnline, since: confirmedSince });
   }
   if (upserts.length) {
     await supabase.from("camera_status").upsert(upserts, { onConflict: "instance_id,camera" });
