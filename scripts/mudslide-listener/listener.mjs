@@ -115,12 +115,12 @@ function toJid(to) {
   return `${digits}@s.whatsapp.net`;
 }
 
-function readJsonBody(req) {
+function readJsonBody(req, maxBytes = 1_000_000) {
   return new Promise((resolve, reject) => {
     let data = "";
     req.on("data", (c) => {
       data += c;
-      if (data.length > 1_000_000) {
+      if (data.length > maxBytes) {
         req.destroy();
         reject(new Error("body too large"));
       }
@@ -179,18 +179,39 @@ async function handleHttp(req, res) {
     if (path === "/send" && req.method === "POST") {
       if (!authOk(req)) return json(res, 401, { error: "unauthorized" });
       if (!connected || !sock) return json(res, 503, { error: "not connected" });
-      const body = await readJsonBody(req);
+      // Accept larger bodies for base64-encoded images
+      const body = await readJsonBody(req, 20_000_000).catch((e) => ({ __err: e }));
+      if (body?.__err) return json(res, 400, { error: String(body.__err?.message ?? body.__err) });
       const message = body?.message;
-      if (!message || typeof message !== "string") {
-        return json(res, 400, { error: "missing 'message'" });
+      const imageUrl = body?.image_url;
+      const imageBase64 = body?.image_base64;
+      const videoUrl = body?.video_url;
+      if (!message && !imageUrl && !imageBase64 && !videoUrl) {
+        return json(res, 400, { error: "missing 'message' or media" });
       }
       let jid;
       try { jid = toJid(body?.to); }
       catch (e) { return json(res, 400, { error: e?.message ?? String(e) }); }
 
       try {
-        const sent = await sock.sendMessage(jid, { text: message });
-        console.log(`[send] ok  ${jid}`);
+        let sent;
+        if (imageBase64 || imageUrl) {
+          let buf;
+          if (imageBase64) {
+            const b64 = String(imageBase64).replace(/^data:[^;]+;base64,/, "");
+            buf = Buffer.from(b64, "base64");
+          } else {
+            const r = await fetch(imageUrl);
+            if (!r.ok) throw new Error(`image fetch ${r.status}`);
+            buf = Buffer.from(await r.arrayBuffer());
+          }
+          sent = await sock.sendMessage(jid, { image: buf, caption: message || "" });
+        } else if (videoUrl) {
+          sent = await sock.sendMessage(jid, { video: { url: videoUrl }, caption: message || "" });
+        } else {
+          sent = await sock.sendMessage(jid, { text: message });
+        }
+        console.log(`[send] ok  ${jid}${imageUrl || imageBase64 ? " (image)" : ""}`);
         return json(res, 200, { ok: true, id: sent?.key?.id ?? null, to: jid });
       } catch (e) {
         console.error(`[send] error ${jid}:`, e?.message ?? e);

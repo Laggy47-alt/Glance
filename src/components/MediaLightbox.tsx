@@ -1,5 +1,5 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Film, Camera, Tag as TagIcon, X, Plus, ImageOff } from "lucide-react";
+import { Film, Camera, Tag as TagIcon, X, Plus, ImageOff, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -32,9 +32,13 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
   const [tags, setTags] = useState<MediaTag[]>([]);
   const [newTag, setNewTag] = useState("");
   const [loading, setLoading] = useState(false);
+  // Tracks which positive tag ids have already dispatched a WhatsApp alert in this session,
+  // so blurring the note field a second time doesn't re-fire.
+  const [dispatched, setDispatched] = useState<Set<string>>(new Set());
+  const [sending, setSending] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!item?.mediaId) { setTags([]); return; }
+    if (!item?.mediaId) { setTags([]); setDispatched(new Set()); return; }
     let active = true;
     (async () => {
       const { data } = await supabase
@@ -42,12 +46,25 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
         .select("id, tag, note")
         .eq("media_id", item.mediaId!)
         .order("created_at", { ascending: false });
-      if (active) setTags((data ?? []) as MediaTag[]);
+      if (active) { setTags((data ?? []) as MediaTag[]); setDispatched(new Set()); }
     })();
     return () => { active = false; };
   }, [item?.mediaId]);
 
-
+  const dispatchPositive = async (tagId: string) => {
+    if (dispatched.has(tagId)) return;
+    setSending(tagId);
+    const { data: res, error: fnErr } = await supabase.functions.invoke("positive-alert-dispatch", {
+      body: { media_tag_id: tagId },
+    });
+    setSending(null);
+    if (fnErr) { toast.error("WhatsApp alert failed"); console.warn(fnErr); return; }
+    if (res?.sent) { toast.success("WhatsApp positive-incident alert sent"); setDispatched((s) => new Set(s).add(tagId)); }
+    else if (res?.skipped === "disabled") toast.info("Positive alerts are disabled in WhatsApp settings");
+    else if (res?.skipped === "cooldown") { toast.info("Positive alert skipped (cooldown)"); setDispatched((s) => new Set(s).add(tagId)); }
+    else if (res?.skipped === "no_group_jid") toast.info("Configure the positive-alert group in WhatsApp settings");
+    else if (res?.skipped === "no_mudslide_url") toast.info("Mudslide URL not configured");
+  };
 
   const addTag = async (value: string, note?: string) => {
     if (!item?.mediaId) return;
@@ -67,27 +84,20 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
     }
     setTags((prev) => [data as MediaTag, ...prev]);
     setNewTag("");
-
-    // Fire-and-forget WhatsApp group alert for positive-incident tags.
     if (/^positive/i.test(tag)) {
-      supabase.functions
-        .invoke("positive-alert-dispatch", { body: { media_tag_id: (data as MediaTag).id } })
-        .then(({ data: res, error: fnErr }) => {
-          if (fnErr) { console.warn("positive-alert-dispatch error", fnErr); return; }
-          if (res?.sent) toast.success("WhatsApp positive-incident alert sent");
-          else if (res?.skipped === "disabled") { /* silent */ }
-          else if (res?.skipped === "cooldown") toast.info("Positive alert skipped (cooldown)");
-          else if (res?.skipped === "no_group_jid") toast.info("Configure the positive-alert group in WhatsApp settings");
-        })
-        .catch((e) => console.warn("positive-alert-dispatch failed", e));
+      toast.info("Add a comment, then press Enter or click Send to notify WhatsApp");
     }
   };
 
-  const updateNote = async (id: string, note: string) => {
+  const updateNote = async (id: string, note: string, tagName: string) => {
     const clean = note.trim();
     const { error } = await supabase.from("media_tags").update({ note: clean || null }).eq("id", id);
     if (error) { toast.error("Failed to save note"); return; }
     setTags((prev) => prev.map((t) => t.id === id ? { ...t, note: clean || null } : t));
+    // Auto-dispatch positive alert once the operator has typed a comment.
+    if (/^positive/i.test(tagName) && clean && !dispatched.has(id)) {
+      dispatchPositive(id);
+    }
   };
 
   const removeTag = async (id: string) => {
@@ -138,12 +148,28 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
                         </Badge>
                         <Input
                           defaultValue={t.note ?? ""}
-                          placeholder="Add a comment…"
+                          placeholder={/^positive/i.test(t.tag) ? "Add a comment, then Enter to send…" : "Add a comment…"}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                          }}
                           onBlur={(e) => {
-                            if ((e.target.value ?? "") !== (t.note ?? "")) updateNote(t.id, e.target.value);
+                            if ((e.target.value ?? "") !== (t.note ?? "")) updateNote(t.id, e.target.value, t.tag);
                           }}
                           className="h-7 text-xs bg-background border-border flex-1 min-w-[180px]"
                         />
+                        {/^positive/i.test(t.tag) && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={sending === t.id || dispatched.has(t.id)}
+                            onClick={() => dispatchPositive(t.id)}
+                            className="h-7 gap-1 px-2 text-xs"
+                          >
+                            <Send className="h-3 w-3" />
+                            {dispatched.has(t.id) ? "Sent" : sending === t.id ? "Sending…" : "Send WhatsApp"}
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>
