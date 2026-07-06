@@ -36,9 +36,13 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
   // so blurring the note field a second time doesn't re-fire.
   const [dispatched, setDispatched] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState<string | null>(null);
+  // Synchronous guard — updated BEFORE the async call so a second trigger
+  // (e.g. Enter also firing blur, or a double-click) can't slip through
+  // while `dispatched` state hasn't been flushed yet.
+  const inflightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!item?.mediaId) { setTags([]); setDispatched(new Set()); return; }
+    if (!item?.mediaId) { setTags([]); setDispatched(new Set()); inflightRef.current = new Set(); return; }
     let active = true;
     (async () => {
       const { data } = await supabase
@@ -46,13 +50,14 @@ export function MediaLightbox({ item, onClose }: { item: LightboxItem | null; on
         .select("id, tag, note")
         .eq("media_id", item.mediaId!)
         .order("created_at", { ascending: false });
-      if (active) { setTags((data ?? []) as MediaTag[]); setDispatched(new Set()); }
+      if (active) { setTags((data ?? []) as MediaTag[]); setDispatched(new Set()); inflightRef.current = new Set(); }
     })();
     return () => { active = false; };
   }, [item?.mediaId]);
 
   const dispatchPositive = async (tagId: string) => {
-    if (dispatched.has(tagId)) return;
+    if (inflightRef.current.has(tagId) || dispatched.has(tagId)) return;
+    inflightRef.current.add(tagId);
     setSending(tagId);
     const { data: res, error: fnErr } = await supabase.functions.invoke("positive-alert-dispatch", {
       body: { media_tag_id: tagId },
