@@ -60,10 +60,11 @@ function releaseLiveWallPollLock(owner: string) {
 // Module-level singletons so unacknowledged alerts and dedup state survive
 // in-app navigation (Wall unmount/remount). A full page reload still resets
 // these, which keeps the "no historical backfill on reload" behavior.
-const wallAlertsStore: { alerts: Alert[]; seen: Set<string>; mountedAt: number } = {
+const wallAlertsStore: { alerts: Alert[]; seen: Set<string>; mountedAt: number; dispatchedSites: Set<string> } = {
   alerts: [],
   seen: new Set<string>(),
   mountedAt: Date.now(),
+  dispatchedSites: new Set<string>(),
 };
 
 const SAME_INCIDENT_WINDOW_MS = 15_000;
