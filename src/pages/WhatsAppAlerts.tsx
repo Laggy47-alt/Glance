@@ -287,6 +287,7 @@ export default function WhatsAppAlerts() {
   const { activeOrg } = useAuth();
   const [settings, setSettings] = useState<WAS>(DEFAULTS);
   const [nvrs, setNvrs] = useState<Nvr[]>([]);
+  const [allNvrs, setAllNvrs] = useState<Array<{ id: string; name: string; type: "frigate" | "unifi" | "hikvision" }>>([]);
   const [nvrCameras, setNvrCameras] = useState<Record<string, string[]>>({});
   const [customMsg, setCustomMsg] = useState("");
   const [customSelected, setCustomSelected] = useState<Record<string, boolean>>({});
