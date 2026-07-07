@@ -12,6 +12,7 @@ on-site bridges live here.
 | [UNIFI_BRIDGE.md](./UNIFI_BRIDGE.md) | Installing the UniFi Protect bridge on an on-site machine: creating the ENVR in Glance, copying the slug + secret, running the systemd service. |
 | [UNIFI_BRIDGE_MACHINE.md](./UNIFI_BRIDGE_MACHINE.md) | Deep reference for the on-site bridge box: what is installed where, the full data flow, every config file, and a numbered debug playbook. |
 | [MUDSLIDE_LISTENER.md](./MUDSLIDE_LISTENER.md) | Self-hosted WhatsApp (Mudslide) listener: install, pair, send test message, daily report delivery. |
+| [MAINTENANCE.md](./MAINTENANCE.md) | Routine frontend + backend maintenance runbook: builds, migrations, edge deploy, VACUUM, backups, WhatsApp health, rollback. |
 
 ## Quick map of moving parts
 
