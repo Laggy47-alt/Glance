@@ -355,7 +355,7 @@ export default function WhatsAppAlerts() {
     delete (payload as any).last_heartbeat_at;
     delete (payload as any).last_heartbeat_status;
     delete (payload as any).daily_broadcast_last_sent_at;
-    const { error } = await supabase.from("whatsapp_settings").upsert(payload, { onConflict: "organization_id" });
+    const { error } = await supabase.from("whatsapp_settings").upsert(payload as any, { onConflict: "organization_id" });
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success("WhatsApp settings saved");
