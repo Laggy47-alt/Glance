@@ -173,6 +173,7 @@ export type UnifiOfflineAlertSettings = {
   cooldown_minutes: number;
   notify_on_recovery: boolean;
   recipients: Array<{ type?: "number" | "group"; value: string; label?: string }>;
+  daily_broadcast_enabled?: boolean;
   updated_at: string;
 };
 
