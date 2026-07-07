@@ -176,8 +176,10 @@ Deno.serve(async (req) => {
       .update({ last_sent_at: new Date().toISOString() })
       .eq("organization_id", organization_id);
 
+    // Always return 200 so supabase.functions.invoke() surfaces the JSON body
+    // (errors[]) to the client instead of masking it as "non-2xx status code".
     return new Response(JSON.stringify({ ok: errors.length === 0, sent: cleaned.length - errors.length, errors }), {
-      status: errors.length && errors.length === cleaned.length ? 502 : 200,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
