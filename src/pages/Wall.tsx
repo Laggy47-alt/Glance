@@ -914,6 +914,14 @@ function AlertCard({
             Play clip
           </div>
         )}
+        {(() => {
+          const plate = extractLicensePlate(alert);
+          return plate ? (
+            <div className="absolute bottom-1.5 right-1.5 bg-yellow-400 text-black px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider shadow" title="Recognized license plate">
+              {plate}
+            </div>
+          ) : null;
+        })()}
         <span
           role="button"
           tabIndex={0}
