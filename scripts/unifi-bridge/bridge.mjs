@@ -188,6 +188,36 @@ async function runInstance(inst) {
     csrf = res.headers.get("x-csrf-token") ?? "";
   }
 
+  // Fetch a Protect API path with the current session cookie. On 401/403 the
+  // session cookie has expired (Protect rotates it independently of the WS,
+  // so events keep flowing while HTTP calls silently 401). Re-login once and
+  // retry so thumbnails/snapshots/clips recover without a service restart.
+  let reloginInFlight = null;
+  async function authedFetch(path, init = {}) {
+    const url = path.startsWith("http") ? path : `${base}${path}`;
+    const doFetch = () => fetch(url, {
+      ...init,
+      headers: { ...(init.headers || {}), Cookie: cookie, "x-csrf-token": csrf },
+      dispatcher,
+    });
+    let r = await doFetch();
+    if (r.status === 401 || r.status === 403) {
+      try {
+        if (!reloginInFlight) {
+          reloginInFlight = (async () => {
+            log("info", inst.id, `session expired (HTTP ${r.status}) — re-logging in`);
+            await login();
+          })().finally(() => { reloginInFlight = null; });
+        }
+        await reloginInFlight;
+        r = await doFetch();
+      } catch (e) {
+        log("info", inst.id, "relogin failed", e?.message ?? e);
+      }
+    }
+    return r;
+  }
+
   async function loadCameras() {
     const r = await fetch(`${base}/proxy/protect/api/cameras`, {
       headers: { Cookie: cookie, "x-csrf-token": csrf },
@@ -302,10 +332,7 @@ async function runInstance(inst) {
 
   async function fetchEventThumb(eventId) {
     try {
-      const r = await fetch(`${base}/proxy/protect/api/events/${eventId}/thumbnail?w=640`, {
-        headers: { Cookie: cookie, "x-csrf-token": csrf },
-        dispatcher,
-      });
+      const r = await authedFetch(`/proxy/protect/api/events/${eventId}/thumbnail?w=640`);
       return await responseImageBase64(r, "event thumbnail");
     } catch (e) {
       log("debug", inst.id, "event thumbnail error", e?.message ?? e);
@@ -324,10 +351,7 @@ async function runInstance(inst) {
     ];
     for (const path of paths) {
       try {
-        const r = await fetch(`${base}${path}`, {
-          headers: { Cookie: cookie, "x-csrf-token": csrf },
-          dispatcher,
-        });
+        const r = await authedFetch(path);
         const img = await responseImageBase64(r, "camera snapshot");
         if (img) return img;
       } catch (e) {
@@ -373,10 +397,7 @@ async function runInstance(inst) {
     ];
     try {
       for (const path of paths) {
-        const r = await fetch(`${base}${path}`, {
-          headers: { Cookie: cookie, "x-csrf-token": csrf },
-          dispatcher,
-        });
+        const r = await authedFetch(path);
         if (!r.ok) {
           log("debug", inst.id, `clip HTTP ${r.status} ${path}`);
           continue;
