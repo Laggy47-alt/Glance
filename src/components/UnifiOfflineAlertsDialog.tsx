@@ -72,6 +72,7 @@ export function UnifiOfflineAlertsDialog({
         threshold_minutes: Math.max(1, Math.floor(threshold) || 5),
         cooldown_minutes: Math.max(1, Math.floor(cooldown) || 60),
         notify_on_recovery: notifyRecovery,
+        daily_broadcast_enabled: dailyBroadcast,
         recipients: clean,
       });
       toast.success("Offline alert settings saved");
