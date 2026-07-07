@@ -158,6 +158,22 @@ function extractLicensePlate(a: Alert): string | null {
   return null;
 }
 
+// True when Frigate has matched the plate to a KNOWN plate from the
+// `known_plates` config. Such alerts should be suppressed on the live wall —
+// operators only care about unknown/unrecognized vehicles.
+function isRecognizedKnownPlate(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const rec = payload as Record<string, unknown>;
+  const data = (rec.data && typeof rec.data === "object" && !Array.isArray(rec.data))
+    ? rec.data as Record<string, unknown>
+    : {};
+  const v = rec.recognized_license_plate ?? data.recognized_license_plate;
+  if (typeof v === "string" && v.trim()) return true;
+  if (Array.isArray(v) && typeof v[0] === "string" && v[0].trim()) return true;
+  return false;
+}
+
+
 function mediaUrlForPlayback(m: MediaItem, preferred: "clip" | "snapshot") {
   if (preferred === "clip" && m.clip_url) return resolveMediaUrl(m.clip_url);
   return resolveMediaUrl(m.url);
@@ -206,7 +222,7 @@ const Wall = () => {
   
   
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
-  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set(["person"]));
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set(["person", "license_plate"]));
   const seenRef = useRef<Set<string>>(wallAlertsStore.seen);
   const mountedAtRef = useRef<number>(wallAlertsStore.mountedAt);
   const pollOwnerRef = useRef<string>(`wall-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`);
@@ -394,11 +410,17 @@ const Wall = () => {
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
       // Skip alerts for cameras that are currently disarmed
       if (isCameraDisarmed(e.source_id, null, e.camera)) { seenRef.current.add(key); continue; }
+      // Suppress license-plate alerts when the plate is recognized/known.
+      // Operators only want to see UNKNOWN plates on the live wall.
+      if ((e.label === "license_plate") && isRecognizedKnownPlate(e.payload)) {
+        seenRef.current.add(key); continue;
+      }
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
       const camera = e.camera ?? "unknown";
       const label = e.label ?? e.kind ?? "motion";
+
       const inst =
         store.frigates.find((f) => f.source_id === e.source_id) ??
         store.unifis.find((u) => u.source_id === e.source_id) ??
