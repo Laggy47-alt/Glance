@@ -239,6 +239,52 @@ Deno.serve(async (req) => {
     }
     if (!sourceLabel) sourceLabel = media?.topic ?? null;
 
+    // Find the most recent dispatch tied to this alert (source_ref = event_id
+    // or media id). Used to include dispatch + arrival times in the message.
+    let dispatchRow: {
+      dispatched_at: string | null;
+      acknowledged_at: string | null;
+      arrived_at: string | null;
+      completed_at: string | null;
+      status: string | null;
+      responder_id: string | null;
+    } | null = null;
+    let responderLabel: string | null = null;
+    try {
+      const refCandidates = [media?.event_id, tag.media_id].filter(Boolean) as string[];
+      if (refCandidates.length > 0) {
+        const { data: disp } = await supabase
+          .from("dispatches")
+          .select("dispatched_at, acknowledged_at, arrived_at, completed_at, status, responder_id")
+          .eq("organization_id", orgId)
+          .in("source_ref", refCandidates)
+          .order("dispatched_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        dispatchRow = (disp as typeof dispatchRow) ?? null;
+        if (dispatchRow?.responder_id) {
+          const { data: resp } = await supabase
+            .from("responders")
+            .select("name")
+            .eq("id", dispatchRow.responder_id)
+            .maybeSingle();
+          responderLabel = (resp as { name?: string } | null)?.name ?? null;
+        }
+      }
+    } catch (e) {
+      console.warn(`dispatch lookup failed: ${(e as Error)?.message ?? e}`);
+    }
+
+    const fmtTime = (iso: string | null | undefined) =>
+      iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Johannesburg" }) : null;
+    const fmtDuration = (fromIso: string | null | undefined, toIso: string | null | undefined) => {
+      if (!fromIso || !toIso) return null;
+      const secs = Math.max(0, Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 1000));
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    };
+
     const lines: string[] = [];
     lines.push("✅ *Positive incident confirmed*");
     lines.push(`Camera: ${media?.camera ?? "unknown"}`);
@@ -247,6 +293,22 @@ Deno.serve(async (req) => {
     lines.push(`Tagged by: ${operatorName}`);
     lines.push(`Tag: ${tag.tag}`);
     if (tag.note && tag.note.trim()) lines.push(`Note: ${tag.note.trim()}`);
+
+    if (dispatchRow) {
+      lines.push("");
+      lines.push("*Dispatch*");
+      if (responderLabel) lines.push(`Responder: ${responderLabel}`);
+      const dispAt = fmtTime(dispatchRow.dispatched_at);
+      const arrAt = fmtTime(dispatchRow.arrived_at);
+      if (dispAt) lines.push(`Dispatched: ${dispAt}`);
+      if (arrAt) {
+        const dur = fmtDuration(dispatchRow.dispatched_at, dispatchRow.arrived_at);
+        lines.push(`Arrived: ${arrAt}${dur ? ` (response ${dur})` : ""}`);
+      } else if (dispatchRow.status) {
+        lines.push(`Status: ${dispatchRow.status}`);
+      }
+    }
+
     if (videoAbs) lines.push(`\nVideo: ${videoAbs}`);
     if (settings.reply_footer) lines.push(`\n${settings.reply_footer}`);
 

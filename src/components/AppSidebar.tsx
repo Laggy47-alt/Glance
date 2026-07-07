@@ -34,6 +34,8 @@ const adminItems = [
 const userItems = [
   { to: "/wall", label: "Live Wall", icon: Bell },
   { to: "/camera-status", label: "Camera Status", icon: VideoOff },
+  { to: "/unifi-status", label: "UniFi Status", icon: Radio },
+  { to: "/unifi-live", label: "UniFi Live", icon: Video },
   { to: "/media", label: "Media", icon: Film },
 ];
 
