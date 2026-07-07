@@ -791,7 +791,25 @@ const Wall = () => {
       <DispatchDialog
         open={!!dispatchFor}
         onClose={() => setDispatchFor(null)}
-        defaultSiteId={dispatchFor ? siteNameToId[dispatchFor.site?.toLowerCase() ?? ""] ?? null : null}
+        defaultSiteId={(() => {
+          if (!dispatchFor) return null;
+          const srcId = dispatchFor.event?.source_id ?? null;
+          const instId = dispatchFor.clip?.instance_id ?? dispatchFor.snapshot?.instance_id ?? null;
+          const frig = store.frigates.find((f) => (instId && f.id === instId) || (srcId && f.source_id === srcId)) as any;
+          const hik = store.hikvisions.find((h) => (instId && h.id === instId) || (srcId && h.source_id === srcId)) as any;
+          const uni = store.unifis.find((u) => (instId && u.id === instId) || (srcId && u.source_id === srcId)) as any;
+          const inst = frig ?? hik ?? uni;
+          // Multi-tenant NVRs: don't auto-select — operator picks per alert.
+          if (inst?.multi_client) return null;
+          // UniFi: per-camera site mapping is authoritative when present.
+          if (uni && dispatchFor.camera) {
+            const mapped = unifiSiteByCam.get(`${uni.id}:${dispatchFor.camera}`);
+            if (mapped) return mapped;
+          }
+          // Frigate / Hikvision (single-tenant): match by NVR name → site name.
+          const name = (inst?.name ?? dispatchFor.site ?? "").toLowerCase();
+          return siteNameToId[name] ?? null;
+        })()}
         hint={dispatchFor ? `Dispatching for alert: ${dispatchFor.site} · ${dispatchFor.camera}` : undefined}
         source="other"
         sourceRef={dispatchFor?.event?.id ?? dispatchFor?.key ?? null}
