@@ -160,6 +160,7 @@ const Wall = () => {
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [dispatchFor, setDispatchFor] = useState<Alert | null>(null);
+  const [dispatchedSites, setDispatchedSites] = useState<Set<string>>(wallAlertsStore.dispatchedSites);
   
   
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
