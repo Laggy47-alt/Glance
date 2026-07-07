@@ -791,6 +791,7 @@ const Wall = () => {
       <DispatchDialog
         open={!!dispatchFor}
         onClose={() => setDispatchFor(null)}
+        defaultSiteId={dispatchFor ? siteNameToId[dispatchFor.site?.toLowerCase() ?? ""] ?? null : null}
         hint={dispatchFor ? `Dispatching for alert: ${dispatchFor.site} · ${dispatchFor.camera}` : undefined}
         source="other"
         sourceRef={dispatchFor?.event?.id ?? dispatchFor?.key ?? null}
