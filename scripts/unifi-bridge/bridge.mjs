@@ -351,10 +351,7 @@ async function runInstance(inst) {
     ];
     for (const path of paths) {
       try {
-        const r = await fetch(`${base}${path}`, {
-          headers: { Cookie: cookie, "x-csrf-token": csrf },
-          dispatcher,
-        });
+        const r = await authedFetch(path);
         const img = await responseImageBase64(r, "camera snapshot");
         if (img) return img;
       } catch (e) {
