@@ -306,11 +306,13 @@ export default function WhatsAppAlerts() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [{ data: s }, { data: n }] = await Promise.all([
+      const [{ data: s }, { data: n }, { data: uni }, { data: hik }] = await Promise.all([
         supabase.from("whatsapp_settings").select("*").eq("organization_id", activeOrg.id).maybeSingle(),
         supabase.from("frigate_instances")
           .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, master_alert_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients, daily_broadcast_enabled")
           .eq("organization_id", activeOrg.id).order("name"),
+        supabase.from("unifi_instances").select("id, name").eq("organization_id", activeOrg.id).order("name"),
+        supabase.from("hikvision_instances").select("id, name").eq("organization_id", activeOrg.id).order("name"),
       ]);
       if (cancelled) return;
       if (s) setSettings({ ...DEFAULTS, ...(s as any) });
