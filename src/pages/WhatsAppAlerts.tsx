@@ -635,7 +635,7 @@ export default function WhatsAppAlerts() {
                 onChange={(v) => setSettings({ ...settings, positive_alert_enabled: v })}
               />
               <div className="grid md:grid-cols-2 gap-3">
-                <Field label="WhatsApp group ID (JID)" hint="Format looks like 120363000000000000@g.us. Get it from the mudslide listener’s /groups endpoint.">
+                <Field label="Default WhatsApp group ID (JID)" hint="Fallback group. Used when the NVR below has no override. Format: 120363000000000000@g.us.">
                   <Input
                     value={settings.positive_alert_group_jid ?? ""}
                     onChange={(e) => setSettings({ ...settings, positive_alert_group_jid: e.target.value })}
