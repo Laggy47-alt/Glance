@@ -397,10 +397,7 @@ async function runInstance(inst) {
     ];
     try {
       for (const path of paths) {
-        const r = await fetch(`${base}${path}`, {
-          headers: { Cookie: cookie, "x-csrf-token": csrf },
-          dispatcher,
-        });
+        const r = await authedFetch(path);
         if (!r.ok) {
           log("debug", inst.id, `clip HTTP ${r.status} ${path}`);
           continue;
