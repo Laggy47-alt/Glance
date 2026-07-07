@@ -28,6 +28,7 @@ export function UnifiOfflineAlertsDialog({
   const [threshold, setThreshold] = useState(5);
   const [cooldown, setCooldown] = useState(60);
   const [notifyRecovery, setNotifyRecovery] = useState(true);
+  const [dailyBroadcast, setDailyBroadcast] = useState(false);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -41,10 +42,11 @@ export function UnifiOfflineAlertsDialog({
           setThreshold(s.threshold_minutes);
           setCooldown(s.cooldown_minutes);
           setNotifyRecovery(s.notify_on_recovery);
+          setDailyBroadcast(!!s.daily_broadcast_enabled);
           setRecipients((s.recipients ?? []) as Recipient[]);
         } else {
           setEnabled(true); setThreshold(5); setCooldown(60);
-          setNotifyRecovery(true); setRecipients([]);
+          setNotifyRecovery(true); setDailyBroadcast(false); setRecipients([]);
         }
       })
       .catch((e) => toast.error((e as Error).message))
@@ -70,6 +72,7 @@ export function UnifiOfflineAlertsDialog({
         threshold_minutes: Math.max(1, Math.floor(threshold) || 5),
         cooldown_minutes: Math.max(1, Math.floor(cooldown) || 60),
         notify_on_recovery: notifyRecovery,
+        daily_broadcast_enabled: dailyBroadcast,
         recipients: clean,
       });
       toast.success("Offline alert settings saved");
@@ -116,6 +119,16 @@ export function UnifiOfflineAlertsDialog({
               <Switch checked={notifyRecovery} onCheckedChange={setNotifyRecovery} />
               <div className="flex-1">
                 <p className="text-xs font-medium">Send recovery notification when a camera comes back online</p>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border bg-secondary/40 px-3 py-2.5 flex items-start gap-3">
+              <Switch checked={dailyBroadcast} onCheckedChange={setDailyBroadcast} />
+              <div className="flex-1">
+                <p className="text-xs font-medium">Include this NVR in the daily offline broadcast</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Offline UniFi cameras appear in the org's scheduled daily summary (WhatsApp Alerts → Daily broadcast times).
+                </p>
               </div>
             </div>
 
