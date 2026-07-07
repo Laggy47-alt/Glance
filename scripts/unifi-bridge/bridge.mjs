@@ -332,10 +332,7 @@ async function runInstance(inst) {
 
   async function fetchEventThumb(eventId) {
     try {
-      const r = await fetch(`${base}/proxy/protect/api/events/${eventId}/thumbnail?w=640`, {
-        headers: { Cookie: cookie, "x-csrf-token": csrf },
-        dispatcher,
-      });
+      const r = await authedFetch(`/proxy/protect/api/events/${eventId}/thumbnail?w=640`);
       return await responseImageBase64(r, "event thumbnail");
     } catch (e) {
       log("debug", inst.id, "event thumbnail error", e?.message ?? e);
