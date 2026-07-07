@@ -410,11 +410,17 @@ const Wall = () => {
       if (isSourceMuted(e.source_id)) { seenRef.current.add(key); continue; }
       // Skip alerts for cameras that are currently disarmed
       if (isCameraDisarmed(e.source_id, null, e.camera)) { seenRef.current.add(key); continue; }
+      // Suppress license-plate alerts when the plate is recognized/known.
+      // Operators only want to see UNKNOWN plates on the live wall.
+      if ((e.label === "license_plate") && isRecognizedKnownPlate(e.payload)) {
+        seenRef.current.add(key); continue;
+      }
       const clip = findMedia(e, "clip");
       const snapshot = findMedia(e, "snapshot");
       seenRef.current.add(key);
       const camera = e.camera ?? "unknown";
       const label = e.label ?? e.kind ?? "motion";
+
       const inst =
         store.frigates.find((f) => f.source_id === e.source_id) ??
         store.unifis.find((u) => u.source_id === e.source_id) ??
