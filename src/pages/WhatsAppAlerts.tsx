@@ -315,7 +315,13 @@ export default function WhatsAppAlerts() {
         supabase.from("hikvision_instances").select("id, name").eq("organization_id", activeOrg.id).order("name"),
       ]);
       if (cancelled) return;
-      if (s) setSettings({ ...DEFAULTS, ...(s as any) });
+      if (s) setSettings({ ...DEFAULTS, ...(s as any), positive_alert_group_jids: ((s as any).positive_alert_group_jids ?? {}) as Record<string, string> });
+      const merged: Array<{ id: string; name: string; type: "frigate" | "unifi" | "hikvision" }> = [
+        ...((n ?? []) as any[]).map((x) => ({ id: x.id as string, name: x.name as string, type: "frigate" as const })),
+        ...((uni ?? []) as any[]).map((x) => ({ id: x.id as string, name: x.name as string, type: "unifi" as const })),
+        ...((hik ?? []) as any[]).map((x) => ({ id: x.id as string, name: x.name as string, type: "hikvision" as const })),
+      ];
+      setAllNvrs(merged);
       const list = ((n ?? []) as any[]).map((x) => ({
         ...x,
         whatsapp_recipients: x.whatsapp_recipients ?? [],
