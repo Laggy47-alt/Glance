@@ -140,6 +140,40 @@ Deno.serve(async (req) => {
       }
     }
 
+    // UniFi: include offline cameras from any UniFi NVR in this org whose
+    // unifi_offline_alert_settings.daily_broadcast_enabled is true. This is
+    // additive — orgs that don't opt in (e.g. ABC) get no UniFi content here.
+    const { data: unifiOptIn } = await supabase
+      .from("unifi_offline_alert_settings")
+      .select("unifi_instance_id, daily_broadcast_enabled")
+      .eq("organization_id", o.organization_id)
+      .eq("daily_broadcast_enabled", true);
+    const unifiInstIds = (unifiOptIn ?? []).map((r: any) => r.unifi_instance_id);
+    if (unifiInstIds.length) {
+      const { data: unifiInsts } = await supabase
+        .from("unifi_instances")
+        .select("id, name")
+        .in("id", unifiInstIds);
+      const unifiNameMap = new Map<string, string>((unifiInsts ?? []).map((i: any) => [i.id, i.name]));
+      const { data: unifiCams } = await supabase
+        .from("unifi_camera_status")
+        .select("instance_id, camera_id, name, is_online, last_offline_at")
+        .in("instance_id", unifiInstIds)
+        .eq("is_online", false);
+      const uGrouped = new Map<string, string[]>();
+      for (const c of unifiCams ?? []) {
+        const offMs = c.last_offline_at ? new Date(c.last_offline_at).getTime() : nowMs;
+        const mins = Math.max(0, Math.floor((nowMs - offMs) / 60_000));
+        const list = uGrouped.get(c.instance_id) ?? [];
+        list.push(`${c.name || c.camera_id} (offline ${mins}m)`);
+        uGrouped.set(c.instance_id, list);
+      }
+      for (const [id, cams] of uGrouped) {
+        if (!cams.length) continue;
+        nvrsPayload.push({ name: unifiNameMap.get(id) ?? "UniFi NVR", reachable: true, offlineCameras: cams });
+      }
+    }
+
     const recipients = (o.daily_broadcast_recipients?.length ? o.daily_broadcast_recipients : (o.default_recipients ?? []))
       .map((s: string) => String(s).trim()).filter(Boolean);
 
