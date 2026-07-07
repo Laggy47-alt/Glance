@@ -28,6 +28,7 @@ export function UnifiOfflineAlertsDialog({
   const [threshold, setThreshold] = useState(5);
   const [cooldown, setCooldown] = useState(60);
   const [notifyRecovery, setNotifyRecovery] = useState(true);
+  const [dailyBroadcast, setDailyBroadcast] = useState(false);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [loading, setLoading] = useState(false);
 
