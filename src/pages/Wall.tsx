@@ -60,10 +60,11 @@ function releaseLiveWallPollLock(owner: string) {
 // Module-level singletons so unacknowledged alerts and dedup state survive
 // in-app navigation (Wall unmount/remount). A full page reload still resets
 // these, which keeps the "no historical backfill on reload" behavior.
-const wallAlertsStore: { alerts: Alert[]; seen: Set<string>; mountedAt: number } = {
+const wallAlertsStore: { alerts: Alert[]; seen: Set<string>; mountedAt: number; dispatchedSites: Set<string> } = {
   alerts: [],
   seen: new Set<string>(),
   mountedAt: Date.now(),
+  dispatchedSites: new Set<string>(),
 };
 
 const SAME_INCIDENT_WINDOW_MS = 15_000;
@@ -159,6 +160,7 @@ const Wall = () => {
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [dispatchFor, setDispatchFor] = useState<Alert | null>(null);
+  const [dispatchedSites, setDispatchedSites] = useState<Set<string>>(wallAlertsStore.dispatchedSites);
   
   
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
@@ -169,6 +171,7 @@ const Wall = () => {
 
   // Keep the module-level mirror in sync so a remount restores current alerts.
   useEffect(() => { wallAlertsStore.alerts = alerts; }, [alerts]);
+  useEffect(() => { wallAlertsStore.dispatchedSites = dispatchedSites; }, [dispatchedSites]);
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
@@ -652,6 +655,56 @@ const Wall = () => {
       <div className="relative h-[calc(100vh-10rem)] rounded-lg border border-border bg-gradient-to-br from-background via-background to-secondary/30 overflow-hidden">
         {(() => {
           const visibleAlerts = alerts.filter((a) => matchesFilter(a.camera, a.label));
+          const isDispatched = (site: string) => dispatchedSites.has(site);
+          const openAlerts = visibleAlerts.filter((a) => !isDispatched(a.site));
+          const trailAlerts = visibleAlerts.filter((a) => isDispatched(a.site));
+
+          // Group trail by site, newest first
+          const trailBySite = new Map<string, Alert[]>();
+          for (const a of trailAlerts) {
+            const list = trailBySite.get(a.site) ?? [];
+            list.push(a);
+            trailBySite.set(a.site, list);
+          }
+          const trailSites = Array.from(trailBySite.keys());
+
+          const renderCard = (a: Alert, i: number, compact = false) => {
+            const openMedia = (preferred: "clip" | "snapshot") => {
+              const m = preferred === "clip" ? (a.clip ?? (a.snapshot?.clip_url ? a.snapshot : undefined) ?? a.snapshot) : (a.snapshot ?? a.clip);
+              if (!m) return;
+              const inst = store.frigates.find((f) =>
+                (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id
+              );
+              setLightbox({
+                kind: preferred === "clip" && (m.kind === "clip" || m.clip_url) ? "clip" : m.kind,
+                url: mediaUrlForPlayback(m, preferred),
+                camera: a.camera,
+                topic: m.topic ?? null,
+                ts: m.ts,
+                thumbnail: a.snapshot && preferred === "clip" ? resolveMediaUrl(a.snapshot.url) : undefined,
+                frigateUrl: inst ? `${inst.base_url}/cameras/${a.camera}` : null,
+                mediaId: m.id,
+                organizationId: m.organization_id ?? a.event?.organization_id ?? activeOrg?.id ?? null,
+                eventId: a.event?.id ?? m.event_id ?? null,
+              });
+            };
+            return (
+              <AlertCard
+                key={a.key}
+                alert={a}
+                index={i}
+                onArchive={() => archive(a)}
+                onDismiss={() => dismiss(a)}
+                onOpen={() => openMedia("clip")}
+                onTag={() => openMedia("snapshot")}
+                onDispatch={() => setDispatchFor(a)}
+                liveUrl={unifiLiveUrlFor(a)}
+              />
+            );
+          };
+
+          const hasTrail = trailSites.length > 0;
+
           return (
             <>
               {visibleAlerts.length === 0 && (
@@ -668,43 +721,51 @@ const Wall = () => {
                 </div>
               )}
 
-              <div className="absolute inset-0 overflow-y-auto p-4">
-                <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] auto-rows-min">
-                  {visibleAlerts.map((a, i) => {
-                    const openMedia = (preferred: "clip" | "snapshot") => {
-                      const m = preferred === "clip" ? (a.clip ?? (a.snapshot?.clip_url ? a.snapshot : undefined) ?? a.snapshot) : (a.snapshot ?? a.clip);
-                      if (!m) return;
-                      const inst = store.frigates.find((f) =>
-                        (m.instance_id && f.id === m.instance_id) || f.source_id === m.source_id
-                      );
-                      setLightbox({
-                        kind: preferred === "clip" && (m.kind === "clip" || m.clip_url) ? "clip" : m.kind,
-                        url: mediaUrlForPlayback(m, preferred),
-                        camera: a.camera,
-                        topic: m.topic ?? null,
-                        ts: m.ts,
-                        thumbnail: a.snapshot && preferred === "clip" ? resolveMediaUrl(a.snapshot.url) : undefined,
-                        frigateUrl: inst ? `${inst.base_url}/cameras/${a.camera}` : null,
-                        mediaId: m.id,
-                        organizationId: m.organization_id ?? a.event?.organization_id ?? activeOrg?.id ?? null,
-                        eventId: a.event?.id ?? m.event_id ?? null,
-                      });
-                    };
-                    return (
-                      <AlertCard
-                        key={a.key}
-                        alert={a}
-                        index={i}
-                        onArchive={() => archive(a)}
-                        onDismiss={() => dismiss(a)}
-                        onOpen={() => openMedia("clip")}
-                        onTag={() => openMedia("snapshot")}
-                        onDispatch={() => setDispatchFor(a)}
-                        liveUrl={unifiLiveUrlFor(a)}
-                      />
-                    );
-                  })}
+              <div className={cn("absolute inset-0 flex gap-3 p-4", !hasTrail && "block")}>
+                <div className={cn("overflow-y-auto", hasTrail ? "flex-1 min-w-0" : "h-full")}>
+                  <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] auto-rows-min">
+                    {openAlerts.map((a, i) => renderCard(a, i))}
+                  </div>
                 </div>
+
+                {hasTrail && (
+                  <div className="w-[380px] shrink-0 overflow-y-auto border-l border-border pl-3 space-y-4">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                      <Siren className="h-3 w-3 text-primary" />
+                      Dispatched — site trail
+                    </div>
+                    {trailSites.map((site) => {
+                      const list = (trailBySite.get(site) ?? []).slice().sort((a, b) => alertTimeMs(b) - alertTimeMs(a));
+                      return (
+                        <div key={site} className="rounded-lg border border-primary/40 bg-primary/5 overflow-hidden">
+                          <div className="flex items-center justify-between px-2 py-1.5 bg-primary/10 border-b border-primary/30">
+                            <div className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
+                              <Siren className="h-3 w-3 text-primary" />
+                              {site}
+                              <span className="text-[10px] text-muted-foreground font-normal">({list.length})</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setDispatchedSites((prev) => {
+                                  const next = new Set(prev);
+                                  next.delete(site);
+                                  return next;
+                                });
+                              }}
+                              className="h-5 w-5 grid place-items-center rounded hover:bg-black/30 text-muted-foreground hover:text-foreground"
+                              title="Close trail"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="p-2 space-y-2">
+                            {list.map((a, i) => renderCard(a, i, true))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </>
           );
@@ -717,6 +778,10 @@ const Wall = () => {
         hint={dispatchFor ? `Dispatching for alert: ${dispatchFor.site} · ${dispatchFor.camera}` : undefined}
         source="other"
         sourceRef={dispatchFor?.event?.id ?? dispatchFor?.key ?? null}
+        onCreated={() => {
+          const site = dispatchFor?.site;
+          if (site) setDispatchedSites((prev) => new Set(prev).add(site));
+        }}
       />
     </DashboardLayout>
   );
