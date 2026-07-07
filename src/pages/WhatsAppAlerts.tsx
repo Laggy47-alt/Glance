@@ -656,6 +656,40 @@ export default function WhatsAppAlerts() {
               <p className="text-[11px] text-muted-foreground">
                 The message includes camera name, timestamp, operator name, the tag’s comment, and public snapshot + video URLs — WhatsApp renders the snapshot URL inline.
               </p>
+
+              <div className="pt-4 border-t border-border space-y-2">
+                <Header icon={Server} title="Per-NVR group overrides" subtitle="Route positive alerts from a specific NVR to its own WhatsApp group. Leave blank to use the default above." />
+                {allNvrs.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic">No NVRs configured yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {allNvrs.map((nvr) => {
+                      const current = settings.positive_alert_group_jids?.[nvr.id] ?? "";
+                      return (
+                        <div key={nvr.id} className="grid grid-cols-[1fr_2fr] gap-2 items-center">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Badge variant="outline" className="uppercase text-[9px] font-mono shrink-0">{nvr.type}</Badge>
+                            <span className="text-sm truncate" title={nvr.name}>{nvr.name}</span>
+                          </div>
+                          <Input
+                            value={current}
+                            onChange={(e) => {
+                              const next = { ...(settings.positive_alert_group_jids ?? {}) };
+                              const v = e.target.value;
+                              if (v.trim()) next[nvr.id] = v;
+                              else delete next[nvr.id];
+                              setSettings({ ...settings, positive_alert_group_jids: next });
+                            }}
+                            placeholder="Uses default group"
+                            className="bg-secondary border-border font-mono text-xs h-8"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}
