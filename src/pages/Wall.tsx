@@ -158,6 +158,22 @@ function extractLicensePlate(a: Alert): string | null {
   return null;
 }
 
+// True when Frigate has matched the plate to a KNOWN plate from the
+// `known_plates` config. Such alerts should be suppressed on the live wall —
+// operators only care about unknown/unrecognized vehicles.
+function isRecognizedKnownPlate(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const rec = payload as Record<string, unknown>;
+  const data = (rec.data && typeof rec.data === "object" && !Array.isArray(rec.data))
+    ? rec.data as Record<string, unknown>
+    : {};
+  const v = rec.recognized_license_plate ?? data.recognized_license_plate;
+  if (typeof v === "string" && v.trim()) return true;
+  if (Array.isArray(v) && typeof v[0] === "string" && v[0].trim()) return true;
+  return false;
+}
+
+
 function mediaUrlForPlayback(m: MediaItem, preferred: "clip" | "snapshot") {
   if (preferred === "clip" && m.clip_url) return resolveMediaUrl(m.clip_url);
   return resolveMediaUrl(m.url);
