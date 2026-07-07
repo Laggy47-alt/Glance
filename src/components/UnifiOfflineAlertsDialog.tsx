@@ -42,10 +42,11 @@ export function UnifiOfflineAlertsDialog({
           setThreshold(s.threshold_minutes);
           setCooldown(s.cooldown_minutes);
           setNotifyRecovery(s.notify_on_recovery);
+          setDailyBroadcast(!!s.daily_broadcast_enabled);
           setRecipients((s.recipients ?? []) as Recipient[]);
         } else {
           setEnabled(true); setThreshold(5); setCooldown(60);
-          setNotifyRecovery(true); setRecipients([]);
+          setNotifyRecovery(true); setDailyBroadcast(false); setRecipients([]);
         }
       })
       .catch((e) => toast.error((e as Error).message))
