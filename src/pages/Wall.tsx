@@ -171,6 +171,7 @@ const Wall = () => {
 
   // Keep the module-level mirror in sync so a remount restores current alerts.
   useEffect(() => { wallAlertsStore.alerts = alerts; }, [alerts]);
+  useEffect(() => { wallAlertsStore.dispatchedSites = dispatchedSites; }, [dispatchedSites]);
 
   const availableCameras = useMemo(() => {
     const set = new Set<string>();
