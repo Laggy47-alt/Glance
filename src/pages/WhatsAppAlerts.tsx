@@ -72,6 +72,7 @@ type WAS = {
   last_heartbeat_status?: string | null;
   positive_alert_enabled: boolean;
   positive_alert_group_jid: string | null;
+  positive_alert_group_jids: Record<string, string>;
   positive_alert_cooldown_seconds: number;
 };
 
