@@ -116,6 +116,7 @@ const DEFAULTS: WAS = {
     "Hey there! 👋😊\n\nI'm Glance, your friendly ABC CCTV sidekick! 🛡️🤖\n\nKeep an eye out for my updates — I'll ping you whenever something needs attention onsite. 🔔🔧\n\nNeed technical assistance? Just reply to this message and our team will be in touch! 👨‍💻🚀\n\nCheers for now! 🎉👍",
   positive_alert_enabled: false,
   positive_alert_group_jid: "",
+  positive_alert_group_jids: {},
   positive_alert_cooldown_seconds: 60,
 };
 
