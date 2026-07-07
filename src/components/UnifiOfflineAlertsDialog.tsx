@@ -122,6 +122,16 @@ export function UnifiOfflineAlertsDialog({
               </div>
             </div>
 
+            <div className="rounded-md border border-border bg-secondary/40 px-3 py-2.5 flex items-start gap-3">
+              <Switch checked={dailyBroadcast} onCheckedChange={setDailyBroadcast} />
+              <div className="flex-1">
+                <p className="text-xs font-medium">Include this NVR in the daily offline broadcast</p>
+                <p className="text-[10px] text-muted-foreground">
+                  Offline UniFi cameras appear in the org's scheduled daily summary (WhatsApp Alerts → Daily broadcast times).
+                </p>
+              </div>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs">Recipients</Label>
