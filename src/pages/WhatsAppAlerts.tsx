@@ -72,6 +72,7 @@ type WAS = {
   last_heartbeat_status?: string | null;
   positive_alert_enabled: boolean;
   positive_alert_group_jid: string | null;
+  positive_alert_group_jids: Record<string, string>;
   positive_alert_cooldown_seconds: number;
 };
 
@@ -115,6 +116,7 @@ const DEFAULTS: WAS = {
     "Hey there! 👋😊\n\nI'm Glance, your friendly ABC CCTV sidekick! 🛡️🤖\n\nKeep an eye out for my updates — I'll ping you whenever something needs attention onsite. 🔔🔧\n\nNeed technical assistance? Just reply to this message and our team will be in touch! 👨‍💻🚀\n\nCheers for now! 🎉👍",
   positive_alert_enabled: false,
   positive_alert_group_jid: "",
+  positive_alert_group_jids: {},
   positive_alert_cooldown_seconds: 60,
 };
 
@@ -285,6 +287,7 @@ export default function WhatsAppAlerts() {
   const { activeOrg } = useAuth();
   const [settings, setSettings] = useState<WAS>(DEFAULTS);
   const [nvrs, setNvrs] = useState<Nvr[]>([]);
+  const [allNvrs, setAllNvrs] = useState<Array<{ id: string; name: string; type: "frigate" | "unifi" | "hikvision" }>>([]);
   const [nvrCameras, setNvrCameras] = useState<Record<string, string[]>>({});
   const [customMsg, setCustomMsg] = useState("");
   const [customSelected, setCustomSelected] = useState<Record<string, boolean>>({});
@@ -303,14 +306,22 @@ export default function WhatsAppAlerts() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [{ data: s }, { data: n }] = await Promise.all([
+      const [{ data: s }, { data: n }, { data: uni }, { data: hik }] = await Promise.all([
         supabase.from("whatsapp_settings").select("*").eq("organization_id", activeOrg.id).maybeSingle(),
         supabase.from("frigate_instances")
           .select("id, name, whatsapp_alert_enabled, whatsapp_recipients, master_alert_recipients, whatsapp_alert_minutes, offline_alert_minutes, multi_client, camera_whatsapp_recipients, daily_broadcast_enabled")
           .eq("organization_id", activeOrg.id).order("name"),
+        supabase.from("unifi_instances").select("id, name").eq("organization_id", activeOrg.id).order("name"),
+        supabase.from("hikvision_instances").select("id, name").eq("organization_id", activeOrg.id).order("name"),
       ]);
       if (cancelled) return;
-      if (s) setSettings({ ...DEFAULTS, ...(s as any) });
+      if (s) setSettings({ ...DEFAULTS, ...(s as any), positive_alert_group_jids: ((s as any).positive_alert_group_jids ?? {}) as Record<string, string> });
+      const merged: Array<{ id: string; name: string; type: "frigate" | "unifi" | "hikvision" }> = [
+        ...((n ?? []) as any[]).map((x) => ({ id: x.id as string, name: x.name as string, type: "frigate" as const })),
+        ...((uni ?? []) as any[]).map((x) => ({ id: x.id as string, name: x.name as string, type: "unifi" as const })),
+        ...((hik ?? []) as any[]).map((x) => ({ id: x.id as string, name: x.name as string, type: "hikvision" as const })),
+      ];
+      setAllNvrs(merged);
       const list = ((n ?? []) as any[]).map((x) => ({
         ...x,
         whatsapp_recipients: x.whatsapp_recipients ?? [],
@@ -353,7 +364,7 @@ export default function WhatsAppAlerts() {
     delete (payload as any).last_heartbeat_at;
     delete (payload as any).last_heartbeat_status;
     delete (payload as any).daily_broadcast_last_sent_at;
-    const { error } = await supabase.from("whatsapp_settings").upsert(payload, { onConflict: "organization_id" });
+    const { error } = await supabase.from("whatsapp_settings").upsert(payload as any, { onConflict: "organization_id" });
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success("WhatsApp settings saved");
@@ -624,7 +635,7 @@ export default function WhatsAppAlerts() {
                 onChange={(v) => setSettings({ ...settings, positive_alert_enabled: v })}
               />
               <div className="grid md:grid-cols-2 gap-3">
-                <Field label="WhatsApp group ID (JID)" hint="Format looks like 120363000000000000@g.us. Get it from the mudslide listener’s /groups endpoint.">
+                <Field label="Default WhatsApp group ID (JID)" hint="Fallback group. Used when the NVR below has no override. Format: 120363000000000000@g.us.">
                   <Input
                     value={settings.positive_alert_group_jid ?? ""}
                     onChange={(e) => setSettings({ ...settings, positive_alert_group_jid: e.target.value })}
@@ -645,6 +656,40 @@ export default function WhatsAppAlerts() {
               <p className="text-[11px] text-muted-foreground">
                 The message includes camera name, timestamp, operator name, the tag’s comment, and public snapshot + video URLs — WhatsApp renders the snapshot URL inline.
               </p>
+
+              <div className="pt-4 border-t border-border space-y-2">
+                <Header icon={Server} title="Per-NVR group overrides" subtitle="Route positive alerts from a specific NVR to its own WhatsApp group. Leave blank to use the default above." />
+                {allNvrs.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic">No NVRs configured yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {allNvrs.map((nvr) => {
+                      const current = settings.positive_alert_group_jids?.[nvr.id] ?? "";
+                      return (
+                        <div key={nvr.id} className="grid grid-cols-[1fr_2fr] gap-2 items-center">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Badge variant="outline" className="uppercase text-[9px] font-mono shrink-0">{nvr.type}</Badge>
+                            <span className="text-sm truncate" title={nvr.name}>{nvr.name}</span>
+                          </div>
+                          <Input
+                            value={current}
+                            onChange={(e) => {
+                              const next = { ...(settings.positive_alert_group_jids ?? {}) };
+                              const v = e.target.value;
+                              if (v.trim()) next[nvr.id] = v;
+                              else delete next[nvr.id];
+                              setSettings({ ...settings, positive_alert_group_jids: next });
+                            }}
+                            placeholder="Uses default group"
+                            className="bg-secondary border-border font-mono text-xs h-8"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <SaveBar onSave={save} saving={saving} />
             </div>
           )}

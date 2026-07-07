@@ -131,14 +131,25 @@ Deno.serve(async (req) => {
 
     const { data: settings } = await supabase
       .from("whatsapp_settings")
-      .select("mudslide_url, mudslide_token, positive_alert_enabled, positive_alert_group_jid, positive_alert_cooldown_seconds, reply_footer")
+      .select("mudslide_url, mudslide_token, positive_alert_enabled, positive_alert_group_jid, positive_alert_group_jids, positive_alert_cooldown_seconds, reply_footer")
       .eq("organization_id", orgId)
       .maybeSingle();
     if (!settings) return j(200, { ok: true, skipped: "no_settings" });
     if (!settings.positive_alert_enabled) return j(200, { ok: true, skipped: "disabled" });
-    const groupJid = String(settings.positive_alert_group_jid ?? "").trim();
-    if (!groupJid) return j(200, { ok: true, skipped: "no_group_jid" });
     if (!settings.mudslide_url) return j(200, { ok: true, skipped: "no_mudslide_url" });
+
+    // Look up the source NVR early so we can pick a per-NVR group JID override.
+    const { data: mediaEarly } = await supabase
+      .from("media_items")
+      .select("instance_id")
+      .eq("id", tag.media_id)
+      .maybeSingle();
+    const perNvrMap = (settings.positive_alert_group_jids ?? {}) as Record<string, string>;
+    const perNvrJid = mediaEarly?.instance_id
+      ? String(perNvrMap[mediaEarly.instance_id] ?? "").trim()
+      : "";
+    const groupJid = perNvrJid || String(settings.positive_alert_group_jid ?? "").trim();
+    if (!groupJid) return j(200, { ok: true, skipped: "no_group_jid" });
 
     const cooldownSec = Math.max(0, Number(settings.positive_alert_cooldown_seconds ?? 60));
     if (cooldownSec > 0) {
