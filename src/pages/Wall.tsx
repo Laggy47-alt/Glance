@@ -778,6 +778,10 @@ const Wall = () => {
         hint={dispatchFor ? `Dispatching for alert: ${dispatchFor.site} · ${dispatchFor.camera}` : undefined}
         source="other"
         sourceRef={dispatchFor?.event?.id ?? dispatchFor?.key ?? null}
+        onCreated={() => {
+          const site = dispatchFor?.site;
+          if (site) setDispatchedSites((prev) => new Set(prev).add(site));
+        }}
       />
     </DashboardLayout>
   );
