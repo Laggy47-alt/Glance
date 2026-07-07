@@ -161,6 +161,22 @@ const Wall = () => {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [dispatchFor, setDispatchFor] = useState<Alert | null>(null);
   const [dispatchedSites, setDispatchedSites] = useState<Set<string>>(wallAlertsStore.dispatchedSites);
+  const [siteNameToId, setSiteNameToId] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!activeOrg?.id) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("sites")
+        .select("id, name")
+        .eq("organization_id", activeOrg.id);
+      const map: Record<string, string> = {};
+      for (const s of (data ?? []) as Array<{ id: string; name: string }>) {
+        if (s.name) map[s.name.toLowerCase()] = s.id;
+      }
+      setSiteNameToId(map);
+    })();
+  }, [activeOrg?.id]);
   
   
   const [cameraFilter, setCameraFilter] = useState<Set<string>>(new Set());
