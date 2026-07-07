@@ -132,6 +132,32 @@ function hasPlayableClip(a: Alert) {
   return !!a.clip || !!a.snapshot?.clip_url;
 }
 
+// Extract a recognized license plate from a Frigate/NVR event payload.
+// Frigate exposes plates via `recognized_license_plate` (top level or in
+// `data`), and older/other integrations sometimes use `sub_label` or
+// `plate` / `license_plate`. We check all of them.
+function extractLicensePlate(a: Alert): string | null {
+  const p = a.event?.payload;
+  if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+  const rec = p as Record<string, unknown>;
+  const data = (rec.data && typeof rec.data === "object" && !Array.isArray(rec.data))
+    ? rec.data as Record<string, unknown>
+    : {};
+  const candidates: unknown[] = [
+    rec.recognized_license_plate,
+    data.recognized_license_plate,
+    rec.license_plate,
+    rec.plate,
+    rec.sub_label,
+    data.sub_label,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim().toUpperCase();
+    if (Array.isArray(c) && typeof c[0] === "string" && c[0].trim()) return c[0].trim().toUpperCase();
+  }
+  return null;
+}
+
 function mediaUrlForPlayback(m: MediaItem, preferred: "clip" | "snapshot") {
   if (preferred === "clip" && m.clip_url) return resolveMediaUrl(m.clip_url);
   return resolveMediaUrl(m.url);
@@ -888,6 +914,14 @@ function AlertCard({
             Play clip
           </div>
         )}
+        {(() => {
+          const plate = extractLicensePlate(alert);
+          return plate ? (
+            <div className="absolute bottom-1.5 right-1.5 bg-yellow-400 text-black px-1.5 py-0.5 rounded text-[10px] font-bold font-mono tracking-wider shadow" title="Recognized license plate">
+              {plate}
+            </div>
+          ) : null;
+        })()}
         <span
           role="button"
           tabIndex={0}
