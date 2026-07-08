@@ -189,6 +189,30 @@ const Dispatches = () => {
 
   const path = pings.map((p) => [p.latitude, p.longitude] as [number, number]);
 
+  // Responders currently on an active dispatch → responder_id → site
+  const activeAssignments = useMemo(() => {
+    const map: Record<string, { siteId: string; status: Dispatch["status"] }> = {};
+    for (const r of rows) {
+      if (r.responder_id && (r.status === "pending" || r.status === "en_route" || r.status === "on_site")) {
+        map[r.responder_id] = { siteId: r.site_id, status: r.status };
+      }
+    }
+    return map;
+  }, [rows]);
+
+  const overviewCenter = useMemo<[number, number] | null>(() => {
+    const pts: [number, number][] = [];
+    for (const d of devices) pts.push([d.last_latitude, d.last_longitude]);
+    for (const s of Object.values(sites)) {
+      if (s.latitude != null && s.longitude != null) pts.push([s.latitude, s.longitude]);
+    }
+    if (!pts.length) return null;
+    const lat = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+    const lng = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    return [lat, lng];
+  }, [devices, sites]);
+
+
   return (
     <DashboardLayout title="Dispatches" subtitle={`${active.length} active`}>
       <div className="space-y-4">
