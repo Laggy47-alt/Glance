@@ -241,7 +241,7 @@ const Dispatches = () => {
               <span>· {devices.length} responder{devices.length === 1 ? "" : "s"} tracked</span>
             </div>
           </div>
-          <div className="h-80 bg-secondary/40">
+          <div className="h-80 bg-secondary/40 relative z-0 isolate">
             {overviewCenter ? (
               <MapContainer center={overviewCenter} zoom={12} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
