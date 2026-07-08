@@ -1,74 +1,129 @@
-## What we're shipping
+## Scope
 
-1. **Diagnose the 0-ping 500s** — already patched `dispatch-ping` to log every step and return `detail` in the error body, and the responder app now surfaces `detail` in its on-screen log. Redeploy `dispatch-ping` and the next failed ping tells us exactly which DB call is choking (likely the `dispatch_location_pings` insert — see step 4).
-2. **Push notifications** — use `@capacitor/local-notifications` fired from the poll loop. This is the right fit here: no FCM/Firebase account, no server-side push infra, works on self-hosted, and reliable within the existing 10–15 s poll cadence. Alert fires the moment poll sees a new dispatch id or a status change.
-3. **Alert payload on the phone** — when the operator dispatches from a Wall alert, snapshot the alert into `dispatches.alert_payload` (jsonb). The phone reads it via `dispatch-poll` and shows it on the status view.
+Three linked features on the self-hosted stack (Supabase ref `ragpwpshriqnieniaapx`). No responder-app changes needed — feedback is operator-only, and GPS pings already work end-to-end; the fix is on the operator side.
 
-## Backend changes
+---
 
-**Migration (both self-hosted `ragpwpshriqnieniaapx` and Lovable Cloud `bgczubehzofjvjenozof`):**
+## 1. GPS not showing on operator map
+
+Root-cause candidates (top-down):
+- `responder_devices` row exists but `last_latitude` never got written (`dispatch-ping` update swallowed).
+- Row updates fine but the operator query filters it out (`.eq(organization_id)`, `revoked_at IS NULL`, `last_latitude IS NOT NULL`).
+- Realtime subscription isn't wired for `UPDATE` on that row, so map only refreshes on other events.
+
+Fix steps:
+1. Add a **Devices panel** at the top of `Dispatches.tsx` that lists every paired device for the org — regardless of whether it has a fix yet — showing `label`, `responder`, `last_seen_at`, and `last_latitude/last_longitude` (or "no fix yet"). This makes the state obvious instead of the map silently hiding rows.
+2. Remove the `.not("last_latitude", "is", null)` filter from the map query — draw a "no fix" chip for devices without coords, plot the ones that have them.
+3. Confirm the realtime channel picks up `UPDATE` on `responder_devices` (already `event: "*"` — but add a `console.debug` on payload so we can see it firing in the browser network panel).
+4. Small hardening on `dispatch-ping`: log the row-count returned by the update; if 0 rows matched, return a 500 with `device update matched 0 rows` so we know it's an RLS/id mismatch and not a silent miss.
+
+---
+
+## 2. Operator-filled feedback popup on completion
+
+Flow: responder taps **Complete** → dispatch status becomes `completed` → operator's Dispatches page pops a **Feedback dialog** (does NOT auto-close the dispatch card until feedback is submitted).
+
+Schema (new migration `self-hosted-migrations/20260708_dispatch_feedback.sql` + mirror `db/dispatch/003_dispatch_feedback.sql`):
 
 ```sql
 alter table public.dispatches
-  add column if not exists alert_payload jsonb;
--- source / source_ref already exist and cover source_kind + source_id.
-grant select, insert, update on public.dispatches to authenticated;
+  add column if not exists feedback_outcome text
+    check (feedback_outcome in ('false_alarm','genuine','resolved','other')),
+  add column if not exists feedback_action text
+    check (feedback_action in ('patrol','arrest','saps_called','none','other')),
+  add column if not exists feedback_notes text,
+  add column if not exists feedback_damage text,
+  add column if not exists feedback_submitted_at timestamptz,
+  add column if not exists feedback_submitted_by uuid references auth.users(id);
 ```
 
-Reason for reusing existing columns: `dispatches` already has `source` (text) and `source_ref` (text). Those are functionally the `source_kind` + `source_id` you approved — no need to duplicate. `alert_payload` is the new one.
+New component `src/components/DispatchFeedbackDialog.tsx`:
+- 4 fields matching your selection: **Outcome** (dropdown), **Action taken** (dropdown), **Free-text notes** (relayed from responder), **Damage / loss** (text).
+- Submit writes the 4 columns + `feedback_submitted_at/by` and inserts a `dispatch_events` row with `kind='feedback_submitted'`.
 
-**Edge functions:**
-- `dispatch-ping`: hardened with per-step error logging + JSON `detail` (done in this turn).
-- `dispatch-poll`: include `alert_payload` in the returned dispatch object.
+Trigger in `Dispatches.tsx`:
+- On realtime UPDATE where old.status != 'completed' AND new.status == 'completed' AND `feedback_submitted_at` is null → open dialog for that dispatch id.
+- Also on initial page load: any completed dispatch without feedback shows a "Complete report" button in the row.
 
-## Frontend changes
+---
 
-**`src/components/DispatchDialog.tsx`**
-- New optional prop `alertPayload?: { site, camera, label, ts, snapshot_url? }`.
-- Insert it into `dispatches.alert_payload` on submit.
+## 3. Auto-tag on dispatch + auto-clear on feedback + Dispatch Reports page
 
-**`src/pages/Wall.tsx`**
-- When opening the dispatch dialog for an alert, pass `alertPayload` built from `dispatchFor` (site, camera, label, ts, snapshot URL from `dispatchFor.snapshot`).
+### 3a. Auto-tag as positive on dispatch
 
-## Responder app changes (`apps/responder-android`)
+When a dispatch is created **from a Wall alert** (source `"other"` with a `sourceRef`), tag the underlying media as **positive** immediately.
 
-**`package.json`** — add `@capacitor/local-notifications`.
+Wall passes `sourceRef = dispatchFor.event?.id ?? dispatchFor.key`. The `event.id` is a `webhook_events.id`. `media_items.event_id` FKs to `webhook_events.id`, so we resolve media by that.
 
-**`src/main.ts`**
-- Track `lastDispatchId` and `lastStatus` in memory.
-- When poll returns a dispatch whose id differs from `lastDispatchId`, or status transitions to `pending`/`en_route`, fire a local notification: title = priority + site name, body = alert label or "New dispatch".
-- Render `alert_payload` in the status view: alert text line + snapshot `<img>` if URL present. Fetches with the anon key headers if needed; snapshot URLs from media_items are already served through the Supabase storage/media path.
-
-**`src/api.ts`** — extend `PollResult.dispatch` with `alert_payload?: { site, camera, label, ts, snapshot_url? }`.
-
-**`index.html`** — add a `#alertPayload` block (hidden by default) with an `<img>` slot and a text slot.
-
-**Android permission** — `POST_NOTIFICATIONS` is already listed in the manifest per README, so no manifest edit needed. Plugin will prompt on first fire.
-
-## What you'll do after I ship
-
-```bash
-# 1. Apply the migration on both backends
-psql "$SELF_HOSTED_URL" -f self-hosted-migrations/20260708_dispatch_alert_payload.sql
-psql "$CLOUD_URL"       -f self-hosted-migrations/20260708_dispatch_alert_payload.sql
-
-# 2. Deploy edge functions to self-hosted
-supabase functions deploy dispatch-ping dispatch-poll
-
-# 3. Rebuild the responder APK
-cd apps/responder-android
-npm install                # picks up @capacitor/local-notifications
-npm run build
-npx cap sync android
-cd android && ./gradlew assembleDebug
+Extend `DispatchDialog.submit()`:
+```
+if (sourceRef && dispatch created) {
+  // find media_items where event_id = sourceRef
+  // insert into media_tags (media_id, tag='positive', note='auto: dispatch <id>') for each
+  // also store dispatch_id → media_id link so report can join back
+}
 ```
 
-Sideload the new APK, re-pair, create a dispatch from a Wall alert, and you should see the alert card + snapshot on the phone and a heads-up notification.
+Also add `alert_media_ids uuid[]` column on `dispatches` (migration above) so the report page can pull the snapshot(s) without re-resolving.
 
-## Why local notifications, not FCM
+### 3b. Auto-clear alert from Wall on completion
 
-- **No external account required** — FCM needs a Firebase project + server key + a secret on the backend. Local notifications work out of the box on any self-hosted stack.
-- **The polling channel already exists** — you already accept a 10–15 s worst-case latency, so wake-from-doze via FCM buys little.
-- **Escape hatch** — if you later need instant wake or notifications while the app is killed, swapping in FCM is additive: `dispatch-state`/dispatch creation trigger fires an FCM message, everything else stays.
+You picked "keep alert visible until responder completes". On completion (responder taps Complete OR operator submits feedback), we already have the tag; add a second auto-tag `dispatched_completed` and update `media_items.archived = true` — the Wall filters out archived items. Do this in the **feedback submit** handler so it doubles as the "case closed" step.
 
-If you'd rather go FCM up-front, say so and I'll wire that path instead (needs your Firebase server key).
+### 3c. Dispatch Reports page
+
+New route `/dispatch-reports` → `src/pages/DispatchReports.tsx`. Sidebar entry under Dispatches with `FileText` icon.
+
+List view:
+- All dispatches (default: last 30 days) with columns: dispatched at, site, responder, priority, outcome, elapsed, has-feedback badge.
+- Click row → detail/report view.
+
+Detail view (printable, single column, `window.print`-friendly):
+- Header: site name, dispatched-at, responder, vehicle, priority.
+- **Initial alert section** — snapshot image (from `alert_payload.snapshot_url` or `alert_media_ids`), label, camera, timestamp.
+- **Timeline** — every `dispatch_events` row (created / acknowledged / arrived / completed / feedback_submitted) with time-since-dispatch.
+- **Route** — small Leaflet map of `dispatch_location_pings` polyline + site marker (reuses existing map code).
+- **Response times** — dispatched → ack, ack → arrived, arrived → completed.
+- **Feedback** — the four fields.
+- Export: "Print / Save PDF" button using browser print stylesheet.
+
+---
+
+## Technical layout
+
+```text
+supabase/functions/
+  dispatch-ping/index.ts          # add matched-rows check
+  dispatch-state/index.ts         # unchanged
+db/dispatch/
+  003_dispatch_feedback.sql       # new (self-hosted canonical)
+self-hosted-migrations/
+  20260708_dispatch_feedback.sql  # applied via psql on the box
+src/
+  pages/
+    Dispatches.tsx                # devices panel, feedback trigger, "complete report" btn
+    DispatchReports.tsx           # NEW list + detail
+  components/
+    AppSidebar.tsx                # add "Dispatch Reports" nav item
+    DispatchFeedbackDialog.tsx    # NEW
+    DispatchDialog.tsx            # auto-tag media_items on submit
+  App.tsx                         # register /dispatch-reports route
+```
+
+## What the user runs
+
+1. `git pull` on the self-hosted operator frontend.
+2. Apply new migration:
+   ```
+   docker compose exec -T db psql -U postgres -d postgres < self-hosted-migrations/20260708_dispatch_feedback.sql
+   ```
+3. Redeploy edge functions (only `dispatch-ping` changed):
+   ```
+   supabase functions deploy dispatch-ping --project-ref ragpwpshriqnieniaapx --no-verify-jwt
+   ```
+4. Rebuild + publish operator frontend (`npm run build` → your normal deploy).
+5. **No APK rebuild** — responder app is untouched.
+
+## Open decision
+
+You didn't answer the GPS-log question, so I'll go ahead with the "make it visible, harden the ping, log the update" approach in step 1 rather than guessing at a specific fix. Once you deploy this and open the Dispatches page you'll see either "device with no fix yet" (ping never landed) or coords (map filter was the issue), and we'll know exactly where to look next.
