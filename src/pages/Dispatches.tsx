@@ -277,7 +277,7 @@ const Dispatches = () => {
                   );
                 })}
                 {/* Each responder — dot + line to their site if dispatched */}
-                {devices.map((d) => {
+                {devicesWithFix.map((d) => {
                   const name = responders[d.responder_id] ?? "?";
                   const short = name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "R";
                   const assign = activeAssignments[d.responder_id];
@@ -285,13 +285,13 @@ const Dispatches = () => {
                   return (
                     <React.Fragment key={d.id}>
                       <Marker
-                        position={[d.last_latitude, d.last_longitude]}
+                        position={[d.last_latitude!, d.last_longitude!]}
                         icon={responderDotIcon(short, !!assign)}
                       />
                       {site?.latitude != null && site?.longitude != null && (
                         <Polyline
                           positions={[
-                            [d.last_latitude, d.last_longitude],
+                            [d.last_latitude!, d.last_longitude!],
                             [site.latitude, site.longitude],
                           ]}
                           pathOptions={{ color: "#f59e0b", weight: 2, dashArray: "4 6", opacity: 0.8 }}
@@ -307,7 +307,38 @@ const Dispatches = () => {
               </div>
             )}
           </div>
+          {/* Devices panel */}
+          <div className="px-3 py-2 border-t border-border bg-secondary/20">
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Smartphone className="h-3 w-3" /> Paired devices ({devices.length})
+            </div>
+            {devices.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground italic">No devices paired yet.</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
+                {devices.map((d) => {
+                  const name = responders[d.responder_id] ?? "Unknown";
+                  const hasFix = d.last_latitude != null && d.last_longitude != null;
+                  return (
+                    <div key={d.id} className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-[11px]">
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${hasFix ? "bg-emerald-500" : "bg-amber-500"}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{name}</div>
+                        <div className="truncate text-muted-foreground text-[10px]">
+                          {d.label ?? "device"} · {d.last_seen_at
+                            ? `seen ${new Date(d.last_seen_at).toLocaleTimeString()}`
+                            : "never seen"}
+                          {!hasFix && " · no fix yet"}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
