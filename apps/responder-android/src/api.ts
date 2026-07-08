@@ -24,6 +24,14 @@ async function post(p: Pairing, fn: string, body: unknown) {
   return json;
 }
 
+export interface AlertPayload {
+  site?: string;
+  camera?: string;
+  label?: string;
+  ts?: string;
+  snapshot_url?: string;
+}
+
 export interface PollResult {
   dispatch: null | {
     id: string;
@@ -34,6 +42,7 @@ export interface PollResult {
     site_lat?: number;
     site_lng?: number;
     dispatched_at?: string;
+    alert_payload?: AlertPayload | null;
   };
   tracking: boolean;
   interval_ms: number;
