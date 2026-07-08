@@ -57,8 +57,6 @@ async function notifyDispatch(title: string, body: string) {
         id: Math.floor(Math.random() * 2_147_483_000),
         title,
         body,
-        smallIcon: "ic_stat_icon_config_sample",
-        sound: undefined,
         schedule: { at: new Date(Date.now() + 200) },
       }],
     });
