@@ -2,7 +2,7 @@ import { App } from "@capacitor/app";
 import { api } from "./api";
 import { scanQR, parsePayload } from "./pairing";
 import { clearPairing, getPairing, setPairing, type Pairing } from "./storage";
-import { isTracking, startTracking, stopTracking } from "./tracker";
+import { ensureLocationPermission, isTracking, startTracking, stopTracking } from "./tracker";
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -94,6 +94,13 @@ async function onPair(p: Pairing) {
   pairing = p;
   log(`paired as ${p.responder_name ?? p.responder_id ?? "responder"}`);
   render();
+  // Prompt for location up-front so it's granted before a dispatch arrives.
+  try {
+    const ok = await ensureLocationPermission();
+    log(ok ? "location permission granted" : "location permission denied");
+  } catch (e: any) {
+    log(`location prompt error: ${e?.message ?? e}`);
+  }
   pollOnce();
 }
 
