@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Circle } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -68,6 +68,21 @@ const siteIcon = L.divIcon({
   iconSize: [22, 22],
   iconAnchor: [11, 11],
 });
+const responderDotIcon = (label: string, dispatched: boolean) => L.divIcon({
+  className: "",
+  html: `<div style="background:${dispatched ? "#f59e0b" : "#10b981"};color:#fff;border-radius:9999px;min-width:22px;height:22px;padding:0 6px;display:inline-grid;place-items:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);white-space:nowrap">${label}</div>`,
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+});
+
+type DeviceLoc = {
+  id: string;
+  responder_id: string;
+  last_latitude: number;
+  last_longitude: number;
+  last_seen_at: string | null;
+};
+
 
 const Dispatches = () => {
   const { activeOrg } = useAuth();
@@ -80,6 +95,7 @@ const Dispatches = () => {
   const [sites, setSites] = useState<Record<string, { name: string; latitude: number | null; longitude: number | null; geofence_radius_m: number }>>({});
   const [responders, setResponders] = useState<Record<string, string>>({});
   const [vehicles, setVehicles] = useState<Record<string, string>>({});
+  const [devices, setDevices] = useState<DeviceLoc[]>([]);
   const [nowTick, setNowTick] = useState(0);
 
   // Live clock for elapsed times
@@ -91,7 +107,7 @@ const Dispatches = () => {
   const load = async () => {
     if (!activeOrg?.id) { setRows([]); setLoading(false); return; }
     setLoading(true);
-    const [d, s, r, v] = await Promise.all([
+    const [d, s, r, v, dev] = await Promise.all([
       sb.from("dispatches").select("*")
         .eq("organization_id", activeOrg.id)
         .order("dispatched_at", { ascending: false }).limit(200),
@@ -99,11 +115,18 @@ const Dispatches = () => {
         .eq("organization_id", activeOrg.id),
       sb.from("responders").select("id, name").eq("organization_id", activeOrg.id),
       sb.from("vehicles").select("id, plate").eq("organization_id", activeOrg.id),
+      sb.from("responder_devices")
+        .select("id, responder_id, last_latitude, last_longitude, last_seen_at")
+        .eq("organization_id", activeOrg.id)
+        .is("revoked_at", null)
+        .not("last_latitude", "is", null)
+        .not("last_longitude", "is", null),
     ]);
     setRows((d.data ?? []) as Dispatch[]);
     setSites(Object.fromEntries((s.data ?? []).map((x: any) => [x.id, x])));
     setResponders(Object.fromEntries((r.data ?? []).map((x: any) => [x.id, x.name])));
     setVehicles(Object.fromEntries((v.data ?? []).map((x: any) => [x.id, x.plate])));
+    setDevices((dev.data ?? []) as DeviceLoc[]);
     setLoading(false);
   };
 
@@ -118,6 +141,7 @@ const Dispatches = () => {
       .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "dispatch_events" }, () => {
         if (selectedId) void loadDetail(selectedId);
       })
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "responder_devices" }, () => void load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,6 +189,30 @@ const Dispatches = () => {
 
   const path = pings.map((p) => [p.latitude, p.longitude] as [number, number]);
 
+  // Responders currently on an active dispatch → responder_id → site
+  const activeAssignments = useMemo(() => {
+    const map: Record<string, { siteId: string; status: Dispatch["status"] }> = {};
+    for (const r of rows) {
+      if (r.responder_id && (r.status === "pending" || r.status === "en_route" || r.status === "on_site")) {
+        map[r.responder_id] = { siteId: r.site_id, status: r.status };
+      }
+    }
+    return map;
+  }, [rows]);
+
+  const overviewCenter = useMemo<[number, number] | null>(() => {
+    const pts: [number, number][] = [];
+    for (const d of devices) pts.push([d.last_latitude, d.last_longitude]);
+    for (const s of Object.values(sites)) {
+      if (s.latitude != null && s.longitude != null) pts.push([s.latitude, s.longitude]);
+    }
+    if (!pts.length) return null;
+    const lat = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+    const lng = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    return [lat, lng];
+  }, [devices, sites]);
+
+
   return (
     <DashboardLayout title="Dispatches" subtitle={`${active.length} active`}>
       <div className="space-y-4">
@@ -180,7 +228,73 @@ const Dispatches = () => {
           </Button>
         </div>
 
+        {/* Overview map — all responders */}
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Fleet overview
+            </div>
+            <div className="text-[10px] text-muted-foreground flex items-center gap-3">
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500" /> Available</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500" /> Dispatched</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500" /> Site</span>
+              <span>· {devices.length} responder{devices.length === 1 ? "" : "s"} tracked</span>
+            </div>
+          </div>
+          <div className="h-80 bg-secondary/40">
+            {overviewCenter ? (
+              <MapContainer center={overviewCenter} zoom={12} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
+                {/* Sites for active dispatches */}
+                {Object.values(activeAssignments).map(({ siteId }) => {
+                  const s = sites[siteId];
+                  if (!s || s.latitude == null || s.longitude == null) return null;
+                  return (
+                    <React.Fragment key={siteId}>
+                      <Marker position={[s.latitude, s.longitude]} icon={siteIcon} />
+                      <Circle
+                        center={[s.latitude, s.longitude]}
+                        radius={s.geofence_radius_m ?? 100}
+                        pathOptions={{ color: "#ef4444", weight: 1, fillOpacity: 0.06 }}
+                      />
+                    </React.Fragment>
+                  );
+                })}
+                {/* Each responder — dot + line to their site if dispatched */}
+                {devices.map((d) => {
+                  const name = responders[d.responder_id] ?? "?";
+                  const short = name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "R";
+                  const assign = activeAssignments[d.responder_id];
+                  const site = assign ? sites[assign.siteId] : null;
+                  return (
+                    <React.Fragment key={d.id}>
+                      <Marker
+                        position={[d.last_latitude, d.last_longitude]}
+                        icon={responderDotIcon(short, !!assign)}
+                      />
+                      {site?.latitude != null && site?.longitude != null && (
+                        <Polyline
+                          positions={[
+                            [d.last_latitude, d.last_longitude],
+                            [site.latitude, site.longitude],
+                          ]}
+                          pathOptions={{ color: "#f59e0b", weight: 2, dashArray: "4 6", opacity: 0.8 }}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </MapContainer>
+            ) : (
+              <div className="h-full grid place-items-center text-xs text-muted-foreground">
+                No responder locations yet. Once a paired phone sends its first ping, it will appear here.
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
           {/* List */}
           <div className="lg:col-span-3 rounded-lg border border-border bg-card overflow-hidden">
             <Table>
