@@ -17,7 +17,10 @@ async function post(p: Pairing, fn: string, body: unknown) {
   const text = await res.text();
   let json: any = null;
   try { json = text ? JSON.parse(text) : null; } catch { /* leave null */ }
-  if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const msg = json?.error ? `${json.error}${json.detail ? `: ${json.detail}` : ""}` : `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
   return json;
 }
 
