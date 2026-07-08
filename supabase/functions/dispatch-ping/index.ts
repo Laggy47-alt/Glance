@@ -1,7 +1,7 @@
 // dispatch-ping — accepts GPS pings from a provisioned responder phone.
 //
 // POST /functions/v1/dispatch-ping
-// Body: { token, latitude, longitude, accuracy?, speed?, heading?, recorded_at? }
+// Body: { token, latitude/lng or lat/lng, accuracy?, speed?, heading?, recorded_at? }
 //
 // No user login required — the opaque device token is the auth.
 // The function uses the service role to bypass RLS and writes on the
@@ -38,8 +38,12 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "invalid JSON" }, 400); }
 
   const token = String(body?.token ?? "").trim();
-  const lat = Number(body?.latitude);
-  const lng = Number(body?.longitude);
+  // Older responder builds send { lat, lng }; newer/server docs used
+  // { latitude, longitude }. Accept both so GPS pings do not get rejected.
+  const latRaw = body?.latitude ?? body?.lat;
+  const lngRaw = body?.longitude ?? body?.lng;
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
   const acc = body?.accuracy != null ? Number(body.accuracy) : null;
   const speed = body?.speed != null ? Number(body.speed) : null;
   const heading = body?.heading != null ? Number(body.heading) : null;

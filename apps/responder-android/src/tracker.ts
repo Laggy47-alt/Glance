@@ -15,14 +15,21 @@ export function isTracking(): boolean {
   return watchId !== null;
 }
 
-export async function startTracking(pairing: Pairing, onPing: (t: number) => void) {
+export async function startTracking(
+  pairing: Pairing,
+  onPing: (t: number) => void,
+  onError?: (message: string) => void,
+) {
   if (watchId) return;
   const ok = await ensureLocationPermission();
   if (!ok) throw new Error("Location permission denied");
   watchId = await Geolocation.watchPosition(
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
     async (pos, err) => {
-      if (err || !pos) return;
+      if (err || !pos) {
+        if (err) onError?.(err.message ?? "location watch error");
+        return;
+      }
       try {
         await api.ping(pairing, {
           lat: pos.coords.latitude,
@@ -32,8 +39,9 @@ export async function startTracking(pairing: Pairing, onPing: (t: number) => voi
           heading: pos.coords.heading ?? undefined,
         });
         onPing(Date.now());
-      } catch {
-        /* swallow, keep the watcher alive */
+      } catch (e: any) {
+        onError?.(e?.message ?? "ping failed");
+        /* keep the watcher alive */
       }
     },
   );
