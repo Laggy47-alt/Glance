@@ -12,8 +12,9 @@ import { DispatchDialog } from "@/components/DispatchDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { DispatchFeedbackDialog } from "@/components/DispatchFeedbackDialog";
 import {
-  Loader2, Plus, Siren, Clock, MapPin, User, Car as CarIcon, X, CheckCircle2,
+  Loader2, Plus, Siren, Clock, MapPin, User, Car as CarIcon, X, CheckCircle2, ClipboardCheck, Smartphone,
 } from "lucide-react";
 
 type Dispatch = {
@@ -78,8 +79,9 @@ const responderDotIcon = (label: string, dispatched: boolean) => L.divIcon({
 type DeviceLoc = {
   id: string;
   responder_id: string;
-  last_latitude: number;
-  last_longitude: number;
+  label: string | null;
+  last_latitude: number | null;
+  last_longitude: number | null;
   last_seen_at: string | null;
 };
 
@@ -97,6 +99,8 @@ const Dispatches = () => {
   const [vehicles, setVehicles] = useState<Record<string, string>>({});
   const [devices, setDevices] = useState<DeviceLoc[]>([]);
   const [nowTick, setNowTick] = useState(0);
+  const [feedbackFor, setFeedbackFor] = useState<string | null>(null);
+  const prevStatusRef = React.useRef<Record<string, string>>({});
 
   // Live clock for elapsed times
   useEffect(() => {
@@ -116,13 +120,20 @@ const Dispatches = () => {
       sb.from("responders").select("id, name").eq("organization_id", activeOrg.id),
       sb.from("vehicles").select("id, plate").eq("organization_id", activeOrg.id),
       sb.from("responder_devices")
-        .select("id, responder_id, last_latitude, last_longitude, last_seen_at")
+        .select("id, responder_id, label, last_latitude, last_longitude, last_seen_at")
         .eq("organization_id", activeOrg.id)
-        .is("revoked_at", null)
-        .not("last_latitude", "is", null)
-        .not("last_longitude", "is", null),
+        .is("revoked_at", null),
     ]);
-    setRows((d.data ?? []) as Dispatch[]);
+    const dispatches = (d.data ?? []) as Dispatch[];
+    // Detect newly-completed rows lacking feedback → open feedback dialog
+    for (const row of dispatches) {
+      const prev = prevStatusRef.current[row.id];
+      if (prev && prev !== "completed" && row.status === "completed" && !(row as any).feedback_submitted_at) {
+        setFeedbackFor(row.id);
+      }
+      prevStatusRef.current[row.id] = row.status;
+    }
+    setRows(dispatches);
     setSites(Object.fromEntries((s.data ?? []).map((x: any) => [x.id, x])));
     setResponders(Object.fromEntries((r.data ?? []).map((x: any) => [x.id, x.name])));
     setVehicles(Object.fromEntries((v.data ?? []).map((x: any) => [x.id, x.plate])));
@@ -202,7 +213,9 @@ const Dispatches = () => {
 
   const overviewCenter = useMemo<[number, number] | null>(() => {
     const pts: [number, number][] = [];
-    for (const d of devices) pts.push([d.last_latitude, d.last_longitude]);
+    for (const d of devices) {
+      if (d.last_latitude != null && d.last_longitude != null) pts.push([d.last_latitude, d.last_longitude]);
+    }
     for (const s of Object.values(sites)) {
       if (s.latitude != null && s.longitude != null) pts.push([s.latitude, s.longitude]);
     }
@@ -211,6 +224,9 @@ const Dispatches = () => {
     const lng = pts.reduce((a, p) => a + p[1], 0) / pts.length;
     return [lat, lng];
   }, [devices, sites]);
+
+  const devicesWithFix = devices.filter((d) => d.last_latitude != null && d.last_longitude != null);
+  const devicesNoFix = devices.filter((d) => d.last_latitude == null || d.last_longitude == null);
 
 
   return (
