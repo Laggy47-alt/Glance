@@ -5,7 +5,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // push to this URL is picked up without rebuilding/reinstalling the APK.
 // Set RESPONDER_SERVER_URL when running `npm run build` to override.
 const REMOTE_URL =
-  process.env.RESPONDER_SERVER_URL ?? "https://responder.example.com";
+  process.env.RESPONDER_SERVER_URL ?? "https://responder.abcglance.co.za";
 
 const config: CapacitorConfig = {
   appId: "app.glance.responder",
