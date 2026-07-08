@@ -1,4 +1,5 @@
 import { App } from "@capacitor/app";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import { api } from "./api";
 import { scanQR, parsePayload } from "./pairing";
 import { clearPairing, getPairing, setPairing, type Pairing } from "./storage";
@@ -11,6 +12,10 @@ const els = {
   pairView: $("pairView"),
   statusView: $("statusView"),
   actionsView: $("actionsView"),
+  alertView: $("alertView"),
+  alertLabel: $("alertLabel"),
+  alertMeta: $("alertMeta"),
+  alertSnapshot: $("alertSnapshot") as HTMLImageElement,
   scanBtn: $("scanBtn") as HTMLButtonElement,
   manualBtn: $("manualBtn") as HTMLButtonElement,
   unpairBtn: $("unpairBtn") as HTMLButtonElement,
