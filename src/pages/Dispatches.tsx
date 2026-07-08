@@ -389,7 +389,7 @@ const Dispatches = () => {
                         <span className="hidden">{nowTick}</span>
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        {active && (
+                        {active ? (
                           <div className="flex justify-end gap-1">
                             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setStatus(d, "complete")}>
                               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -398,7 +398,12 @@ const Dispatches = () => {
                               <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                        )}
+                        ) : d.status === "completed" && !(d as any).feedback_submitted_at ? (
+                          <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1"
+                            onClick={() => setFeedbackFor(d.id)}>
+                            <ClipboardCheck className="h-3 w-3" /> Report
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
@@ -489,6 +494,12 @@ const Dispatches = () => {
       </div>
 
       <DispatchDialog open={dialog} onClose={() => setDialog(false)} onCreated={(id) => id && setSelectedId(id)} />
+      <DispatchFeedbackDialog
+        open={!!feedbackFor}
+        dispatchId={feedbackFor}
+        onClose={() => setFeedbackFor(null)}
+        onSubmitted={() => void load()}
+      />
     </DashboardLayout>
   );
 };
