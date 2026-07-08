@@ -62,14 +62,22 @@ Deno.serve(async (req) => {
   if (devErr) { console.error("device lookup failed", devErr); return json({ error: "device lookup failed", detail: devErr.message }, 500); }
   if (!dev || dev.revoked_at) return json({ error: "invalid token" }, 401);
 
-  // Update device last-seen
-  const { error: devUpdErr } = await sb.from("responder_devices").update({
+  // Update device last-seen — use .select() to see how many rows matched.
+  const { data: updated, error: devUpdErr } = await sb.from("responder_devices").update({
     last_seen_at: recordedAt,
     last_latitude: lat,
     last_longitude: lng,
     last_accuracy_m: acc,
-  }).eq("id", dev.id);
-  if (devUpdErr) console.error("device update failed", devUpdErr);
+  }).eq("id", dev.id).select("id");
+  if (devUpdErr) {
+    console.error("device update failed", devUpdErr);
+    return json({ error: "device update failed", detail: devUpdErr.message }, 500);
+  }
+  if (!updated || updated.length === 0) {
+    console.error("device update matched 0 rows", { device_id: dev.id });
+    return json({ error: "device update matched 0 rows", detail: `id=${dev.id}` }, 500);
+  }
+
 
   // Find responder's active dispatch (pending / en_route / on_site)
   const { data: dispatch, error: dErr } = await sb

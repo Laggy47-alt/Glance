@@ -12,8 +12,9 @@ import { DispatchDialog } from "@/components/DispatchDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { DispatchFeedbackDialog } from "@/components/DispatchFeedbackDialog";
 import {
-  Loader2, Plus, Siren, Clock, MapPin, User, Car as CarIcon, X, CheckCircle2,
+  Loader2, Plus, Siren, Clock, MapPin, User, Car as CarIcon, X, CheckCircle2, ClipboardCheck, Smartphone,
 } from "lucide-react";
 
 type Dispatch = {
@@ -78,8 +79,9 @@ const responderDotIcon = (label: string, dispatched: boolean) => L.divIcon({
 type DeviceLoc = {
   id: string;
   responder_id: string;
-  last_latitude: number;
-  last_longitude: number;
+  label: string | null;
+  last_latitude: number | null;
+  last_longitude: number | null;
   last_seen_at: string | null;
 };
 
@@ -97,6 +99,8 @@ const Dispatches = () => {
   const [vehicles, setVehicles] = useState<Record<string, string>>({});
   const [devices, setDevices] = useState<DeviceLoc[]>([]);
   const [nowTick, setNowTick] = useState(0);
+  const [feedbackFor, setFeedbackFor] = useState<string | null>(null);
+  const prevStatusRef = React.useRef<Record<string, string>>({});
 
   // Live clock for elapsed times
   useEffect(() => {
@@ -116,13 +120,20 @@ const Dispatches = () => {
       sb.from("responders").select("id, name").eq("organization_id", activeOrg.id),
       sb.from("vehicles").select("id, plate").eq("organization_id", activeOrg.id),
       sb.from("responder_devices")
-        .select("id, responder_id, last_latitude, last_longitude, last_seen_at")
+        .select("id, responder_id, label, last_latitude, last_longitude, last_seen_at")
         .eq("organization_id", activeOrg.id)
-        .is("revoked_at", null)
-        .not("last_latitude", "is", null)
-        .not("last_longitude", "is", null),
+        .is("revoked_at", null),
     ]);
-    setRows((d.data ?? []) as Dispatch[]);
+    const dispatches = (d.data ?? []) as Dispatch[];
+    // Detect newly-completed rows lacking feedback → open feedback dialog
+    for (const row of dispatches) {
+      const prev = prevStatusRef.current[row.id];
+      if (prev && prev !== "completed" && row.status === "completed" && !(row as any).feedback_submitted_at) {
+        setFeedbackFor(row.id);
+      }
+      prevStatusRef.current[row.id] = row.status;
+    }
+    setRows(dispatches);
     setSites(Object.fromEntries((s.data ?? []).map((x: any) => [x.id, x])));
     setResponders(Object.fromEntries((r.data ?? []).map((x: any) => [x.id, x.name])));
     setVehicles(Object.fromEntries((v.data ?? []).map((x: any) => [x.id, x.plate])));
@@ -202,7 +213,9 @@ const Dispatches = () => {
 
   const overviewCenter = useMemo<[number, number] | null>(() => {
     const pts: [number, number][] = [];
-    for (const d of devices) pts.push([d.last_latitude, d.last_longitude]);
+    for (const d of devices) {
+      if (d.last_latitude != null && d.last_longitude != null) pts.push([d.last_latitude, d.last_longitude]);
+    }
     for (const s of Object.values(sites)) {
       if (s.latitude != null && s.longitude != null) pts.push([s.latitude, s.longitude]);
     }
@@ -211,6 +224,9 @@ const Dispatches = () => {
     const lng = pts.reduce((a, p) => a + p[1], 0) / pts.length;
     return [lat, lng];
   }, [devices, sites]);
+
+  const devicesWithFix = devices.filter((d) => d.last_latitude != null && d.last_longitude != null);
+  const devicesNoFix = devices.filter((d) => d.last_latitude == null || d.last_longitude == null);
 
 
   return (
@@ -261,7 +277,7 @@ const Dispatches = () => {
                   );
                 })}
                 {/* Each responder — dot + line to their site if dispatched */}
-                {devices.map((d) => {
+                {devicesWithFix.map((d) => {
                   const name = responders[d.responder_id] ?? "?";
                   const short = name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "R";
                   const assign = activeAssignments[d.responder_id];
@@ -269,13 +285,13 @@ const Dispatches = () => {
                   return (
                     <React.Fragment key={d.id}>
                       <Marker
-                        position={[d.last_latitude, d.last_longitude]}
+                        position={[d.last_latitude!, d.last_longitude!]}
                         icon={responderDotIcon(short, !!assign)}
                       />
                       {site?.latitude != null && site?.longitude != null && (
                         <Polyline
                           positions={[
-                            [d.last_latitude, d.last_longitude],
+                            [d.last_latitude!, d.last_longitude!],
                             [site.latitude, site.longitude],
                           ]}
                           pathOptions={{ color: "#f59e0b", weight: 2, dashArray: "4 6", opacity: 0.8 }}
@@ -291,7 +307,38 @@ const Dispatches = () => {
               </div>
             )}
           </div>
+          {/* Devices panel */}
+          <div className="px-3 py-2 border-t border-border bg-secondary/20">
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Smartphone className="h-3 w-3" /> Paired devices ({devices.length})
+            </div>
+            {devices.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground italic">No devices paired yet.</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
+                {devices.map((d) => {
+                  const name = responders[d.responder_id] ?? "Unknown";
+                  const hasFix = d.last_latitude != null && d.last_longitude != null;
+                  return (
+                    <div key={d.id} className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-[11px]">
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${hasFix ? "bg-emerald-500" : "bg-amber-500"}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{name}</div>
+                        <div className="truncate text-muted-foreground text-[10px]">
+                          {d.label ?? "device"} · {d.last_seen_at
+                            ? `seen ${new Date(d.last_seen_at).toLocaleTimeString()}`
+                            : "never seen"}
+                          {!hasFix && " · no fix yet"}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
@@ -342,7 +389,7 @@ const Dispatches = () => {
                         <span className="hidden">{nowTick}</span>
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        {active && (
+                        {active ? (
                           <div className="flex justify-end gap-1">
                             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setStatus(d, "complete")}>
                               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -351,7 +398,12 @@ const Dispatches = () => {
                               <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                        )}
+                        ) : d.status === "completed" && !(d as any).feedback_submitted_at ? (
+                          <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1"
+                            onClick={() => setFeedbackFor(d.id)}>
+                            <ClipboardCheck className="h-3 w-3" /> Report
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
@@ -442,6 +494,12 @@ const Dispatches = () => {
       </div>
 
       <DispatchDialog open={dialog} onClose={() => setDialog(false)} onCreated={(id) => id && setSelectedId(id)} />
+      <DispatchFeedbackDialog
+        open={!!feedbackFor}
+        dispatchId={feedbackFor}
+        onClose={() => setFeedbackFor(null)}
+        onSubmitted={() => void load()}
+      />
     </DashboardLayout>
   );
 };
