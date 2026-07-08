@@ -115,9 +115,9 @@ const App = () => (
                 <Route path="/sites" element={protect(<Sites />, true)} />
                 <Route path="/responders" element={protect(<Responders />, true)} />
                 <Route path="/vehicles" element={protect(<Vehicles />, true)} />
-                <Route path="/dispatches" element={protect(<Dispatches />, true)} />
-                <Route path="/dispatch-reports" element={protect(<DispatchReports />, true)} />
-                <Route path="/dispatch-reports/:id" element={protect(<DispatchReports />, true)} />
+                <Route path="/dispatches" element={protect(<Dispatches />)} />
+                <Route path="/dispatch-reports" element={protect(<DispatchReports />)} />
+                <Route path="/dispatch-reports/:id" element={protect(<DispatchReports />)} />
                 <Route path="/customer" element={protect(<Customer />)} />
                 <Route path="/customer/events" element={protect(<CustomerEvents />)} />
                 <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />
