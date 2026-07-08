@@ -54,23 +54,25 @@ Deno.serve(async (req) => {
   );
 
   // Resolve token → responder
-  const { data: dev } = await sb
+  const { data: dev, error: devErr } = await sb
     .from("responder_devices")
     .select("id, organization_id, responder_id, revoked_at")
     .eq("token", token)
     .maybeSingle();
+  if (devErr) { console.error("device lookup failed", devErr); return json({ error: "device lookup failed", detail: devErr.message }, 500); }
   if (!dev || dev.revoked_at) return json({ error: "invalid token" }, 401);
 
   // Update device last-seen
-  await sb.from("responder_devices").update({
+  const { error: devUpdErr } = await sb.from("responder_devices").update({
     last_seen_at: recordedAt,
     last_latitude: lat,
     last_longitude: lng,
     last_accuracy_m: acc,
   }).eq("id", dev.id);
+  if (devUpdErr) console.error("device update failed", devUpdErr);
 
   // Find responder's active dispatch (pending / en_route / on_site)
-  const { data: dispatch } = await sb
+  const { data: dispatch, error: dErr } = await sb
     .from("dispatches")
     .select("id, status, site_id, arrived_at, organization_id")
     .eq("responder_id", dev.responder_id)
@@ -78,17 +80,20 @@ Deno.serve(async (req) => {
     .order("dispatched_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (dErr) { console.error("dispatch lookup failed", dErr); return json({ error: "dispatch lookup failed", detail: dErr.message }, 500); }
 
   // Update vehicle last-known-location if this responder drives one
-  const { data: resp } = await sb.from("responders").select("vehicle_id").eq("id", dev.responder_id).maybeSingle();
+  const { data: resp, error: respErr } = await sb.from("responders").select("vehicle_id").eq("id", dev.responder_id).maybeSingle();
+  if (respErr) console.error("responder lookup failed", respErr);
   if (resp?.vehicle_id) {
-    await sb.from("vehicles").update({
+    const { error: vehErr } = await sb.from("vehicles").update({
       last_latitude: lat,
       last_longitude: lng,
       last_speed: speed,
       last_heading: heading,
       last_ping_at: recordedAt,
     }).eq("id", resp.vehicle_id);
+    if (vehErr) console.error("vehicle update failed", vehErr);
   }
 
   if (!dispatch) {
@@ -97,7 +102,7 @@ Deno.serve(async (req) => {
   }
 
   // Insert breadcrumb ping
-  await sb.from("dispatch_location_pings").insert({
+  const { error: pingErr } = await sb.from("dispatch_location_pings").insert({
     dispatch_id: dispatch.id,
     organization_id: dispatch.organization_id,
     latitude: lat,
@@ -107,6 +112,7 @@ Deno.serve(async (req) => {
     heading,
     recorded_at: recordedAt,
   });
+  if (pingErr) { console.error("ping insert failed", pingErr); return json({ error: "ping insert failed", detail: pingErr.message }, 500); }
 
   // Auto-transitions
   let newStatus: string | null = null;
@@ -116,11 +122,12 @@ Deno.serve(async (req) => {
   }
 
   // Auto-arrival geofence check
-  const { data: site } = await sb
+  const { data: site, error: siteErr } = await sb
     .from("sites")
     .select("latitude, longitude, geofence_radius_m")
     .eq("id", dispatch.site_id)
     .maybeSingle();
+  if (siteErr) console.error("site lookup failed", siteErr);
   const insideGeofence =
     site?.latitude != null && site?.longitude != null &&
     distanceM(lat, lng, site.latitude, site.longitude) <= (site.geofence_radius_m ?? 100);
@@ -136,7 +143,8 @@ Deno.serve(async (req) => {
     if (newStatus === "en_route" && !dispatch.arrived_at) {
       patch.acknowledged_at = recordedAt;
     }
-    await sb.from("dispatches").update(patch).eq("id", dispatch.id);
+    const { error: upErr } = await sb.from("dispatches").update(patch).eq("id", dispatch.id);
+    if (upErr) console.error("dispatch update failed", upErr);
 
     if (arrivedAt) {
       await sb.from("dispatch_events").insert({
@@ -156,4 +164,8 @@ Deno.serve(async (req) => {
   }
 
   return json({ ok: true, dispatch: dispatch.id, status: newStatus ?? dispatch.status });
+  } catch (e: any) {
+    console.error("dispatch-ping unexpected error", e);
+    return json({ error: "server error", detail: e?.message ?? String(e) }, 500);
+  }
 });
