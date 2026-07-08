@@ -228,7 +228,73 @@ const Dispatches = () => {
           </Button>
         </div>
 
+        {/* Overview map — all responders */}
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Fleet overview
+            </div>
+            <div className="text-[10px] text-muted-foreground flex items-center gap-3">
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-emerald-500" /> Available</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-amber-500" /> Dispatched</span>
+              <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-red-500" /> Site</span>
+              <span>· {devices.length} responder{devices.length === 1 ? "" : "s"} tracked</span>
+            </div>
+          </div>
+          <div className="h-80 bg-secondary/40">
+            {overviewCenter ? (
+              <MapContainer center={overviewCenter} zoom={12} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
+                {/* Sites for active dispatches */}
+                {Object.values(activeAssignments).map(({ siteId }) => {
+                  const s = sites[siteId];
+                  if (!s || s.latitude == null || s.longitude == null) return null;
+                  return (
+                    <div key={siteId}>
+                      <Marker position={[s.latitude, s.longitude]} icon={siteIcon} />
+                      <Circle
+                        center={[s.latitude, s.longitude]}
+                        radius={s.geofence_radius_m ?? 100}
+                        pathOptions={{ color: "#ef4444", weight: 1, fillOpacity: 0.06 }}
+                      />
+                    </div>
+                  );
+                })}
+                {/* Each responder — dot + line to their site if dispatched */}
+                {devices.map((d) => {
+                  const name = responders[d.responder_id] ?? "?";
+                  const short = name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "R";
+                  const assign = activeAssignments[d.responder_id];
+                  const site = assign ? sites[assign.siteId] : null;
+                  return (
+                    <div key={d.id}>
+                      <Marker
+                        position={[d.last_latitude, d.last_longitude]}
+                        icon={responderDotIcon(short, !!assign)}
+                      />
+                      {site?.latitude != null && site?.longitude != null && (
+                        <Polyline
+                          positions={[
+                            [d.last_latitude, d.last_longitude],
+                            [site.latitude, site.longitude],
+                          ]}
+                          pathOptions={{ color: "#f59e0b", weight: 2, dashArray: "4 6", opacity: 0.8 }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </MapContainer>
+            ) : (
+              <div className="h-full grid place-items-center text-xs text-muted-foreground">
+                No responder locations yet. Once a paired phone sends its first ping, it will appear here.
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
           {/* List */}
           <div className="lg:col-span-3 rounded-lg border border-border bg-card overflow-hidden">
             <Table>
