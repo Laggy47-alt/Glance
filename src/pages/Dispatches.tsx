@@ -107,7 +107,7 @@ const Dispatches = () => {
   const load = async () => {
     if (!activeOrg?.id) { setRows([]); setLoading(false); return; }
     setLoading(true);
-    const [d, s, r, v] = await Promise.all([
+    const [d, s, r, v, dev] = await Promise.all([
       sb.from("dispatches").select("*")
         .eq("organization_id", activeOrg.id)
         .order("dispatched_at", { ascending: false }).limit(200),
@@ -115,11 +115,18 @@ const Dispatches = () => {
         .eq("organization_id", activeOrg.id),
       sb.from("responders").select("id, name").eq("organization_id", activeOrg.id),
       sb.from("vehicles").select("id, plate").eq("organization_id", activeOrg.id),
+      sb.from("responder_devices")
+        .select("id, responder_id, last_latitude, last_longitude, last_seen_at")
+        .eq("organization_id", activeOrg.id)
+        .is("revoked_at", null)
+        .not("last_latitude", "is", null)
+        .not("last_longitude", "is", null),
     ]);
     setRows((d.data ?? []) as Dispatch[]);
     setSites(Object.fromEntries((s.data ?? []).map((x: any) => [x.id, x])));
     setResponders(Object.fromEntries((r.data ?? []).map((x: any) => [x.id, x.name])));
     setVehicles(Object.fromEntries((v.data ?? []).map((x: any) => [x.id, x.plate])));
+    setDevices((dev.data ?? []) as DeviceLoc[]);
     setLoading(false);
   };
 
