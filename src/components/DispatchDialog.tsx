@@ -95,6 +95,17 @@ export function DispatchDialog({
     if (!siteId) { toast.error("Pick a site"); return; }
     if (!responderId) { toast.error("Pick a responder"); return; }
     setSaving(true);
+
+    // Resolve linked media items (for auto-tagging + report snapshot) BEFORE insert
+    let mediaIds: string[] = [];
+    if (sourceRef) {
+      const { data: media } = await sb.from("media_items")
+        .select("id")
+        .eq("event_id", sourceRef)
+        .eq("organization_id", activeOrg.id);
+      mediaIds = (media ?? []).map((m: any) => m.id);
+    }
+
     const { data, error } = await sb.from("dispatches").insert({
       organization_id: activeOrg.id,
       site_id: siteId,
@@ -105,6 +116,7 @@ export function DispatchDialog({
       source,
       source_ref: sourceRef,
       alert_payload: alertPayload ?? null,
+      alert_media_ids: mediaIds.length ? mediaIds : null,
       status: "pending",
     }).select("id").maybeSingle();
     setSaving(false);
@@ -114,8 +126,17 @@ export function DispatchDialog({
         dispatch_id: data.id,
         organization_id: activeOrg.id,
         kind: "created",
-        payload: { source, source_ref: sourceRef },
+        payload: { source, source_ref: sourceRef, media_count: mediaIds.length },
       });
+      // Auto-tag linked media as "positive" (dispatched)
+      if (mediaIds.length > 0) {
+        const rows = mediaIds.map((mid) => ({
+          media_id: mid,
+          tag: "positive",
+          note: `auto: dispatched (${data.id})`,
+        }));
+        await sb.from("media_tags").insert(rows);
+      }
     }
     toast.success("Dispatched");
     onCreated?.(data?.id ?? "");
