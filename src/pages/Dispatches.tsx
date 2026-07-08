@@ -141,6 +141,7 @@ const Dispatches = () => {
       .on("postgres_changes" as any, { event: "INSERT", schema: "public", table: "dispatch_events" }, () => {
         if (selectedId) void loadDetail(selectedId);
       })
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "responder_devices" }, () => void load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
