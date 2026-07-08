@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
 
     const { data: d, error: dErr } = await sb
       .from("dispatches")
-      .select("id, status, priority, site_id, dispatched_at, acknowledged_at, arrived_at, sites(name, latitude, longitude)")
+      .select("id, status, priority, site_id, dispatched_at, acknowledged_at, arrived_at, alert_payload, sites(name, latitude, longitude)")
       .eq("responder_id", dev.responder_id)
       .in("status", ["pending", "en_route", "on_site"])
       .order("dispatched_at", { ascending: false })
@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
         dispatched_at: d.dispatched_at,
         acknowledged_at: d.acknowledged_at,
         arrived_at: d.arrived_at,
+        alert_payload: (d as any).alert_payload ?? null,
       } : null,
       tracking,
       interval_ms: tracking ? 10000 : 15000,

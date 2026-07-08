@@ -861,6 +861,18 @@ const Wall = () => {
         hint={dispatchFor ? `Dispatching for alert: ${dispatchFor.site} · ${dispatchFor.camera}` : undefined}
         source="other"
         sourceRef={dispatchFor?.event?.id ?? dispatchFor?.key ?? null}
+        alertPayload={dispatchFor ? {
+          site: dispatchFor.site,
+          camera: dispatchFor.camera,
+          label: dispatchFor.label,
+          ts: dispatchFor.ts,
+          snapshot_url:
+            (dispatchFor.snapshot as any)?.public_url
+            ?? (dispatchFor.snapshot as any)?.url
+            ?? (dispatchFor.snapshot as any)?.signed_url
+            ?? (dispatchFor.snapshot as any)?.thumbnail_url
+            ?? undefined,
+        } : null}
         onCreated={() => {
           const site = dispatchFor?.site;
           if (site) setDispatchedSites((prev) => new Set(prev).add(site));

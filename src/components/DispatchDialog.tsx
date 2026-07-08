@@ -17,6 +17,14 @@ type Responder = { id: string; name: string; on_duty: boolean; vehicle_id: strin
 type Vehicle = { id: string; plate: string; call_sign: string | null; responder_id: string | null };
 type Site = { id: string; name: string; latitude: number | null; longitude: number | null };
 
+type AlertPayload = {
+  site?: string;
+  camera?: string;
+  label?: string;
+  ts?: string;
+  snapshot_url?: string;
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -27,13 +35,15 @@ type Props = {
   /** Optional source metadata written to dispatches.source / source_ref. */
   source?: "manual" | "unifi_offline" | "hikvision_event" | "frigate_event" | "other";
   sourceRef?: string | null;
+  /** Optional alert snapshot written to dispatches.alert_payload so the responder phone can display it. */
+  alertPayload?: AlertPayload | null;
   onCreated?: (dispatchId: string) => void;
 };
 
 const sb = supabase as any;
 
 export function DispatchDialog({
-  open, onClose, defaultSiteId, hint, source = "manual", sourceRef = null, onCreated,
+  open, onClose, defaultSiteId, hint, source = "manual", sourceRef = null, alertPayload = null, onCreated,
 }: Props) {
   const { activeOrg } = useAuth();
   const [responders, setResponders] = useState<Responder[]>([]);
@@ -94,6 +104,7 @@ export function DispatchDialog({
       notes: notes.trim() || null,
       source,
       source_ref: sourceRef,
+      alert_payload: alertPayload ?? null,
       status: "pending",
     }).select("id").maybeSingle();
     setSaving(false);
