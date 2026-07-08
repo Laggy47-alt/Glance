@@ -181,6 +181,13 @@ async function onPair(p: Pairing) {
   } catch (e: any) {
     log(`location prompt error: ${e?.message ?? e}`);
   }
+  // Prompt for notification permission so we can alert the responder on dispatch.
+  try {
+    const ok = await ensureNotifPermission();
+    log(ok ? "notifications enabled" : "notifications denied");
+  } catch (e: any) {
+    log(`notif prompt error: ${e?.message ?? e}`);
+  }
   pollOnce();
 }
 
