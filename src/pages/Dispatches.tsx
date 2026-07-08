@@ -391,7 +391,7 @@ const Dispatches = () => {
                   </div>
                 </div>
 
-                <div className="h-64 bg-secondary/40">
+                <div className="h-64 bg-secondary/40 relative z-0 isolate">
                   {mapCenter ? (
                     <MapContainer center={mapCenter} zoom={15} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
                       <TileLayer
