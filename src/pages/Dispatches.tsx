@@ -95,6 +95,7 @@ const Dispatches = () => {
   const [sites, setSites] = useState<Record<string, { name: string; latitude: number | null; longitude: number | null; geofence_radius_m: number }>>({});
   const [responders, setResponders] = useState<Record<string, string>>({});
   const [vehicles, setVehicles] = useState<Record<string, string>>({});
+  const [devices, setDevices] = useState<DeviceLoc[]>([]);
   const [nowTick, setNowTick] = useState(0);
 
   // Live clock for elapsed times
