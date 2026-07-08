@@ -40,13 +40,13 @@ Deno.serve(async (req) => {
 
     const { data: d, error: dErr } = await sb
       .from("dispatches")
-      .select("id, status, priority, site_id, dispatched_at, acknowledged_at, arrived_at, sites(name, lat, lng)")
+      .select("id, status, priority, site_id, dispatched_at, acknowledged_at, arrived_at, sites(name, latitude, longitude)")
       .eq("responder_id", dev.responder_id)
       .in("status", ["pending", "en_route", "on_site"])
       .order("dispatched_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (dErr) { console.error("dispatch lookup failed", dErr); return json({ error: "dispatch lookup failed" }, 500); }
+    if (dErr) { console.error("dispatch lookup failed", dErr); return json({ error: "dispatch lookup failed", detail: dErr.message }, 500); }
 
     const tracking = !!d && (d.status === "pending" || d.status === "en_route");
     const site: any = (d as any)?.sites ?? null;
@@ -57,8 +57,8 @@ Deno.serve(async (req) => {
         priority: d.priority,
         site_id: d.site_id,
         site_name: site?.name ?? null,
-        site_lat: site?.lat ?? null,
-        site_lng: site?.lng ?? null,
+        site_lat: site?.latitude ?? null,
+        site_lng: site?.longitude ?? null,
         dispatched_at: d.dispatched_at,
         acknowledged_at: d.acknowledged_at,
         arrived_at: d.arrived_at,
