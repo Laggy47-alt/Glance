@@ -104,6 +104,7 @@ export function DispatchDialog({
       notes: notes.trim() || null,
       source,
       source_ref: sourceRef,
+      alert_payload: alertPayload ?? null,
       status: "pending",
     }).select("id").maybeSingle();
     setSaving(false);
