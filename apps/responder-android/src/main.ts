@@ -87,6 +87,11 @@ function renderAlert(payload: any | null | undefined) {
   }
   els.alertMeta.textContent = parts.join(" · ") || "—";
   if (payload.snapshot_url) {
+    els.alertSnapshot.onload = () => log(`snapshot loaded`);
+    els.alertSnapshot.onerror = () => {
+      log(`snapshot failed to load: ${payload.snapshot_url}`);
+      els.alertSnapshot.style.display = "none";
+    };
     els.alertSnapshot.src = payload.snapshot_url;
     els.alertSnapshot.style.display = "block";
   } else {
