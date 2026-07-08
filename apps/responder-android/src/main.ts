@@ -142,7 +142,11 @@ async function pollOnce() {
       if (res.tracking) {
         setStatus("on", "Tracking");
         if (!isTracking()) {
-          await startTracking(pairing, (t) => { lastPingAt = t; render(); });
+          await startTracking(
+            pairing,
+            (t) => { lastPingAt = t; render(); },
+            (message) => log(`GPS ping failed: ${message}`),
+          );
           log("started GPS tracking");
         }
       } else {

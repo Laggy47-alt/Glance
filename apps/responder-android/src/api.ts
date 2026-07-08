@@ -51,7 +51,12 @@ export interface PollResult {
 export const api = {
   poll: (p: Pairing) => post(p, "dispatch-poll", { token: p.token }) as Promise<PollResult>,
   ping: (p: Pairing, coords: { lat: number; lng: number; accuracy?: number; speed?: number; heading?: number }) =>
-    post(p, "dispatch-ping", { token: p.token, ...coords }),
+    post(p, "dispatch-ping", {
+      token: p.token,
+      ...coords,
+      latitude: coords.lat,
+      longitude: coords.lng,
+    }),
   state: (p: Pairing, action: "acknowledge" | "arrive" | "complete" | "cancel", dispatch_id?: string) =>
     post(p, "dispatch-state", { token: p.token, action, dispatch_id }),
 };
