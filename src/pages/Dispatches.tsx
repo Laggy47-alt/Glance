@@ -250,7 +250,7 @@ const Dispatches = () => {
                   const s = sites[siteId];
                   if (!s || s.latitude == null || s.longitude == null) return null;
                   return (
-                    <div key={siteId}>
+                    <React.Fragment key={siteId}>
                       <Marker position={[s.latitude, s.longitude]} icon={siteIcon} />
                       <Circle
                         center={[s.latitude, s.longitude]}
@@ -267,7 +267,7 @@ const Dispatches = () => {
                   const assign = activeAssignments[d.responder_id];
                   const site = assign ? sites[assign.siteId] : null;
                   return (
-                    <div key={d.id}>
+                    <React.Fragment key={d.id}>
                       <Marker
                         position={[d.last_latitude, d.last_longitude]}
                         icon={responderDotIcon(short, !!assign)}
