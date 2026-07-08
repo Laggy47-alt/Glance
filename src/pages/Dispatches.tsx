@@ -67,7 +67,21 @@ const siteIcon = L.divIcon({
   html: `<div style="background:#ef4444;color:#fff;border-radius:9999px;width:22px;height:22px;display:grid;place-items:center;font-size:11px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">S</div>`,
   iconSize: [22, 22],
   iconAnchor: [11, 11],
+const responderDotIcon = (label: string, dispatched: boolean) => L.divIcon({
+  className: "",
+  html: `<div style="background:${dispatched ? "#f59e0b" : "#10b981"};color:#fff;border-radius:9999px;min-width:22px;height:22px;padding:0 6px;display:inline-grid;place-items:center;font-size:10px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);white-space:nowrap">${label}</div>`,
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
 });
+
+type DeviceLoc = {
+  id: string;
+  responder_id: string;
+  last_latitude: number;
+  last_longitude: number;
+  last_seen_at: string | null;
+};
+
 
 const Dispatches = () => {
   const { activeOrg } = useAuth();
