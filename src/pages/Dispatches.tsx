@@ -281,7 +281,7 @@ const Dispatches = () => {
                           pathOptions={{ color: "#f59e0b", weight: 2, dashArray: "4 6", opacity: 0.8 }}
                         />
                       )}
-                    </div>
+                    </React.Fragment>
                   );
                 })}
               </MapContainer>
