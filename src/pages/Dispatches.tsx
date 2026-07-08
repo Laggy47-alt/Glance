@@ -257,7 +257,7 @@ const Dispatches = () => {
                         radius={s.geofence_radius_m ?? 100}
                         pathOptions={{ color: "#ef4444", weight: 1, fillOpacity: 0.06 }}
                       />
-                    </div>
+                    </React.Fragment>
                   );
                 })}
                 {/* Each responder — dot + line to their site if dispatched */}
