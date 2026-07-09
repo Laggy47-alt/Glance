@@ -234,10 +234,6 @@ els.unpairBtn.addEventListener("click", async () => {
   log("unpaired");
 });
 
-els.ackBtn.addEventListener("click", () => doAction("acknowledge"));
-els.arriveBtn.addEventListener("click", () => doAction("arrive"));
-els.completeBtn.addEventListener("click", () => doAction("complete"));
-
 App.addListener("resume", () => { if (pairing) pollOnce(); });
 
 (async function boot() {
