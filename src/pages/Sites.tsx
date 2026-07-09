@@ -208,26 +208,114 @@ const Sites = () => {
     void load();
   };
 
-  const linkedNvrsForSite = (siteId: string) =>
-    nvrs.filter((n) => n.site_id === siteId);
+  const tableFor = (kind: NvrRow["kind"]) =>
+    kind === "unifi"
+      ? "unifi_instances"
+      : kind === "hikvision"
+      ? "hikvision_instances"
+      : "frigate_instances";
 
-  const unlinkedNvrs = useMemo(() => nvrs.filter((n) => !n.site_id), [nvrs]);
+  // NVRs linked to a site = primary site_id match OR a row in nvr_site_assignments.
+  const linkedNvrsForSite = (siteId: string) => {
+    const extraIds = new Set(
+      assignments
+        .filter((a) => a.site_id === siteId)
+        .map((a) => `${a.nvr_kind}:${a.nvr_id}`),
+    );
+    return nvrs.filter(
+      (n) => n.site_id === siteId || extraIds.has(`${n.kind}:${n.id}`),
+    );
+  };
 
-  const setNvrSite = async (n: NvrRow, siteId: string | null) => {
-    const table =
-      n.kind === "unifi"
-        ? "unifi_instances"
-        : n.kind === "hikvision"
-        ? "hikvision_instances"
-        : "frigate_instances";
-    const { error } = await sb.from(table).update({ site_id: siteId }).eq("id", n.id);
+  // Sites already linked to this NVR (primary + extras).
+  const sitesForNvr = (n: NvrRow): string[] => {
+    const ids = new Set<string>();
+    if (n.site_id) ids.add(n.site_id);
+    for (const a of assignments) {
+      if (a.nvr_kind === n.kind && a.nvr_id === n.id) ids.add(a.site_id);
+    }
+    return [...ids];
+  };
+
+  // Available NVRs for a specific site = not currently linked to it.
+  const availableNvrsForSite = (siteId: string) => {
+    const linked = new Set(linkedNvrsForSite(siteId).map((n) => `${n.kind}:${n.id}`));
+    return nvrs.filter((n) => !linked.has(`${n.kind}:${n.id}`));
+  };
+
+  const setNvrPrimarySite = async (n: NvrRow, siteId: string | null) => {
+    const { error } = await sb.from(tableFor(n.kind)).update({ site_id: siteId }).eq("id", n.id);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success(siteId ? "NVR linked" : "NVR unlinked");
     void load();
   };
+
+  const toggleMultiSite = async (n: NvrRow, next: boolean) => {
+    const { error } = await sb.from(tableFor(n.kind)).update({ multi_site: next }).eq("id", n.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    // When turning OFF, clear any extra site assignments (keep primary site_id).
+    if (!next) {
+      await sb
+        .from("nvr_site_assignments")
+        .delete()
+        .eq("nvr_kind", n.kind)
+        .eq("nvr_id", n.id);
+    }
+    toast.success(next ? "Multi-site enabled" : "Multi-site disabled");
+    void load();
+  };
+
+  // Link this NVR to the current site (primary if none, else additional via join).
+  const linkNvrToSite = async (n: NvrRow, site: Site) => {
+    if (!n.site_id) {
+      await setNvrPrimarySite(n, site.id);
+      toast.success("NVR linked");
+      return;
+    }
+    if (!n.multi_site) {
+      toast.error("Enable multi-site on this NVR to link additional sites");
+      return;
+    }
+    if (!activeOrg?.id) return;
+    const { error } = await sb.from("nvr_site_assignments").insert({
+      organization_id: activeOrg.id,
+      nvr_kind: n.kind,
+      nvr_id: n.id,
+      site_id: site.id,
+    });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("NVR linked to additional site");
+    void load();
+  };
+
+  // Unlink this NVR from the current site. Primary → null site_id. Extras → delete row.
+  const unlinkNvrFromSite = async (n: NvrRow, site: Site) => {
+    if (n.site_id === site.id) {
+      await setNvrPrimarySite(n, null);
+      toast.success("NVR unlinked");
+      return;
+    }
+    const row = assignments.find(
+      (a) => a.nvr_kind === n.kind && a.nvr_id === n.id && a.site_id === site.id,
+    );
+    if (!row) return;
+    const { error } = await sb.from("nvr_site_assignments").delete().eq("id", row.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("NVR unlinked");
+    void load();
+  };
+
 
   return (
     <DashboardLayout title="Sites" subtitle="Physical locations with geofences for dispatch">
