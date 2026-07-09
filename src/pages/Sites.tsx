@@ -51,7 +51,15 @@ type NvrRow = {
   id: string;
   name: string;
   site_id: string | null;
+  multi_site: boolean;
   kind: "unifi" | "hikvision" | "frigate";
+};
+
+type NvrAssignment = {
+  id: string;
+  nvr_kind: "unifi" | "hikvision" | "frigate";
+  nvr_id: string;
+  site_id: string;
 };
 
 const emptyForm = (): Partial<Site> => ({
@@ -69,6 +77,7 @@ const Sites = () => {
   const { activeOrg } = useAuth();
   const [rows, setRows] = useState<Site[]>([]);
   const [nvrs, setNvrs] = useState<NvrRow[]>([]);
+  const [assignments, setAssignments] = useState<NvrAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Site | null>(null);
   const [form, setForm] = useState<Partial<Site>>(emptyForm());
@@ -80,11 +89,12 @@ const Sites = () => {
     if (!activeOrg?.id) {
       setRows([]);
       setNvrs([]);
+      setAssignments([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [sitesRes, unifiRes, hikRes, frigRes] = await Promise.all([
+    const [sitesRes, unifiRes, hikRes, frigRes, assignRes] = await Promise.all([
       sb
         .from("sites")
         .select("*")
@@ -92,24 +102,29 @@ const Sites = () => {
         .order("name"),
       sb
         .from("unifi_instances")
-        .select("id,name,site_id")
+        .select("id,name,site_id,multi_site")
         .eq("organization_id", activeOrg.id),
       sb
         .from("hikvision_instances")
-        .select("id,name,site_id")
+        .select("id,name,site_id,multi_site")
         .eq("organization_id", activeOrg.id),
       sb
         .from("frigate_instances")
-        .select("id,name,site_id")
+        .select("id,name,site_id,multi_site")
+        .eq("organization_id", activeOrg.id),
+      sb
+        .from("nvr_site_assignments")
+        .select("id,nvr_kind,nvr_id,site_id")
         .eq("organization_id", activeOrg.id),
     ]);
     setRows((sitesRes.data ?? []) as Site[]);
     const merged: NvrRow[] = [
-      ...(unifiRes.data ?? []).map((r: any) => ({ ...r, kind: "unifi" as const })),
-      ...(hikRes.data ?? []).map((r: any) => ({ ...r, kind: "hikvision" as const })),
-      ...(frigRes.data ?? []).map((r: any) => ({ ...r, kind: "frigate" as const })),
+      ...(unifiRes.data ?? []).map((r: any) => ({ ...r, multi_site: !!r.multi_site, kind: "unifi" as const })),
+      ...(hikRes.data ?? []).map((r: any) => ({ ...r, multi_site: !!r.multi_site, kind: "hikvision" as const })),
+      ...(frigRes.data ?? []).map((r: any) => ({ ...r, multi_site: !!r.multi_site, kind: "frigate" as const })),
     ];
     setNvrs(merged);
+    setAssignments((assignRes.data ?? []) as NvrAssignment[]);
     setLoading(false);
   };
 
@@ -122,12 +137,18 @@ const Sites = () => {
         { event: "*", schema: "public", table: "sites" },
         () => void load(),
       )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "nvr_site_assignments" },
+        () => void load(),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrg?.id]);
+
 
   const openNew = () => {
     setEditing(null);
@@ -187,26 +208,114 @@ const Sites = () => {
     void load();
   };
 
-  const linkedNvrsForSite = (siteId: string) =>
-    nvrs.filter((n) => n.site_id === siteId);
+  const tableFor = (kind: NvrRow["kind"]) =>
+    kind === "unifi"
+      ? "unifi_instances"
+      : kind === "hikvision"
+      ? "hikvision_instances"
+      : "frigate_instances";
 
-  const unlinkedNvrs = useMemo(() => nvrs.filter((n) => !n.site_id), [nvrs]);
+  // NVRs linked to a site = primary site_id match OR a row in nvr_site_assignments.
+  const linkedNvrsForSite = (siteId: string) => {
+    const extraIds = new Set(
+      assignments
+        .filter((a) => a.site_id === siteId)
+        .map((a) => `${a.nvr_kind}:${a.nvr_id}`),
+    );
+    return nvrs.filter(
+      (n) => n.site_id === siteId || extraIds.has(`${n.kind}:${n.id}`),
+    );
+  };
 
-  const setNvrSite = async (n: NvrRow, siteId: string | null) => {
-    const table =
-      n.kind === "unifi"
-        ? "unifi_instances"
-        : n.kind === "hikvision"
-        ? "hikvision_instances"
-        : "frigate_instances";
-    const { error } = await sb.from(table).update({ site_id: siteId }).eq("id", n.id);
+  // Sites already linked to this NVR (primary + extras).
+  const sitesForNvr = (n: NvrRow): string[] => {
+    const ids = new Set<string>();
+    if (n.site_id) ids.add(n.site_id);
+    for (const a of assignments) {
+      if (a.nvr_kind === n.kind && a.nvr_id === n.id) ids.add(a.site_id);
+    }
+    return [...ids];
+  };
+
+  // Available NVRs for a specific site = not currently linked to it.
+  const availableNvrsForSite = (siteId: string) => {
+    const linked = new Set(linkedNvrsForSite(siteId).map((n) => `${n.kind}:${n.id}`));
+    return nvrs.filter((n) => !linked.has(`${n.kind}:${n.id}`));
+  };
+
+  const setNvrPrimarySite = async (n: NvrRow, siteId: string | null) => {
+    const { error } = await sb.from(tableFor(n.kind)).update({ site_id: siteId }).eq("id", n.id);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success(siteId ? "NVR linked" : "NVR unlinked");
     void load();
   };
+
+  const toggleMultiSite = async (n: NvrRow, next: boolean) => {
+    const { error } = await sb.from(tableFor(n.kind)).update({ multi_site: next }).eq("id", n.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    // When turning OFF, clear any extra site assignments (keep primary site_id).
+    if (!next) {
+      await sb
+        .from("nvr_site_assignments")
+        .delete()
+        .eq("nvr_kind", n.kind)
+        .eq("nvr_id", n.id);
+    }
+    toast.success(next ? "Multi-site enabled" : "Multi-site disabled");
+    void load();
+  };
+
+  // Link this NVR to the current site (primary if none, else additional via join).
+  const linkNvrToSite = async (n: NvrRow, site: Site) => {
+    if (!n.site_id) {
+      await setNvrPrimarySite(n, site.id);
+      toast.success("NVR linked");
+      return;
+    }
+    if (!n.multi_site) {
+      toast.error("Enable multi-site on this NVR to link additional sites");
+      return;
+    }
+    if (!activeOrg?.id) return;
+    const { error } = await sb.from("nvr_site_assignments").insert({
+      organization_id: activeOrg.id,
+      nvr_kind: n.kind,
+      nvr_id: n.id,
+      site_id: site.id,
+    });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("NVR linked to additional site");
+    void load();
+  };
+
+  // Unlink this NVR from the current site. Primary → null site_id. Extras → delete row.
+  const unlinkNvrFromSite = async (n: NvrRow, site: Site) => {
+    if (n.site_id === site.id) {
+      await setNvrPrimarySite(n, null);
+      toast.success("NVR unlinked");
+      return;
+    }
+    const row = assignments.find(
+      (a) => a.nvr_kind === n.kind && a.nvr_id === n.id && a.site_id === site.id,
+    );
+    if (!row) return;
+    const { error } = await sb.from("nvr_site_assignments").delete().eq("id", row.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("NVR unlinked");
+    void load();
+  };
+
 
   return (
     <DashboardLayout title="Sites" subtitle="Physical locations with geofences for dispatch">
@@ -403,77 +512,127 @@ const Sites = () => {
             </DialogDescription>
           </DialogHeader>
 
-          {linkSite && (
+          {linkSite && (() => {
+            const linked = linkedNvrsForSite(linkSite.id);
+            const available = availableNvrsForSite(linkSite.id);
+            return (
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               <div>
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                  Linked ({linkedNvrsForSite(linkSite.id).length})
+                  Linked ({linked.length})
                 </h3>
                 <div className="space-y-1.5">
-                  {linkedNvrsForSite(linkSite.id).length === 0 ? (
+                  {linked.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">
                       Nothing linked yet.
                     </p>
                   ) : (
-                    linkedNvrsForSite(linkSite.id).map((n) => (
+                    linked.map((n) => {
+                      const isPrimary = n.site_id === linkSite.id;
+                      const linkedCount = sitesForNvr(n).length;
+                      return (
                       <div
                         key={`${n.kind}-${n.id}`}
-                        className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 gap-2"
                       >
                         <div className="min-w-0">
-                          <div className="text-sm truncate">{n.name}</div>
+                          <div className="text-sm truncate flex items-center gap-2">
+                            {n.name}
+                            {isPrimary && (
+                              <span className="text-[9px] uppercase tracking-wider rounded bg-primary/15 text-primary px-1.5 py-0.5">
+                                primary
+                              </span>
+                            )}
+                            {n.multi_site && linkedCount > 1 && (
+                              <span className="text-[9px] uppercase tracking-wider rounded bg-muted text-muted-foreground px-1.5 py-0.5">
+                                {linkedCount} sites
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                             {n.kind}
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setNvrSite(n, null)}
-                        >
-                          Unlink
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="flex items-center gap-1 text-[11px] text-muted-foreground select-none">
+                            <input
+                              type="checkbox"
+                              className="h-3 w-3"
+                              checked={n.multi_site}
+                              onChange={(e) => toggleMultiSite(n, e.target.checked)}
+                            />
+                            multi
+                          </label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => unlinkNvrFromSite(n, linkSite)}
+                          >
+                            Unlink
+                          </Button>
+                        </div>
                       </div>
-                    ))
+                    );
+                    })
                   )}
                 </div>
               </div>
 
               <div>
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                  Available ({unlinkedNvrs.length})
+                  Available ({available.length})
                 </h3>
                 <div className="space-y-1.5">
-                  {unlinkedNvrs.length === 0 ? (
+                  {available.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">
-                      All NVRs are already linked.
+                      All NVRs are already linked to this site.
                     </p>
                   ) : (
-                    unlinkedNvrs.map((n) => (
+                    available.map((n) => {
+                      const alreadyHasPrimary = !!n.site_id;
+                      const disabled = alreadyHasPrimary && !n.multi_site;
+                      return (
                       <div
                         key={`${n.kind}-${n.id}`}
-                        className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 gap-2"
                       >
                         <div className="min-w-0">
                           <div className="text-sm truncate">{n.name}</div>
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                             {n.kind}
+                            {alreadyHasPrimary && !n.multi_site && " · linked elsewhere"}
+                            {alreadyHasPrimary && n.multi_site && " · multi-site"}
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setNvrSite(n, linkSite.id)}
-                        >
-                          Link
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {alreadyHasPrimary && !n.multi_site && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleMultiSite(n, true)}
+                            >
+                              Enable multi
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={disabled}
+                            onClick={() => linkNvrToSite(n, linkSite)}
+                          >
+                            Link
+                          </Button>
+                        </div>
                       </div>
-                    ))
+                    );
+                    })
                   )}
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
+
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setLinkSite(null)}>
