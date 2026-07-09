@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MediaLightbox, type LightboxItem } from "@/components/MediaLightbox";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrgFeatures } from "@/hooks/useOrgFeatures";
 
 type Alert = {
   key: string;
@@ -198,6 +199,8 @@ function prependUniqueIncidents(prev: Alert[], incoming: Alert[]) {
 const Wall = () => {
   const store = useWebhookStore();
   const { activeOrg } = useAuth();
+  const { hasFeature } = useOrgFeatures();
+  const dispatchEnabled = hasFeature("dispatch");
   const [alerts, setAlerts] = useState<Alert[]>(wallAlertsStore.alerts);
   const [muted, setMuted] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -761,7 +764,7 @@ const Wall = () => {
                 onDismiss={() => dismiss(a)}
                 onOpen={() => openMedia("clip")}
                 onTag={() => openMedia("snapshot")}
-                onDispatch={() => setDispatchFor(a)}
+                onDispatch={dispatchEnabled ? () => setDispatchFor(a) : undefined}
                 liveUrl={unifiLiveUrlFor(a)}
               />
             );
@@ -904,7 +907,7 @@ function AlertCard({
   onDismiss: () => void;
   onOpen: () => void;
   onTag: () => void;
-  onDispatch: () => void;
+  onDispatch?: () => void;
   liveUrl?: string | null;
 }) {
   const withBbox = (raw: string) => {
@@ -995,15 +998,17 @@ function AlertCard({
           >
             <TagIcon className="h-3 w-3" />
           </Button>
-          <Button
-            size="sm"
-            variant="default"
-            onClick={onDispatch}
-            className="gap-1 h-7 px-2 text-[11px]"
-            title="Dispatch responder"
-          >
-            <Siren className="h-3 w-3" /> Dispatch
-          </Button>
+          {onDispatch && (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={onDispatch}
+              className="gap-1 h-7 px-2 text-[11px]"
+              title="Dispatch responder"
+            >
+              <Siren className="h-3 w-3" /> Dispatch
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={onArchive} className="gap-1 h-7 px-2 text-[11px]">
             <ArchiveIcon className="h-3 w-3" /> ACK
           </Button>
