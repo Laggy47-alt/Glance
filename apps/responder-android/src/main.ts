@@ -19,9 +19,6 @@ const els = {
   scanBtn: $("scanBtn") as HTMLButtonElement,
   manualBtn: $("manualBtn") as HTMLButtonElement,
   unpairBtn: $("unpairBtn") as HTMLButtonElement,
-  ackBtn: $("ackBtn") as HTMLButtonElement,
-  arriveBtn: $("arriveBtn") as HTMLButtonElement,
-  completeBtn: $("completeBtn") as HTMLButtonElement,
   statusDot: $("statusDot"),
   statusText: $("statusText"),
   dispatchText: $("dispatchText"),
@@ -198,16 +195,8 @@ async function onPair(p: Pairing) {
   pollOnce();
 }
 
-async function doAction(action: "acknowledge" | "arrive" | "complete" | "cancel") {
-  if (!pairing) return;
-  try {
-    await api.state(pairing, action, currentDispatchId ?? undefined);
-    log(`action: ${action}`);
-    pollOnce();
-  } catch (e: any) {
-    log(`action ${action} failed: ${e?.message ?? e}`);
-  }
-}
+
+
 
 els.scanBtn.addEventListener("click", async () => {
   try {
@@ -236,10 +225,6 @@ els.unpairBtn.addEventListener("click", async () => {
   render();
   log("unpaired");
 });
-
-els.ackBtn.addEventListener("click", () => doAction("acknowledge"));
-els.arriveBtn.addEventListener("click", () => doAction("arrive"));
-els.completeBtn.addEventListener("click", () => doAction("complete"));
 
 App.addListener("resume", () => { if (pairing) pollOnce(); });
 
