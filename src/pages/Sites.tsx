@@ -51,7 +51,15 @@ type NvrRow = {
   id: string;
   name: string;
   site_id: string | null;
+  multi_site: boolean;
   kind: "unifi" | "hikvision" | "frigate";
+};
+
+type NvrAssignment = {
+  id: string;
+  nvr_kind: "unifi" | "hikvision" | "frigate";
+  nvr_id: string;
+  site_id: string;
 };
 
 const emptyForm = (): Partial<Site> => ({
