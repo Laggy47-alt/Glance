@@ -129,36 +129,107 @@ Deno.serve(async (req) => {
   // Auto-transitions
   let newStatus: string | null = null;
   let arrivedAt: string | null = null;
-  if (dispatch.status === "pending") {
-    newStatus = "en_route";
-  }
+  let completedAt: string | null = null;
 
-  // Auto-arrival geofence check
+  // Geofence lookup
   const { data: site, error: siteErr } = await sb
     .from("sites")
     .select("latitude, longitude, geofence_radius_m")
     .eq("id", dispatch.site_id)
     .maybeSingle();
   if (siteErr) console.error("site lookup failed", siteErr);
-  const insideGeofence =
-    site?.latitude != null && site?.longitude != null &&
-    distanceM(lat, lng, site.latitude, site.longitude) <= (site.geofence_radius_m ?? 100);
+  const radius = site?.geofence_radius_m ?? 100;
+  const distM = (site?.latitude != null && site?.longitude != null)
+    ? distanceM(lat, lng, site.latitude, site.longitude)
+    : null;
+  const insideGeofence = distM != null && distM <= radius;
+  // Hysteresis: require moving ~50m past the arrival radius before we call it a departure.
+  const exitBuffer = Math.max(50, Math.round(radius * 0.5));
+  const outsideGeofence = distM != null && distM >= radius + exitBuffer;
 
+  // pending → en_route on first ping (responder is moving / on-duty)
+  if (dispatch.status === "pending") {
+    newStatus = "en_route";
+  }
+
+  // en_route → on_site on geofence entry
   if (insideGeofence && dispatch.status !== "on_site" && !dispatch.arrived_at) {
     newStatus = "on_site";
     arrivedAt = recordedAt;
   }
 
+  // on_site → completed once responder leaves geofence after arrival
+  if (dispatch.status === "on_site" && dispatch.arrived_at && outsideGeofence) {
+    newStatus = "completed";
+    completedAt = recordedAt;
+  }
+
   if (newStatus) {
     const patch: Record<string, unknown> = { status: newStatus };
     if (arrivedAt) patch.arrived_at = arrivedAt;
-    if (newStatus === "en_route" && !dispatch.arrived_at) {
+    if (completedAt) patch.completed_at = completedAt;
+    if (newStatus === "en_route" && !dispatch.acknowledged_at) {
       patch.acknowledged_at = recordedAt;
     }
     const { error: upErr } = await sb.from("dispatches").update(patch).eq("id", dispatch.id);
     if (upErr) console.error("dispatch update failed", upErr);
 
-    if (arrivedAt) {
+    if (completedAt) {
+      await sb.from("dispatch_events").insert({
+        dispatch_id: dispatch.id,
+        organization_id: dispatch.organization_id,
+        kind: "completed",
+        payload: { auto: true, reason: "geofence_exit", lat, lng, distance_m: distM },
+      });
+
+      // Auto-clear alerts: the ones originally dispatched + any active alerts
+      // from the same site (single-tenant NVRs mapped to this site).
+      try {
+        // Load originally dispatched media ids (set at dispatch time)
+        const { data: dRow } = await sb.from("dispatches")
+          .select("alert_media_ids")
+          .eq("id", dispatch.id).maybeSingle();
+        const originalIds: string[] = Array.isArray(dRow?.alert_media_ids) ? dRow!.alert_media_ids : [];
+
+        // Find every NVR instance mapped to this site (single-tenant NVRs)
+        const instanceIds = new Set<string>();
+        for (const table of ["frigate_instances", "unifi_instances", "hikvision_instances"]) {
+          const { data } = await sb.from(table).select("id").eq("site_id", dispatch.site_id);
+          for (const r of (data ?? []) as Array<{ id: string }>) instanceIds.add(r.id);
+        }
+        // Also NVRs joined via the multi-site assignment table (if present)
+        try {
+          const { data: joins } = await sb.from("nvr_site_assignments")
+            .select("nvr_id").eq("site_id", dispatch.site_id);
+          for (const r of (joins ?? []) as Array<{ nvr_id: string }>) instanceIds.add(r.nvr_id);
+        } catch { /* table optional */ }
+
+        let siteMediaIds: string[] = [];
+        if (instanceIds.size > 0) {
+          const { data: mediaRows } = await sb.from("media_items")
+            .select("id")
+            .in("instance_id", Array.from(instanceIds))
+            .eq("organization_id", dispatch.organization_id)
+            .neq("archived", true)
+            .order("ts", { ascending: false })
+            .limit(500);
+          siteMediaIds = (mediaRows ?? []).map((r: { id: string }) => r.id);
+        }
+
+        const allIds = Array.from(new Set([...originalIds, ...siteMediaIds]));
+        if (allIds.length > 0) {
+          await sb.from("media_items").update({ archived: true }).in("id", allIds);
+          const tagRows = allIds.map((mid) => ({
+            media_id: mid,
+            tag: "dispatched_completed",
+            note: `auto: dispatch ${dispatch.id} completed (geofence exit)`,
+          }));
+          await sb.from("media_tags").insert(tagRows);
+        }
+      } catch (e) {
+        console.error("auto-clear alerts failed", e);
+      }
+    } else if (arrivedAt) {
       await sb.from("dispatch_events").insert({
         dispatch_id: dispatch.id,
         organization_id: dispatch.organization_id,
