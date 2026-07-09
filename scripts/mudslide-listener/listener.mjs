@@ -322,9 +322,14 @@ async function start() {
         // Skip if this message ORIGINATED in that group (avoid echo loop).
         if (FORWARD_TO_GROUP_JID && jid !== FORWARD_TO_GROUP_JID) {
           try {
-            const header = isGroup
-              ? `📨 ${senderName} (group ${jid})`
-              : `📨 ${senderName} (${jid})`;
+            let header;
+            if (isGroup) {
+              const subject = await getGroupSubject(jid);
+              const groupLabel = subject ? `“${subject}”` : `group ${jid}`;
+              header = `📨 ${senderName} in ${groupLabel}`;
+            } else {
+              header = `📨 ${senderName} (${jid})`;
+            }
             await sock.sendMessage(FORWARD_TO_GROUP_JID, {
               text: `${header}\n${text}`,
             });
