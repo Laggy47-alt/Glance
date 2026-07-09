@@ -51,6 +51,17 @@ const INCLUDE_FROM_ME = (process.env.INCLUDE_FROM_ME ?? "0") === "1";
 const LISTEN_PORT = Number(process.env.LISTEN_PORT ?? 3000);
 const LISTEN_HOST = process.env.LISTEN_HOST ?? "127.0.0.1";
 const SEND_TOKEN = process.env.SEND_TOKEN ?? "";
+// Optional: forward every accepted incoming message to a WhatsApp group as well.
+// Set FORWARD_TO_GROUP_JID to a full group JID like "1203630xxxxxxx@g.us".
+const FORWARD_TO_GROUP_JID = (process.env.FORWARD_TO_GROUP_JID ?? "").trim();
+// Optional: comma-separated list of group JIDs whose incoming messages should
+// be ignored (not forwarded to the webhook, not forwarded to the mirror group).
+const EXCLUDE_GROUP_JIDS = new Set(
+  (process.env.EXCLUDE_GROUP_JIDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
 
 function must(k) {
   const v = process.env[k];
@@ -273,6 +284,7 @@ async function start() {
         if (isGroup && !INCLUDE_GROUPS) continue;
         if (isDm && !INCLUDE_DMS) continue;
         if (!isGroup && !isDm) continue;
+        if (isGroup && EXCLUDE_GROUP_JIDS.has(jid)) continue;
 
         const text = extractText(m).trim();
         if (!text) continue;
@@ -290,6 +302,21 @@ async function start() {
           message: text,
           message_id: m.key.id || null,
         });
+
+        // Optional mirror into a group so a team can see all inbound traffic.
+        // Skip if this message ORIGINATED in that group (avoid echo loop).
+        if (FORWARD_TO_GROUP_JID && jid !== FORWARD_TO_GROUP_JID) {
+          try {
+            const header = isGroup
+              ? `📨 ${senderName} (group ${jid})`
+              : `📨 ${senderName} (${jid})`;
+            await sock.sendMessage(FORWARD_TO_GROUP_JID, {
+              text: `${header}\n${text}`,
+            });
+          } catch (e) {
+            console.error("[forward] error:", e?.message ?? e);
+          }
+        }
       } catch (e) {
         console.error("handler error:", e?.message ?? e);
       }
