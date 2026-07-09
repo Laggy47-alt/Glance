@@ -74,6 +74,21 @@ function must(k) {
 
 let sock = null;
 let connected = false;
+const groupSubjectCache = new Map(); // jid -> { subject, ts }
+const GROUP_SUBJECT_TTL_MS = 10 * 60 * 1000;
+
+async function getGroupSubject(jid) {
+  const cached = groupSubjectCache.get(jid);
+  if (cached && Date.now() - cached.ts < GROUP_SUBJECT_TTL_MS) return cached.subject;
+  try {
+    const meta = await sock.groupMetadata(jid);
+    const subject = meta?.subject || "";
+    groupSubjectCache.set(jid, { subject, ts: Date.now() });
+    return subject;
+  } catch (e) {
+    return cached?.subject || "";
+  }
+}
 
 function extractText(m) {
   const msg = m.message;
@@ -307,9 +322,14 @@ async function start() {
         // Skip if this message ORIGINATED in that group (avoid echo loop).
         if (FORWARD_TO_GROUP_JID && jid !== FORWARD_TO_GROUP_JID) {
           try {
-            const header = isGroup
-              ? `📨 ${senderName} (group ${jid})`
-              : `📨 ${senderName} (${jid})`;
+            let header;
+            if (isGroup) {
+              const subject = await getGroupSubject(jid);
+              const groupLabel = subject ? `“${subject}”` : `group ${jid}`;
+              header = `📨 ${senderName} in ${groupLabel}`;
+            } else {
+              header = `📨 ${senderName} (${jid})`;
+            }
             await sock.sendMessage(FORWARD_TO_GROUP_JID, {
               text: `${header}\n${text}`,
             });
