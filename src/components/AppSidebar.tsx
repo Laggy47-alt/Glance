@@ -5,6 +5,7 @@ import { useWebhookStore } from "@/hooks/useWebhookStore";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranding } from "@/hooks/useBranding";
 import { useOfflineStatus } from "@/hooks/useOfflineStatus";
+import { useOrgFeatures } from "@/hooks/useOrgFeatures";
 
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,8 @@ export function AppSidebar() {
   const { profile, isAdmin, isSuperAdmin, isCustomer, signOut, activeOrg, orgs, setActiveOrgId } = useAuth();
   const { appName, appSubtitle, logoUrl } = useBranding();
   const { offlineCameras, unreachableNvrs, hasOffline } = useOfflineStatus();
+  const { hasFeature } = useOrgFeatures();
+  const dispatchEnabled = hasFeature("dispatch");
   const location = useLocation();
   const navigate = useNavigate();
   const enabledSources = store.sources.filter((s) => s.enabled).length;
@@ -76,11 +79,13 @@ export function AppSidebar() {
   const abcHiddenPaths = new Set<string>(
     isAbcOrg ? ["/unifi-status", "/unifi-live"] : []
   );
+  const dispatchPaths = new Set<string>(["/responders", "/vehicles", "/dispatches", "/dispatch-reports"]);
+  const featureHidden = (p: string) => !dispatchEnabled && dispatchPaths.has(p);
   const filteredAdminItems = adminItems.filter(
-    (it) => !fiberHiddenPaths.has(it.to) && !abcHiddenPaths.has(it.to)
+    (it) => !fiberHiddenPaths.has(it.to) && !abcHiddenPaths.has(it.to) && !featureHidden(it.to)
   );
   const filteredUserItems = userItems.filter(
-    (it) => !fiberHiddenPaths.has(it.to) && !abcHiddenPaths.has(it.to)
+    (it) => !fiberHiddenPaths.has(it.to) && !abcHiddenPaths.has(it.to) && !featureHidden(it.to)
   );
   const items = isAdmin
     ? [...filteredAdminItems, { to: "/users", label: "Users", icon: UsersIcon }]

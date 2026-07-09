@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { BrandingProvider } from "@/hooks/useBranding";
 import { AuthGate } from "@/components/AuthGate";
+import { FeatureGate } from "@/components/FeatureGate";
 import { AuthorBadge } from "@/components/AuthorBadge";
 import { OperatorOfflinePopup } from "@/components/OperatorOfflinePopup";
 import { BackendWatchdog } from "./components/BackendWatchdog";
@@ -113,11 +114,11 @@ const App = () => (
 
                 <Route path="/callouts" element={protect(<Callouts />, true)} />
                 <Route path="/sites" element={protect(<Sites />, true)} />
-                <Route path="/responders" element={protect(<Responders />, true)} />
-                <Route path="/vehicles" element={protect(<Vehicles />, true)} />
-                <Route path="/dispatches" element={protect(<Dispatches />)} />
-                <Route path="/dispatch-reports" element={protect(<DispatchReports />)} />
-                <Route path="/dispatch-reports/:id" element={protect(<DispatchReports />)} />
+                <Route path="/responders" element={protect(<FeatureGate feature="dispatch"><Responders /></FeatureGate>, true)} />
+                <Route path="/vehicles" element={protect(<FeatureGate feature="dispatch"><Vehicles /></FeatureGate>, true)} />
+                <Route path="/dispatches" element={protect(<FeatureGate feature="dispatch"><Dispatches /></FeatureGate>)} />
+                <Route path="/dispatch-reports" element={protect(<FeatureGate feature="dispatch"><DispatchReports /></FeatureGate>)} />
+                <Route path="/dispatch-reports/:id" element={protect(<FeatureGate feature="dispatch"><DispatchReports /></FeatureGate>)} />
                 <Route path="/customer" element={protect(<Customer />)} />
                 <Route path="/customer/events" element={protect(<CustomerEvents />)} />
                 <Route path="/customer/instructions" element={protect(<CustomerInstructions />)} />
