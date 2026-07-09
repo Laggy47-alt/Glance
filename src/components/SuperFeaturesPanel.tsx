@@ -12,6 +12,7 @@ type FeatureRow = { organization_id: string; feature_key: string; enabled: boole
 const FEATURES: Array<{ key: string; label: string; description: string }> = [
   { key: "hikvision", label: "Hikvision", description: "AcuSense NVR integration" },
   { key: "unifi", label: "UniFi", description: "Protect ENVR bridge" },
+  { key: "dispatch", label: "Dispatch", description: "Responder dispatching + live-wall action" },
 ];
 
 export function SuperFeaturesPanel({ orgs }: { orgs: Org[] }) {
