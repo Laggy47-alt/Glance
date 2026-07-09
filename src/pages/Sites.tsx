@@ -512,77 +512,127 @@ const Sites = () => {
             </DialogDescription>
           </DialogHeader>
 
-          {linkSite && (
+          {linkSite && (() => {
+            const linked = linkedNvrsForSite(linkSite.id);
+            const available = availableNvrsForSite(linkSite.id);
+            return (
             <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               <div>
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                  Linked ({linkedNvrsForSite(linkSite.id).length})
+                  Linked ({linked.length})
                 </h3>
                 <div className="space-y-1.5">
-                  {linkedNvrsForSite(linkSite.id).length === 0 ? (
+                  {linked.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">
                       Nothing linked yet.
                     </p>
                   ) : (
-                    linkedNvrsForSite(linkSite.id).map((n) => (
+                    linked.map((n) => {
+                      const isPrimary = n.site_id === linkSite.id;
+                      const linkedCount = sitesForNvr(n).length;
+                      return (
                       <div
                         key={`${n.kind}-${n.id}`}
-                        className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 gap-2"
                       >
                         <div className="min-w-0">
-                          <div className="text-sm truncate">{n.name}</div>
+                          <div className="text-sm truncate flex items-center gap-2">
+                            {n.name}
+                            {isPrimary && (
+                              <span className="text-[9px] uppercase tracking-wider rounded bg-primary/15 text-primary px-1.5 py-0.5">
+                                primary
+                              </span>
+                            )}
+                            {n.multi_site && linkedCount > 1 && (
+                              <span className="text-[9px] uppercase tracking-wider rounded bg-muted text-muted-foreground px-1.5 py-0.5">
+                                {linkedCount} sites
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                             {n.kind}
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setNvrSite(n, null)}
-                        >
-                          Unlink
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="flex items-center gap-1 text-[11px] text-muted-foreground select-none">
+                            <input
+                              type="checkbox"
+                              className="h-3 w-3"
+                              checked={n.multi_site}
+                              onChange={(e) => toggleMultiSite(n, e.target.checked)}
+                            />
+                            multi
+                          </label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => unlinkNvrFromSite(n, linkSite)}
+                          >
+                            Unlink
+                          </Button>
+                        </div>
                       </div>
-                    ))
+                    );
+                    })
                   )}
                 </div>
               </div>
 
               <div>
                 <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                  Available ({unlinkedNvrs.length})
+                  Available ({available.length})
                 </h3>
                 <div className="space-y-1.5">
-                  {unlinkedNvrs.length === 0 ? (
+                  {available.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">
-                      All NVRs are already linked.
+                      All NVRs are already linked to this site.
                     </p>
                   ) : (
-                    unlinkedNvrs.map((n) => (
+                    available.map((n) => {
+                      const alreadyHasPrimary = !!n.site_id;
+                      const disabled = alreadyHasPrimary && !n.multi_site;
+                      return (
                       <div
                         key={`${n.kind}-${n.id}`}
-                        className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 gap-2"
                       >
                         <div className="min-w-0">
                           <div className="text-sm truncate">{n.name}</div>
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                             {n.kind}
+                            {alreadyHasPrimary && !n.multi_site && " · linked elsewhere"}
+                            {alreadyHasPrimary && n.multi_site && " · multi-site"}
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setNvrSite(n, linkSite.id)}
-                        >
-                          Link
-                        </Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {alreadyHasPrimary && !n.multi_site && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleMultiSite(n, true)}
+                            >
+                              Enable multi
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={disabled}
+                            onClick={() => linkNvrToSite(n, linkSite)}
+                          >
+                            Link
+                          </Button>
+                        </div>
                       </div>
-                    ))
+                    );
+                    })
                   )}
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
+
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setLinkSite(null)}>
