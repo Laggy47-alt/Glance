@@ -195,16 +195,8 @@ async function onPair(p: Pairing) {
   pollOnce();
 }
 
-async function doAction(action: "acknowledge" | "arrive" | "complete" | "cancel") {
-  if (!pairing) return;
-  try {
-    await api.state(pairing, action, currentDispatchId ?? undefined);
-    log(`action: ${action}`);
-    pollOnce();
-  } catch (e: any) {
-    log(`action ${action} failed: ${e?.message ?? e}`);
-  }
-}
+
+
 
 els.scanBtn.addEventListener("click", async () => {
   try {
