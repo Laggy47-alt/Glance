@@ -138,13 +138,20 @@ export function ProvisionDeviceDialog({ open, onClose, responderId, responderNam
               <QRCodeSVG value={provisionPayload} size={220} level="M" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Or paste this token manually</Label>
+              <Label className="text-xs">Or paste this pairing payload manually</Label>
               <div className="flex gap-2">
-                <Input value={device.token} readOnly className="font-mono text-xs" />
-                <Button size="sm" variant="outline" onClick={copyToken}>
+                <Input value={provisionPayload} readOnly className="font-mono text-xs" />
+                <Button size="sm" variant="outline" onClick={() => {
+                  navigator.clipboard.writeText(provisionPayload);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}>
                   {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                Paste this entire JSON into the responder app's "Enter manually" prompt.
+              </p>
             </div>
             {device.label && (
               <p className="text-xs text-muted-foreground">Label: <span className="font-medium">{device.label}</span></p>
