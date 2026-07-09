@@ -74,6 +74,21 @@ function must(k) {
 
 let sock = null;
 let connected = false;
+const groupSubjectCache = new Map(); // jid -> { subject, ts }
+const GROUP_SUBJECT_TTL_MS = 10 * 60 * 1000;
+
+async function getGroupSubject(jid) {
+  const cached = groupSubjectCache.get(jid);
+  if (cached && Date.now() - cached.ts < GROUP_SUBJECT_TTL_MS) return cached.subject;
+  try {
+    const meta = await sock.groupMetadata(jid);
+    const subject = meta?.subject || "";
+    groupSubjectCache.set(jid, { subject, ts: Date.now() });
+    return subject;
+  } catch (e) {
+    return cached?.subject || "";
+  }
+}
 
 function extractText(m) {
   const msg = m.message;
