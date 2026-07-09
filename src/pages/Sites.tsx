@@ -77,6 +77,7 @@ const Sites = () => {
   const { activeOrg } = useAuth();
   const [rows, setRows] = useState<Site[]>([]);
   const [nvrs, setNvrs] = useState<NvrRow[]>([]);
+  const [assignments, setAssignments] = useState<NvrAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Site | null>(null);
   const [form, setForm] = useState<Partial<Site>>(emptyForm());
@@ -88,11 +89,12 @@ const Sites = () => {
     if (!activeOrg?.id) {
       setRows([]);
       setNvrs([]);
+      setAssignments([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const [sitesRes, unifiRes, hikRes, frigRes] = await Promise.all([
+    const [sitesRes, unifiRes, hikRes, frigRes, assignRes] = await Promise.all([
       sb
         .from("sites")
         .select("*")
@@ -100,24 +102,29 @@ const Sites = () => {
         .order("name"),
       sb
         .from("unifi_instances")
-        .select("id,name,site_id")
+        .select("id,name,site_id,multi_site")
         .eq("organization_id", activeOrg.id),
       sb
         .from("hikvision_instances")
-        .select("id,name,site_id")
+        .select("id,name,site_id,multi_site")
         .eq("organization_id", activeOrg.id),
       sb
         .from("frigate_instances")
-        .select("id,name,site_id")
+        .select("id,name,site_id,multi_site")
+        .eq("organization_id", activeOrg.id),
+      sb
+        .from("nvr_site_assignments")
+        .select("id,nvr_kind,nvr_id,site_id")
         .eq("organization_id", activeOrg.id),
     ]);
     setRows((sitesRes.data ?? []) as Site[]);
     const merged: NvrRow[] = [
-      ...(unifiRes.data ?? []).map((r: any) => ({ ...r, kind: "unifi" as const })),
-      ...(hikRes.data ?? []).map((r: any) => ({ ...r, kind: "hikvision" as const })),
-      ...(frigRes.data ?? []).map((r: any) => ({ ...r, kind: "frigate" as const })),
+      ...(unifiRes.data ?? []).map((r: any) => ({ ...r, multi_site: !!r.multi_site, kind: "unifi" as const })),
+      ...(hikRes.data ?? []).map((r: any) => ({ ...r, multi_site: !!r.multi_site, kind: "hikvision" as const })),
+      ...(frigRes.data ?? []).map((r: any) => ({ ...r, multi_site: !!r.multi_site, kind: "frigate" as const })),
     ];
     setNvrs(merged);
+    setAssignments((assignRes.data ?? []) as NvrAssignment[]);
     setLoading(false);
   };
 
@@ -130,12 +137,18 @@ const Sites = () => {
         { event: "*", schema: "public", table: "sites" },
         () => void load(),
       )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "nvr_site_assignments" },
+        () => void load(),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrg?.id]);
+
 
   const openNew = () => {
     setEditing(null);
