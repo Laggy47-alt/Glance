@@ -284,6 +284,7 @@ async function start() {
         if (isGroup && !INCLUDE_GROUPS) continue;
         if (isDm && !INCLUDE_DMS) continue;
         if (!isGroup && !isDm) continue;
+        if (isGroup && EXCLUDE_GROUP_JIDS.has(jid)) continue;
 
         const text = extractText(m).trim();
         if (!text) continue;
@@ -301,6 +302,21 @@ async function start() {
           message: text,
           message_id: m.key.id || null,
         });
+
+        // Optional mirror into a group so a team can see all inbound traffic.
+        // Skip if this message ORIGINATED in that group (avoid echo loop).
+        if (FORWARD_TO_GROUP_JID && jid !== FORWARD_TO_GROUP_JID) {
+          try {
+            const header = isGroup
+              ? `📨 ${senderName} (group ${jid})`
+              : `📨 ${senderName} (${jid})`;
+            await sock.sendMessage(FORWARD_TO_GROUP_JID, {
+              text: `${header}\n${text}`,
+            });
+          } catch (e) {
+            console.error("[forward] error:", e?.message ?? e);
+          }
+        }
       } catch (e) {
         console.error("handler error:", e?.message ?? e);
       }
