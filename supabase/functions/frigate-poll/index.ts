@@ -45,6 +45,19 @@ type FrigateReview = {
 
 function trimUrl(u: string) { return u.replace(/\/+$/, ""); }
 
+async function fetchWithTimeout(url: string, headers: Record<string, string>, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      headers,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchJsonAuthed<T>(
   supabase: any,
   inst: FrigateInstance,
@@ -52,19 +65,20 @@ async function fetchJsonAuthed<T>(
 ): Promise<T> {
   const doFetch = async (force: boolean) => {
     const auth = await frigateAuthHeaders(supabase, inst, force);
-    return fetch(url, {
-      headers: { Accept: "application/json", ...auth },
-      signal: AbortSignal.timeout(15000),
-    });
+    return fetchWithTimeout(url, { Accept: "application/json", ...auth });
   };
   let r = await doFetch(false);
   if (r.status === 401 && inst.auth_username && inst.auth_password) {
     await invalidateFrigateToken(supabase, inst.id);
     inst.auth_token_cache = null;
     inst.auth_token_expires_at = null;
+    await r.body?.cancel().catch(() => undefined);
     r = await doFetch(true);
   }
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText} @ ${url}`);
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`${r.status} ${r.statusText} @ ${url}${body ? ` — ${body.slice(0, 250)}` : ""}`);
+  }
   return r.json() as Promise<T>;
 }
 
@@ -98,6 +112,11 @@ Deno.serve(async (req) => {
 
   const results: Array<Record<string, unknown>> = [];
   for (const inst of (instances ?? []) as FrigateInstance[]) {
+    const lock = await acquireInstanceLock(supabase, inst.id);
+    if (!lock) {
+      results.push({ instance: inst.name, skipped: "poll already running" });
+      continue;
+    }
     try {
       const r = await pollOne(supabase, inst);
       results.push({ instance: inst.name, ...r });
@@ -107,11 +126,40 @@ Deno.serve(async (req) => {
       await supabase.from("frigate_instances")
         .update({ last_error: msg, last_polled_at: new Date().toISOString() })
         .eq("id", inst.id);
+    } finally {
+      await releaseInstanceLock(supabase, inst.id);
     }
   }
 
   return json({ ok: true, polled: results.length, results });
 });
+
+async function acquireInstanceLock(supabase: ReturnType<typeof createClient>, instanceId: string) {
+  const now = new Date().toISOString();
+  const lockedUntil = new Date(Date.now() + 55_000).toISOString();
+  const { data, error } = await supabase
+    .from("frigate_instances")
+    .update({ poll_locked_until: lockedUntil })
+    .eq("id", instanceId)
+    .or(`poll_locked_until.is.null,poll_locked_until.lt.${now}`)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    // Older self-hosted databases may not have the lock column yet. Keep the
+    // poller working, but deploy the matching migration to prevent overlap.
+    if (String(error.message ?? "").includes("poll_locked_until")) return true;
+    throw error;
+  }
+  return Boolean(data);
+}
+
+async function releaseInstanceLock(supabase: ReturnType<typeof createClient>, instanceId: string) {
+  await supabase
+    .from("frigate_instances")
+    .update({ poll_locked_until: null })
+    .eq("id", instanceId);
+}
 
 async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateInstance) {
   const base = trimUrl(inst.base_url);
