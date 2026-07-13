@@ -7,7 +7,8 @@
 --   * daily_broadcast_times defaults to '{}' (empty). When empty the broadcast
 --     function keeps using the existing single-slot daily_broadcast_time.
 --     Only orgs that populate the array switch to multi-slot mode.
---   * daily_broadcast_last_sent_at gates per-slot delivery for multi-slot mode.
+--   * daily_broadcast_last_slot + daily_broadcast_last_sent_at gate per-slot
+--     delivery for multi-slot mode, even if cron overlaps.
 --   * camera_status.pending_online / pending_since power the 5-minute flap
 --     window in camera-watch. NULL means "no pending flip".
 
@@ -17,6 +18,9 @@ ALTER TABLE public.whatsapp_settings
 
 ALTER TABLE public.whatsapp_settings
   ADD COLUMN IF NOT EXISTS daily_broadcast_last_sent_at timestamptz;
+
+ALTER TABLE public.whatsapp_settings
+  ADD COLUMN IF NOT EXISTS daily_broadcast_last_slot text;
 
 -- 2) camera_status: hysteresis columns for flap suppression
 ALTER TABLE public.camera_status

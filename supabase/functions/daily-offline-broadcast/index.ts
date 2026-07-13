@@ -3,7 +3,7 @@
 // Two modes per org:
 //   * Multi-slot (preferred when whatsapp_settings.daily_broadcast_times is
 //     non-empty): fire once per configured HH:MM slot per day, gated by
-//     daily_broadcast_last_sent_at + a window.
+//     daily_broadcast_last_slot + daily_broadcast_last_sent_at + a window.
 //   * Legacy single slot (daily_broadcast_time): fires when current HH:MM
 //     matches. Kept for orgs that haven't opted into the array.
 //
@@ -24,6 +24,15 @@ function currentHM(tz: string): { h: number; m: number } {
     const [h, m] = fmt.format(new Date()).split(":").map(Number);
     return { h, m };
   } catch { const d = new Date(); return { h: d.getUTCHours(), m: d.getUTCMinutes() }; }
+}
+
+function localYMD(tz: string): string {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+    return fmt.format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
 }
 
 // Compute the UTC timestamp (ms) of "today HH:MM" in the given timezone.
@@ -60,7 +69,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: orgs, error } = await supabase
     .from("whatsapp_settings")
-    .select("organization_id, enabled, daily_broadcast_enabled, daily_broadcast_recipients, daily_broadcast_time, daily_broadcast_times, daily_broadcast_last_sent_at, quiet_timezone, default_recipients");
+    .select("organization_id, enabled, daily_broadcast_enabled, daily_broadcast_recipients, daily_broadcast_time, daily_broadcast_times, daily_broadcast_last_sent_at, daily_broadcast_last_slot, quiet_timezone, default_recipients");
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   const results: any[] = [];
@@ -102,6 +111,23 @@ Deno.serve(async (req) => {
       if (now.h === hh && now.m === mm) dueSlot = String(o.daily_broadcast_time ?? "08:00");
     }
     if (!dueSlot) continue;
+
+    // Claim the exact org-local slot before sending. This prevents duplicate
+    // sends when cron overlaps or when the previous send is still running.
+    const slotKey = `${localYMD(tz)}T${dueSlot}`;
+    if (multiSlot && !force) {
+      const { data: claimed, error: claimError } = await supabase
+        .from("whatsapp_settings")
+        .update({ daily_broadcast_last_slot: slotKey, daily_broadcast_last_sent_at: new Date().toISOString() })
+        .eq("organization_id", o.organization_id)
+        .or(`daily_broadcast_last_slot.is.null,daily_broadcast_last_slot.neq.${slotKey}`)
+        .select("organization_id");
+      if (claimError) {
+        results.push({ org: o.organization_id, slot: dueSlot, error: `claim failed: ${claimError.message}` });
+        continue;
+      }
+      if (!claimed?.length) continue;
+    }
 
     // Get NVRs for this org and their offline cameras
     const { data: insts } = await supabase
@@ -233,13 +259,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Mark this slot as fired for multi-slot mode. In force mode we skip the
-    // stamp so a manual test doesn't consume the next real slot.
-    if (multiSlot && anySent && !force) {
-      await supabase.from("whatsapp_settings")
-        .update({ daily_broadcast_last_sent_at: new Date().toISOString() })
-        .eq("organization_id", o.organization_id);
-    }
+    // Multi-slot mode is pre-claimed above so overlapping cron runs cannot
+    // duplicate the same org-local slot. Force mode intentionally never stamps.
   }
 
   return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
