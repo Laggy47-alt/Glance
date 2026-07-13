@@ -66,8 +66,9 @@ async function clearToken(supabase: any, instId: string) {
 async function login(inst: FrigateAuthRow): Promise<string | null> {
   if (!inst.auth_username || !inst.auth_password) return null;
   const base = trimUrl(inst.base_url);
+  let r: Response | null = null;
   try {
-    const r = await fetch(`${base}/api/login`, {
+    r = await fetch(`${base}/api/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ user: inst.auth_username, password: inst.auth_password }),
@@ -87,6 +88,8 @@ async function login(inst: FrigateAuthRow): Promise<string | null> {
     return null;
   } catch {
     return null;
+  } finally {
+    await r?.body?.cancel().catch(() => undefined);
   }
 }
 
@@ -156,6 +159,7 @@ export async function frigateFetch(
     await clearToken(supabase, inst.id);
     inst.auth_token_cache = null;
     inst.auth_token_expires_at = null;
+    await res.body?.cancel().catch(() => undefined);
     res = await fetch(url, { ...init, headers: await buildHeaders(true) });
   }
   return res;
