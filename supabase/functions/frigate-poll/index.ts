@@ -75,11 +75,18 @@ async function fetchJsonAuthed<T>(
     await r.body?.cancel().catch(() => undefined);
     r = await doFetch(true);
   }
-  if (!r.ok) {
-    const body = await r.text().catch(() => "");
-    throw new Error(`${r.status} ${r.statusText} @ ${url}${body ? ` — ${body.slice(0, 250)}` : ""}`);
+  try {
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      throw new Error(`${r.status} ${r.statusText} @ ${url}${body ? ` — ${body.slice(0, 250)}` : ""}`);
+    }
+    return await r.json() as T;
+  } finally {
+    // Deno/Supabase Edge keeps sockets/file handles open until the response
+    // stream is fully released. Be defensive so failed/partial reads don't
+    // accumulate fetchResponse resources under heavy cron polling.
+    await r.body?.cancel().catch(() => undefined);
   }
-  return r.json() as Promise<T>;
 }
 
 function proxyUrl(instanceId: string, path: string) {
