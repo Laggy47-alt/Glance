@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
   return json({ ok: true, polled: results.length, results });
 });
 
-async function acquireInstanceLock(supabase: ReturnType<typeof createClient>, instanceId: string) {
+async function acquireInstanceLock(supabase: any, instanceId: string) {
   const now = new Date().toISOString();
   const lockedUntil = new Date(Date.now() + 55_000).toISOString();
   const { data, error } = await supabase
@@ -161,14 +161,14 @@ async function acquireInstanceLock(supabase: ReturnType<typeof createClient>, in
   return Boolean(data);
 }
 
-async function releaseInstanceLock(supabase: ReturnType<typeof createClient>, instanceId: string) {
+async function releaseInstanceLock(supabase: any, instanceId: string) {
   await supabase
     .from("frigate_instances")
     .update({ poll_locked_until: null })
     .eq("id", instanceId);
 }
 
-async function pollOne(supabase: ReturnType<typeof createClient>, inst: FrigateInstance) {
+async function pollOne(supabase: any, inst: FrigateInstance) {
   const base = trimUrl(inst.base_url);
   // Live wall ingestion is intentionally NOT a catch-up job. Every poll only
   // accepts events that started in the last 5 seconds so page reloads or stale
