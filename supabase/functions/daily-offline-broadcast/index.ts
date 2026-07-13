@@ -90,19 +90,25 @@ Deno.serve(async (req) => {
     if (force) {
       dueSlot = times[0] ?? "08:00";
     } else if (multiSlot) {
-      const lastSentMs = o.daily_broadcast_last_sent_at ? new Date(o.daily_broadcast_last_sent_at).getTime() : 0;
-      for (const t of times) {
-        const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
-        if (!m) continue;
-        const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
-        const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+      const today = localYMD(tz);
+      const lastSlotKey = o.daily_broadcast_last_slot ?? "";
+      // Sort slots ascending so we fire the earliest still-pending slot first.
+      const parsed = times
+        .map((t) => /^(\d{1,2}):(\d{2})$/.exec(String(t).trim()))
+        .filter((m): m is RegExpExecArray => !!m)
+        .map((m) => ({
+          hh: Math.min(23, Math.max(0, parseInt(m[1], 10))),
+          mm: Math.min(59, Math.max(0, parseInt(m[2], 10))),
+        }))
+        .sort((a, b) => a.hh * 60 + a.mm - (b.hh * 60 + b.mm));
+      for (const { hh, mm } of parsed) {
         const slotMinutes = hh * 60 + mm;
-        const diff = curMinutes - slotMinutes;
-        if (diff < 0 || diff > windowMinutes) continue;
-        // Already fired this slot today?
-        const slotMs = slotUtcMs(tz, hh, mm);
-        if (lastSentMs >= slotMs) continue;
-        dueSlot = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+        if (curMinutes < slotMinutes) continue; // slot hasn't happened yet today
+        const slotLabel = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+        const slotKey = `${today}T${slotLabel}`;
+        // Already fired this exact slot today?
+        if (lastSlotKey === slotKey) continue;
+        dueSlot = slotLabel;
         break;
       }
     } else {
