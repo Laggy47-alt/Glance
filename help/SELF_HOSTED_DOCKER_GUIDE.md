@@ -10,6 +10,7 @@
 **PROJECT CONTEXT:** ABC Glance running on self-hosted Docker Supabase (`/srv/supabase/`) with frontend at `/srv/abc-glance/`. Database is Postgres inside `supabase-db` container. Edge functions run in `supabase-edge-functions` container.
 
 **Latest work (resume here):**
+
 - Removed the audit trail feature entirely (table `event_audit_log` dropped, UI/components gone).
 - Added per-NVR WhatsApp daily client reports (`frigate_instances.daily_broadcast_enabled` + `daily-offline-broadcast` edge function fans out per-NVR).
 - Added NVR-unreachable WhatsApp alerts in `camera-watch`: new columns `frigate_instances.nvr_unreachable_since` and `nvr_unreachable_alerted_since`. Fires one WhatsApp message past `whatsapp_alert_minutes` (falls back to `offline_alert_minutes`), gated by `whatsapp_settings.include_nvr_unreachable` + per-NVR `whatsapp_alert_enabled`. Clears on recovery.
@@ -336,18 +337,18 @@ docker exec -i supabase-db psql -U postgres -d postgres -c "
 
 ### 9.1 Moving parts
 
-| Piece | Where | Role |
-|---|---|---|
-| `whatsapp_settings` (table) | Postgres | Per-org Mudslide URL, token, defaults, quiet hours, daily broadcast config |
-| `frigate_instances` (table) | Postgres | Per-NVR `whatsapp_alert_enabled`, `whatsapp_recipients`, `whatsapp_alert_minutes`, `multi_client`, `camera_whatsapp_recipients`, `daily_broadcast_enabled`, `nvr_unreachable_since`, `nvr_unreachable_alerted_since` |
-| `camera_status` (table) | Postgres | Latest online/offline state per camera with `since` timestamp |
-| `camera_offline_alerts` (table) | Postgres | Dedupes per-camera alerts so the same offline streak doesn't repeat |
-| `camera-watch` (edge fn, every minute via pg_cron) | Edge | Polls each NVR's `/api/stats`, reconciles `camera_status`, fires email + WhatsApp |
-| `escalate-offline-whatsapp` (edge fn) | Edge | Sends one message via Mudslide; quiet hours + rate limit + retry |
-| `daily-offline-broadcast` (edge fn, every minute) | Edge | Once-per-day org summary + per-NVR client summaries |
-| `whatsapp-heartbeat` (edge fn, every 5 min) | Edge | `GET /me` on Mudslide to keep the session warm |
-| `whatsapp-incoming` (edge fn) | Edge | Mudslide webhook → `whatsapp_incoming_messages` (Reply inbox) |
-| Mudslide | Container | WhatsApp Web bridge |
+| Piece                                              | Where     | Role                                                                                                                                                                                                                 |
+| -------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `whatsapp_settings` (table)                        | Postgres  | Per-org Mudslide URL, token, defaults, quiet hours, daily broadcast config                                                                                                                                           |
+| `frigate_instances` (table)                        | Postgres  | Per-NVR `whatsapp_alert_enabled`, `whatsapp_recipients`, `whatsapp_alert_minutes`, `multi_client`, `camera_whatsapp_recipients`, `daily_broadcast_enabled`, `nvr_unreachable_since`, `nvr_unreachable_alerted_since` |
+| `camera_status` (table)                            | Postgres  | Latest online/offline state per camera with `since` timestamp                                                                                                                                                        |
+| `camera_offline_alerts` (table)                    | Postgres  | Dedupes per-camera alerts so the same offline streak doesn't repeat                                                                                                                                                  |
+| `camera-watch` (edge fn, every minute via pg_cron) | Edge      | Polls each NVR's `/api/stats`, reconciles `camera_status`, fires email + WhatsApp                                                                                                                                    |
+| `escalate-offline-whatsapp` (edge fn)              | Edge      | Sends one message via Mudslide; quiet hours + rate limit + retry                                                                                                                                                     |
+| `daily-offline-broadcast` (edge fn, every minute)  | Edge      | Once-per-day org summary + per-NVR client summaries                                                                                                                                                                  |
+| `whatsapp-heartbeat` (edge fn, every 5 min)        | Edge      | `GET /me` on Mudslide to keep the session warm                                                                                                                                                                       |
+| `whatsapp-incoming` (edge fn)                      | Edge      | Mudslide webhook → `whatsapp_incoming_messages` (Reply inbox)                                                                                                                                                        |
+| Mudslide                                           | Container | WhatsApp Web bridge                                                                                                                                                                                                  |
 
 ### 9.2 Thresholds — when does an alert fire?
 
@@ -404,6 +405,7 @@ ORDER BY start_time DESC LIMIT 20;
 ### 9.4 Configuring an NVR for 5-minute alerts
 
 In **WhatsApp Alerts → Per-NVR overrides**:
+
 1. Toggle **WhatsApp alerts on**.
 2. **Alert after (minutes):** `5` (leave blank to inherit the email threshold).
 3. Add **Recipients** (`+27821234567` or group JIDs like `12345-67890@g.us`).
@@ -514,3 +516,174 @@ The Lovable scanner flags cross-org RLS holes (most policies just check `auth.ui
 - Make `camera-snapshots` bucket private and serve via a signed-URL edge function.
 
 ---
+
+-----Add in the folowing to increase the open sockets-----
+
+Yesterday at 1:29 PM
+Charl Pretorius
+
+charl@glanceserver:~/supabase-project$ select cron.unschedule(1);
+
+select cron.schedule( 'frigate-poll-1min', '\* \* \* \* \*', $$ select net.http_post( url := 'https://supabase.abcglance.co.za/functions/v1/frigate-poll', headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQ ...
+
+You pasted the SQL straight into bash. Wrap it in psql:
+
+docker compose exec -T db psql -U postgres -d postgres <<'SQL'
+select cron.unschedule(1);
+
+select cron.schedule(
+'frigate-poll-1min',
+'\* \* \* \* \*',
+
+$$
+select net.http_post(
+  url := 'https://supabase.abcglance.co.za/functions/v1/frigate-poll',
+  headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3ODE3NjQwNzAsImV4cCI6MTkzOTQ0NDA3MH0.5o5TR7FZks_15kdjX7bq749b8yPaexXtMVXn0zUGJSI"}'::jsonb,
+  body := '{}'::jsonb
+);
+$$
+
+);
+SQL
+
+The <<'SQL' ... SQL heredoc (with single-quoted 'SQL') prevents bash from interpreting $$, (, etc.
+
+Verify after:
+
+docker compose exec -T db psql -U postgres -d postgres -c \
+ "select jobid, jobname, schedule, active from cron.job order by jobid;"
+
+Yesterday at 1:30 PM
+Charl Pretorius
+
+charl@glanceserver:~/supabase-project$ docker compose exec -T db psql -U postgres -d postgres <<'SQL' select cron.unschedule(1);
+
+select cron.schedule( 'frigate-poll-1min', '\* \* \* \* \*', $$ select net.http_post( url := 'https://supabase.abcglance.co.za/functions/v1/frigate-poll', headers := '{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXV ...
+
+Done — old 12x/min poll is gone, new frigate-poll-1min is active. File-handle errors should stop within a few minutes.
+Yesterday at 1:59 PM
+Charl Pretorius
+
+still the same error
+
+error sending request for url (https://devonvalep1.abcglance.co.za/api/events?after=1783943632&limit=100&include_thumbnails=0): client error (Connect): dns error: Too many open files (os error 24): Too many open files (os error 24)
+
+I’ll patch the Frigate poller to aggressively close every upstream HTTP response and reduce stuck socket/file-handle buildup.
+Fixed Frigate poller file leak
+
+No tasks tracked yet.
+
+Patched and verified: the Frigate poller now closes/cancels upstream response bodies so fetch sockets don’t keep leaking file handles; pull, redeploy frigate-poll, then restart the functions container to clear the already-exhausted handles.
+Today at 10:40 AM
+
+is this a frontend or backend issue? is there something i can change on the machine itself to increase to amount oof open sockets?
+
+Backend — the "Too many open files" error is on the machine running your Supabase Edge Functions container (Deno runtime), not the frontend.
+Yes, raise the OS limits
+
+1. Check current limit inside the functions container:
+
+docker compose exec functions sh -c 'ulimit -n'
+
+Likely 1024.
+
+2. Raise it in docker-compose.yml for the functions service:
+
+services:
+functions:
+ulimits:
+nofile:
+soft: 65536
+hard: 65536
+
+3. Raise the host limit (so Docker can grant it):
+
+# /etc/security/limits.conf
+
+- soft nofile 65536
+- hard nofile 65536
+  root soft nofile 65536
+  root hard nofile 65536
+
+And for systemd-managed Docker:
+
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/override.conf <<EOF
+[Service]
+LimitNOFILE=1048576
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+
+4. Recreate the container (restart alone won't apply new ulimits):
+
+docker compose up -d --force-recreate functions
+
+5. Verify:
+
+docker compose exec functions sh -c 'ulimit -n' # should show 65536
+
+That plus the socket-cleanup fix already deployed should end the errors permanently.
+Today at 10:45 AM
+Usage
+Start: docker compose up -d
+Stop: docker compose down
+Dev mode: docker compose -f docker-compose.yml -f ./dev/docker-compose.dev.yml up -d
+Reset everything: sh reset.sh
+TODO:
+
+- Podman does not support nested variable interpolation (${A:-${B}})
+
+name: supabase
+
+services:
+
+studio: container_name: supabase-studio image ...
+
+Add a ulimits block to the functions service. Here's the exact edit:
+
+In docker-compose.yml, find the functions: service and add ulimits: at the same indent as environment:/volumes::
+
+functions:
+container_name: supabase-edge-functions
+image: supabase/edge-runtime:v1.74.0
+restart: unless-stopped
+ulimits:
+nofile:
+soft: 65536
+hard: 65536
+volumes: - ./volumes/functions:/home/deno/functions:z - deno-cache:/root/.cache/deno
+depends_on:
+kong:
+condition: service_healthy
+...
+
+Then also raise the Docker daemon limit (so containers can be granted that many):
+
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/override.conf <<EOF
+[Service]
+LimitNOFILE=1048576
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+
+Recreate the container (a plain restart won't apply new ulimits):
+
+cd ~/supabase-project
+docker compose up -d --force-recreate functions
+
+Verify:
+
+docker compose exec functions sh -c 'ulimit -n'
+
+# should print 65536
+
+You don't need to touch /etc/security/limits.conf — that only affects interactive PAM logins, not Docker containers.
+Today at 10:48 AM
+
+great so the os error should clear up now?
+
+Yes — once you've done all three steps (compose ulimits + docker daemon LimitNOFILE + --force-recreate functions) and ulimit -n inside the container shows 65536, the "Too many open files" errors will stop.
+
+Combined with the socket-cleanup fix already deployed in frigate-poll, you should see clean logs within a minute or two.
