@@ -352,7 +352,7 @@ class WebhookStore {
         const existing = new Set(this.events.map((e) => e.id));
         const fresh = (ev.data as WebhookEvent[]).filter((e) => !existing.has(e.id));
         if (fresh.length) {
-          this.events = [...fresh, ...this.events].slice(0, 10000);
+          this.events = [...fresh, ...this.events].slice(0, MAX_FEED_ROWS);
           changed = true;
         }
         for (const e of ev.data as WebhookEvent[]) {
@@ -364,7 +364,7 @@ class WebhookStore {
         const existing = new Set(this.media.map((m) => m.id));
         const fresh = (md.data as MediaItem[]).filter((m) => !existing.has(m.id));
         if (fresh.length) {
-          this.media = [...fresh, ...this.media].slice(0, 10000);
+          this.media = [...fresh, ...this.media].slice(0, MAX_FEED_ROWS);
           changed = true;
         }
         for (const m of md.data as MediaItem[]) {
@@ -446,7 +446,7 @@ class WebhookStore {
       .on("postgres_changes", { event: "*", schema: "public", table: "webhook_events" }, (p) => {
         const row = (p.new ?? p.old) as WebhookEvent;
         if (!this.matchesOrg(row)) return;
-        if (p.eventType === "INSERT") this.events = [p.new as WebhookEvent, ...this.events].slice(0, 10000);
+        if (p.eventType === "INSERT") this.events = [p.new as WebhookEvent, ...this.events].slice(0, MAX_FEED_ROWS);
         else if (p.eventType === "UPDATE") this.events = this.events.map((x) => x.id === (p.new as WebhookEvent).id ? (p.new as WebhookEvent) : x);
         else if (p.eventType === "DELETE") this.events = this.events.filter((x) => x.id !== (p.old as WebhookEvent).id);
         this.emit();
@@ -462,7 +462,7 @@ class WebhookStore {
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, (p) => {
         const row = (p.new ?? p.old) as MediaItem;
         if (!this.matchesOrg(row)) return;
-        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, 10000);
+        if (p.eventType === "INSERT") this.media = [p.new as MediaItem, ...this.media].slice(0, MAX_FEED_ROWS);
         else if (p.eventType === "UPDATE") this.media = this.media.map((x) => x.id === (p.new as MediaItem).id ? (p.new as MediaItem) : x);
         else if (p.eventType === "DELETE") this.media = this.media.filter((x) => x.id !== (p.old as MediaItem).id);
         this.emit();
