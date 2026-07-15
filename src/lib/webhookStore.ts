@@ -404,9 +404,9 @@ class WebhookStore {
     try {
       const [s, e, r, m, f, hi, hc, un] = await Promise.all([
         this.scoped(supabase.from("webhook_sources").select("*")).order("created_at", { ascending: true }),
-        this.fetchPaged<WebhookEvent>("webhook_events", "ts", false, 10000),
+        this.fetchPaged<WebhookEvent>("webhook_events", "ts", false, MAX_FEED_ROWS),
         this.scoped(supabase.from("auto_read_rules").select("*")).order("created_at", { ascending: true }),
-        this.fetchPaged<MediaItem>("media_items", "ts", false, 10000),
+        this.fetchPaged<MediaItem>("media_items", "ts", false, MAX_FEED_ROWS),
         this.scoped(supabase.from("frigate_instances").select("*")).order("created_at", { ascending: true }),
         this.scoped(supabase.from("hikvision_instances").select("*")).order("created_at", { ascending: true }),
         this.scoped(supabase.from("hikvision_channels").select("*")).order("channel_id", { ascending: true }),
