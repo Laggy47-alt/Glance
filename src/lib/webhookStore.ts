@@ -1,6 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
+// Maximum rows kept in memory per feed (events, media). Raise to keep more
+// snapshots/clips visible in the UI. Backend retention is controlled separately
+// by the cleanup-old-alerts edge function (RETENTION_DAYS).
+const MAX_FEED_ROWS = 50000;
+
 export type WebhookSource = {
   id: string;
   organization_id?: string | null;
