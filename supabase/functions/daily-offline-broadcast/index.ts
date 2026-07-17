@@ -138,14 +138,15 @@ Deno.serve(async (req) => {
     // Get NVRs for this org and their offline cameras
     const { data: insts } = await supabase
       .from("frigate_instances")
-      .select("id, name, daily_broadcast_enabled, whatsapp_recipients")
+      .select("id, name, daily_broadcast_enabled, whatsapp_recipients, nvr_unreachable_since")
       .eq("organization_id", o.organization_id)
       .eq("enabled", true);
-    const instMap = new Map<string, { name: string; daily: boolean; recipients: string[] }>(
+    const instMap = new Map<string, { name: string; daily: boolean; recipients: string[]; unreachableSince: string | null }>(
       (insts ?? []).map((i: any) => [i.id, {
         name: i.name,
         daily: !!i.daily_broadcast_enabled,
         recipients: Array.isArray(i.whatsapp_recipients) ? i.whatsapp_recipients : [],
+        unreachableSince: i.nvr_unreachable_since ?? null,
       }]),
     );
     const instIds = Array.from(instMap.keys());
@@ -167,6 +168,17 @@ Deno.serve(async (req) => {
         grouped.set(s.instance_id, list);
       }
       for (const [id, info] of instMap) {
+        // If the NVR itself is unreachable, camera_status is stale — report
+        // the NVR as offline explicitly instead of falsely showing "all online".
+        if (info.unreachableSince) {
+          const mins = Math.max(0, Math.floor((nowMs - new Date(info.unreachableSince).getTime()) / 60_000));
+          nvrsPayload.push({
+            name: info.name,
+            reachable: false,
+            offlineCameras: [`⚠️ NVR unreachable (${mins}m) — all cameras offline`],
+          });
+          continue;
+        }
         const cams = grouped.get(id) ?? [];
         if (cams.length) nvrsPayload.push({ name: info.name, reachable: true, offlineCameras: cams });
       }
